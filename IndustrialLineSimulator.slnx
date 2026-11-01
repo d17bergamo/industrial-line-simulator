@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LineSimulator.Models/LineSimulator.Models.csproj" />
+    <Project Path="src/LineSimulator.Core/LineSimulator.Core.csproj" />
+    <Project Path="src/LineSimulator.Optimization/LineSimulator.Optimization.csproj" />
+    <Project Path="src/LineSimulator.Engine/LineSimulator.Engine.csproj" />
+    <Project Path="src/LineSimulator.Infrastructure/LineSimulator.Infrastructure.csproj" />
+    <Project Path="src/LineSimulator.App/LineSimulator.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LineSimulator.Tests/LineSimulator.Tests.csproj" />
+  </Folder>
+</Solution>

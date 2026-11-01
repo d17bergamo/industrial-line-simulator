@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>LineSimulator.App</RootNamespace>
+    <AssemblyName>IndustrialLineSimulator</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HelixToolkit.Wpf" Version="[2.24.0,3.0.0)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LineSimulator.Models\LineSimulator.Models.csproj" />
+    <ProjectReference Include="..\LineSimulator.Core\LineSimulator.Core.csproj" />
+    <ProjectReference Include="..\LineSimulator.Engine\LineSimulator.Engine.csproj" />
+    <ProjectReference Include="..\LineSimulator.Optimization\LineSimulator.Optimization.csproj" />
+    <ProjectReference Include="..\LineSimulator.Infrastructure\LineSimulator.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\examples\*.json" Link="Examples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>LineSimulator.Optimization</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LineSimulator.Models\LineSimulator.Models.csproj" />
+    <ProjectReference Include="..\LineSimulator.Core\LineSimulator.Core.csproj" />
+  </ItemGroup>
+</Project>

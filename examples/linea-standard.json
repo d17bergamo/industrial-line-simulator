@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "projectId": "example0standard0line000000000001",
+  "name": "Linea standard - 3 legatrici (esempio JSON)",
+  "description": "Esempio: accumulo, stazione di legatura a 3 legatrici, stopper e trasferitore. Regola di esempio: bassa velocità su INV2 se il pacco precedente è vicino.",
+  "layout": {
+    "originXMm": 0,
+    "originYMm": 0,
+    "rotationDeg": 0,
+    "rollerTopElevationMm": 800
+  },
+  "inverters": [
+    {
+      "id": "INV1",
+      "name": "Inverter 1 - Ingresso",
+      "lowSpeed": 0.15,
+      "highSpeed": 0.6,
+      "acceleration": 0.5,
+      "deceleration": 0.6,
+      "defaultSpeed": "High",
+      "isEnabled": true
+    },
+    {
+      "id": "INV2",
+      "name": "Inverter 2 - Accumulo",
+      "lowSpeed": 0.15,
+      "highSpeed": 0.6,
+      "acceleration": 0.5,
+      "deceleration": 0.6,
+      "defaultSpeed": "High",
+      "isEnabled": true
+    },
+    {
+      "id": "INV3",
+      "name": "Inverter 3 - Legatura",
+      "lowSpeed": 0.15,
+      "highSpeed": 0.6,
+      "acceleration": 0.5,
+      "deceleration": 0.6,
+      "defaultSpeed": "High",
+      "isEnabled": true
+    },
+    {
+      "id": "INV4",
+      "name": "Inverter 4 - Uscita/Stopper",
+      "lowSpeed": 0.15,
+      "highSpeed": 0.6,
+      "acceleration": 0.5,
+      "deceleration": 0.6,
+      "defaultSpeed": "High",
+      "isEnabled": true
+    }
+  ],
+  "sections": [
+    {
+      "id": "S1",
+      "name": "Via ingresso",
+      "startMm": 0,
+      "lengthMm": 13000,
+      "widthMm": 1200,
+      "rollerCount": 44,
+      "rollerPitchMm": 300,
+      "rollerDiameterMm": 150,
+      "direction": "Forward",
+      "inverterId": "INV1",
+      "isEnabled": true
+    },
+    {
+      "id": "S2",
+      "name": "Via accumulo",
+      "startMm": 13000,
+      "lengthMm": 13000,
+      "widthMm": 1200,
+      "rollerCount": 44,
+      "rollerPitchMm": 300,
+      "rollerDiameterMm": 150,
+      "direction": "Forward",
+      "inverterId": "INV2",
+      "isEnabled": true
+    },
+    {
+      "id": "S3",
+      "name": "Legatura A",
+      "startMm": 26000,
+      "lengthMm": 8000,
+      "widthMm": 1200,
+      "rollerCount": 27,
+      "rollerPitchMm": 300,
+      "rollerDiameterMm": 150,
+      "direction": "Forward",
+      "inverterId": "INV3",
+      "isEnabled": true
+    },
+    {
+      "id": "S4",
+      "name": "Legatura B",
+      "startMm": 34000,
+      "lengthMm": 8000,
+      "widthMm": 1200,
+      "rollerCount": 27,
+      "rollerPitchMm": 300,
+      "rollerDiameterMm": 150,
+      "direction": "Forward",
+      "inverterId": "INV3",
+      "isEnabled": true
+    },
+    {
+      "id": "S5",
+      "name": "Via uscita",
+      "startMm": 42000,
+      "lengthMm": 14000,
+      "widthMm": 1200,
+      "rollerCount": 47,
+      "rollerPitchMm": 300,
+      "rollerDiameterMm": 150,
+      "direction": "Forward",
+      "inverterId": "INV4",
+      "isEnabled": true
+    }
+  ],
+  "photocells": [
+    {
+      "id": "FC1",
+      "name": "FC1 accumulo ingresso",
+      "positionMm": 11500,
+      "type": "ThroughBeam",
+      "direction": "Transversal",
+      "detectionRangeMm": 1500,
+      "responseTimeMs": 20,
+      "isEnabled": true,
+      "controlledInverterId": "INV1",
+      "activation": "WhenOccupied",
+      "action": "Accumulation"
+    },
+    {
+      "id": "FC2",
+      "name": "FC2 accumulo",
+      "positionMm": 24500,
+      "type": "ThroughBeam",
+      "direction": "Transversal",
+      "detectionRangeMm": 1500,
+      "responseTimeMs": 20,
+      "isEnabled": true,
+      "controlledInverterId": "INV2",
+      "activation": "WhenOccupied",
+      "action": "Accumulation"
+    },
+    {
+      "id": "FC3",
+      "name": "FC3 fine legatura",
+      "positionMm": 40500,
+      "type": "ThroughBeam",
+      "direction": "Transversal",
+      "detectionRangeMm": 1500,
+      "responseTimeMs": 20,
+      "isEnabled": true,
+      "controlledInverterId": "INV3",
+      "activation": "WhenOccupied",
+      "action": "Accumulation"
+    },
+    {
+      "id": "FC4",
+      "name": "FC4 rallentamento stopper",
+      "positionMm": 53500,
+      "type": "ThroughBeam",
+      "direction": "Transversal",
+      "detectionRangeMm": 1500,
+      "responseTimeMs": 20,
+      "isEnabled": true,
+      "controlledInverterId": "INV4",
+      "activation": "WhenOccupied",
+      "action": "SlowDown"
+    },
+    {
+      "id": "FC5",
+      "name": "FC5 presenza stopper",
+      "positionMm": 54800,
+      "type": "ThroughBeam",
+      "direction": "Transversal",
+      "detectionRangeMm": 1500,
+      "responseTimeMs": 20,
+      "isEnabled": true,
+      "controlledInverterId": "",
+      "activation": "WhenOccupied",
+      "action": "None"
+    }
+  ],
+  "strappers": [
+    {
+      "id": "L1",
+      "name": "Legatrice 1",
+      "positionMm": 30500,
+      "footprintLengthMm": 1200,
+      "side": "Left",
+      "preparationTimeS": 2,
+      "strappingTimeS": 8,
+      "returnTimeS": 2,
+      "isEnabled": true,
+      "allowCombinedWork": true
+    },
+    {
+      "id": "L2",
+      "name": "Legatrice 2",
+      "positionMm": 35000,
+      "footprintLengthMm": 1200,
+      "side": "Left",
+      "preparationTimeS": 2,
+      "strappingTimeS": 8,
+      "returnTimeS": 2,
+      "isEnabled": true,
+      "allowCombinedWork": true
+    },
+    {
+      "id": "L3",
+      "name": "Legatrice 3",
+      "positionMm": 39500,
+      "footprintLengthMm": 1200,
+      "side": "Left",
+      "preparationTimeS": 2,
+      "strappingTimeS": 8,
+      "returnTimeS": 2,
+      "isEnabled": true,
+      "allowCombinedWork": true
+    }
+  ],
+  "strappingStation": {
+    "isEnabled": true,
+    "inverterId": "INV3",
+    "positioningSpeed": 0.3,
+    "positioningToleranceMm": 2,
+    "strategy": "Automatic",
+    "manualPlans": [
+      {
+        "packageTypeId": "P12",
+        "stops": [
+          {
+            "assignments": [
+              {
+                "strapperId": "L3",
+                "strapIndex": 0
+              },
+              {
+                "strapperId": "L2",
+                "strapIndex": 1
+              },
+              {
+                "strapperId": "L1",
+                "strapIndex": 2
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "stopper": {
+    "id": "STP",
+    "name": "Stopper",
+    "positionMm": 55000,
+    "graphicHeightMm": 300,
+    "alignmentTimeS": 2,
+    "headingTimeS": 0.5,
+    "alignmentRollerSpeed": 0.1,
+    "isRaised": true,
+    "maxImpactSpeed": 0.25
+  },
+  "transfer": {
+    "id": "TRF",
+    "name": "Trasferitore",
+    "positionMm": 43000,
+    "lengthMm": 12000,
+    "widthMm": 400,
+    "liftStrokeMm": 150,
+    "translationStrokeMm": 3000,
+    "destinationSide": "Right",
+    "liftTimeS": 2,
+    "lowerTimeS": 2,
+    "translationSpeed": 0.5,
+    "translationTimeOverrideS": 0,
+    "depositTimeS": 1,
+    "blockInfeedUntilHome": true
+  },
+  "packageTypes": [
+    {
+      "id": "P12",
+      "name": "Pacco 12 m",
+      "lengthMm": 12000,
+      "weightKg": 3000,
+      "graphicWidthMm": 600,
+      "graphicHeightMm": 400,
+      "strapPositionsMm": [
+        1500,
+        6000,
+        10500
+      ],
+      "minStrapDistanceFromEndsMm": 300,
+      "minDistanceBetweenStrapsMm": 500
+    }
+  ],
+  "infeed": {
+    "packageCount": 10,
+    "intervalS": 30,
+    "minimumGapMm": 1000,
+    "firstEntryTimeS": 0,
+    "typeSequence": [
+      "P12"
+    ]
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "name": "Bassa su INV2 se pacco precedente vicino",
+      "isEnabled": true,
+      "targetInverterId": "INV2",
+      "action": "SetLowSpeed",
+      "signalName": "",
+      "condition": {
+        "$type": "and",
+        "children": [
+          {
+            "$type": "gapAhead",
+            "inverterId": "INV2",
+            "gapMm": 1500
+          },
+          {
+            "$type": "not",
+            "child": {
+              "$type": "inverterRunning",
+              "inverterId": "INV3",
+              "running": true
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "simulation": {
+    "timeStepMs": 10,
+    "maxSimulationTimeS": 7200,
+    "recordIntervalMs": 50,
+    "deadlockTimeoutS": 120,
+    "minSafetyDistanceMm": 300,
+    "maxFrictionDeceleration": 2.5,
+    "stopOnCollision": false
+  }
+}
