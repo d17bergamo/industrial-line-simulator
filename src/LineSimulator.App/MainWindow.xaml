@@ -103,8 +103,8 @@
         </Border>
 
         <TabControl x:Name="Pages" BorderThickness="0" Padding="0">
-        <TabItem Header="Simulazione 3D" FontWeight="SemiBold">
-        <Grid FontWeight="Normal">
+        <TabItem Header="Simulazione 3D">
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="360" MinWidth="250"/>
                 <ColumnDefinition Width="5"/>
@@ -204,8 +204,8 @@
             </Grid>
         </Grid>
         </TabItem>
-        <TabItem Header="Ciclogramma" FontWeight="SemiBold">
-        <Grid FontWeight="Normal">
+        <TabItem Header="Ciclogramma">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="3*"/>
                 <RowDefinition Height="Auto"/>
