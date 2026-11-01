@@ -102,7 +102,9 @@
             </DockPanel>
         </Border>
 
-        <Grid>
+        <TabControl x:Name="Pages" BorderThickness="0" Padding="0">
+        <TabItem Header="Simulazione 3D" FontWeight="SemiBold">
+        <Grid FontWeight="Normal">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="360" MinWidth="250"/>
                 <ColumnDefinition Width="5"/>
@@ -175,16 +177,11 @@
             </Grid>
 
             <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
-
-            <!-- Area principale: 3D + timeline + schede -->
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="3*"/>
+                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="5"/>
-                    <RowDefinition Height="2*"/>
                 </Grid.RowDefinitions>
-
                 <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                     <Grid>
                         <h:HelixViewport3D x:Name="Viewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True"
@@ -196,7 +193,6 @@
                                    Text="Clic sinistro: seleziona · Destro: ruota · Rotella: zoom · Centrale/Maiusc+destro: sposta"/>
                     </Grid>
                 </Border>
-
                 <!-- Timeline -->
                 <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
                     <DockPanel>
@@ -205,12 +201,18 @@
                         <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </DockPanel>
                 </Border>
-
-                <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
-
-                <TabControl Grid.Row="3">
-                    <TabItem Header="Ciclogramma">
-                        <DockPanel>
+            </Grid>
+        </Grid>
+        </TabItem>
+        <TabItem Header="Ciclogramma" FontWeight="SemiBold">
+        <Grid FontWeight="Normal">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="5"/>
+                <RowDefinition Height="2*"/>
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0">
                             <DockPanel DockPanel.Dock="Top" Margin="4,2">
                                 <Button DockPanel.Dock="Right" Content="Mostra tutto" Click="CycloFit_Click" Padding="6,1" Margin="2"/>
                                 <Button DockPanel.Dock="Right" Content="Segui cursore" Click="CycloFollow_Click" Padding="6,1" Margin="2"/>
@@ -232,9 +234,16 @@
                                 <ctl:CyclogramControl x:Name="Cyclogram" Recorder="{Binding Recorder}" CursorTime="{Binding DisplayTime, Mode=TwoWay}"
                                                       MaxTime="{Binding MaxTime}" Version="{Binding CyclogramVersion}"/>
                             </ScrollViewer>
-                        </DockPanel>
-                    </TabItem>
-
+            </DockPanel>
+                <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="Timeline" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding DisplayTimeText}" Width="80" VerticalAlignment="Center" TextAlignment="Right" FontFamily="Consolas"/>
+                        <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
+                    </DockPanel>
+                </Border>
+            <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+            <TabControl Grid.Row="3">
                     <TabItem Header="Risultati e produttività">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel Margin="8">
@@ -398,8 +407,9 @@
                             </ListView.View>
                         </ListView>
                     </TabItem>
-                </TabControl>
-            </Grid>
+            </TabControl>
         </Grid>
+        </TabItem>
+        </TabControl>
     </DockPanel>
 </Window>
