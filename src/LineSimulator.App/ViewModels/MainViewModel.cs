@@ -105,7 +105,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<PackageResult> PackageResults { get; } = new();
     public ObservableCollection<KeyValuePair<string, string>> Summary { get; } = new();
     public ObservableCollection<ExampleItem> Examples { get; } = new();
-    public IReadOnlyList<double> Speeds { get; } = new[] { 1.0, 10.0, 50.0, 100.0 };
+    public IReadOnlyList<double> Speeds { get; } = new[] { 1.0, 2.0, 5.0, 10.0, 20.0, 100.0 };
 
     public string Title => $"Industrial Line Simulator - {_project.Name}{(_modified ? " *" : "")}" + (_filePath != null ? $" [{Path.GetFileName(_filePath)}]" : "");
     public LineProject Project => _project;

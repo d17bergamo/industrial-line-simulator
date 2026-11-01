@@ -70,27 +70,6 @@
                 <Button Style="{StaticResource ToolButton}" Content="Fermo" Command="{Binding AddStopCommand}" ToolTip="Fermo intermedio nella zona dello stopper (intestatura di testa o di coda)"/>
                 <Button Style="{StaticResource ToolButton}" Content="Bilico" Command="{Binding AddScaleCommand}" ToolTip="Bilico di pesatura sul lato di deposito del trasferitore"/>
                 <Button Style="{StaticResource ToolButton}" Content="Elimina" Command="{Binding DeleteCommand}" Foreground="#C0392B"/>
-                <Rectangle Width="1" Fill="#D0D5DB" Margin="8,3"/>
-                <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
-                <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="■ Stop" Command="{Binding StopCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="⟲ Reset" Command="{Binding ResetCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="Passo" Command="{Binding StepCommand}" ToolTip="Avanza di un passo di integrazione"/>
-                <Button Style="{StaticResource ToolButton}" Content="Evento ▸" Command="{Binding NextEventCommand}" ToolTip="Avanza fino al prossimo evento"/>
-                <Button Style="{StaticResource ToolButton}" Content="Fino al termine ▸▸" Command="{Binding RunToEndCommand}"/>
-                <TextBlock Text="Velocità:" VerticalAlignment="Center" Margin="10,0,4,0"/>
-                <ComboBox Width="70" ItemsSource="{Binding Speeds}" SelectedItem="{Binding SpeedFactor}" VerticalAlignment="Center">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0}x}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <Rectangle Width="1" Fill="#D0D5DB" Margin="8,3"/>
-                <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
-                <Button Style="{StaticResource ToolButton}" Content="Laterale" Click="ViewSide_Click"/>
-                <Button Style="{StaticResource ToolButton}" Content="Isometrica" Click="ViewIso_Click"/>
-                <Button Style="{StaticResource ToolButton}" Content="Adatta" Click="ViewFit_Click"/>
             </WrapPanel>
         </Border>
 
@@ -119,6 +98,26 @@
                     <RowDefinition Height="3*"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0">
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="3">
+<WrapPanel>
+                <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
+                <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="■ Stop" Command="{Binding StopCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="⟲ Reset" Command="{Binding ResetCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="Passo" Command="{Binding StepCommand}" ToolTip="Avanza di un passo di integrazione"/>
+                <Button Style="{StaticResource ToolButton}" Content="Evento ▸" Command="{Binding NextEventCommand}" ToolTip="Avanza fino al prossimo evento"/>
+                <Button Style="{StaticResource ToolButton}" Content="Fino al termine ▸▸" Command="{Binding RunToEndCommand}"/>
+                <TextBlock Text="Velocità:" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <ComboBox Width="70" ItemsSource="{Binding Speeds}" SelectedItem="{Binding SpeedFactor}" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0}x}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                
+</WrapPanel>
+                </Border>
                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Struttura della linea"/>
                     <TreeView x:Name="LineTree" ItemsSource="{Binding Tree}" SelectedItemChanged="LineTree_SelectedItemChanged" BorderThickness="0">
                         <TreeView.ItemContainerStyle>
@@ -189,6 +188,34 @@
                                            Background="White">
                             <h:DefaultLights/>
                         </h:HelixViewport3D>
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,34,0,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="3">
+<WrapPanel>
+                <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
+                <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="■ Stop" Command="{Binding StopCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="⟲ Reset" Command="{Binding ResetCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="Passo" Command="{Binding StepCommand}" ToolTip="Avanza di un passo di integrazione"/>
+                <Button Style="{StaticResource ToolButton}" Content="Evento ▸" Command="{Binding NextEventCommand}" ToolTip="Avanza fino al prossimo evento"/>
+                <Button Style="{StaticResource ToolButton}" Content="Fino al termine ▸▸" Command="{Binding RunToEndCommand}"/>
+                <TextBlock Text="Velocità:" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <ComboBox Width="70" ItemsSource="{Binding Speeds}" SelectedItem="{Binding SpeedFactor}" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0}x}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                
+</WrapPanel>
+                        </Border>
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,70,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="3">
+                            <WrapPanel>
+                <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
+                <Button Style="{StaticResource ToolButton}" Content="Laterale" Click="ViewSide_Click"/>
+                <Button Style="{StaticResource ToolButton}" Content="Isometrica" Click="ViewIso_Click"/>
+                <Button Style="{StaticResource ToolButton}" Content="Adatta" Click="ViewFit_Click"/>
+                            </WrapPanel>
+                        </Border>
                         <TextBlock Margin="8" VerticalAlignment="Top" HorizontalAlignment="Left" Foreground="#5A6672" Background="#CCFFFFFF" Padding="4"
                                    Text="Clic sinistro: seleziona · Destro: ruota · Rotella: zoom · Centrale/Maiusc+destro: sposta"/>
                     </Grid>
