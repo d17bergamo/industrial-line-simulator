@@ -62,6 +62,7 @@ public sealed class LogicRule : ComponentBase
 [JsonDerivedType(typeof(PackageHeadInRangeCondition), "headInRange")]
 [JsonDerivedType(typeof(GapAheadLessThanCondition), "gapAhead")]
 [JsonDerivedType(typeof(SignalCondition), "signal")]
+[JsonDerivedType(typeof(DeviceStateCondition), "device")]
 public abstract class LogicCondition
 {
     public abstract string Describe();
@@ -146,4 +147,15 @@ public sealed class SignalCondition : LogicCondition
 {
     public string SignalName { get; set; } = string.Empty;
     public override string Describe() => $"Segnale[{SignalName}]";
+}
+
+/// <summary>
+/// Stato di un dispositivo (legatrice, stringifascio, compattatore, rigettatrice, bilico, fermo, trasferitore).
+/// Senza stato: vero se il dispositivo è impegnato (non a riposo).
+/// </summary>
+public sealed class DeviceStateCondition : LogicCondition
+{
+    public string DeviceId { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public override string Describe() => string.IsNullOrWhiteSpace(State) ? $"DISP[{DeviceId}] impegnato" : $"DISP[{DeviceId}] in stato {State}";
 }

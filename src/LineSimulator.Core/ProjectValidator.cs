@@ -53,6 +53,7 @@ public static class ProjectValidator
         ValidateInfeed(p, topo, r);
         ValidateRules(p, r);
         ValidateSimulation(p, r);
+        ValidateProcessDevices(p, topo, r);
         return r;
     }
 
@@ -62,6 +63,10 @@ public static class ProjectValidator
         all.AddRange(p.Inverters); all.AddRange(p.Sections); all.AddRange(p.Photocells);
         all.AddRange(p.Strappers); all.AddRange(p.PackageTypes); all.AddRange(p.Rules);
         all.Add(p.Stopper); all.Add(p.Transfer);
+        if (p.BundleClamp.IsEnabled) all.Add(p.BundleClamp);
+        if (p.Compactor.IsEnabled) all.Add(p.Compactor);
+        if (p.Rejector.IsEnabled) all.Add(p.Rejector);
+        all.AddRange(p.IntermediateStops); all.AddRange(p.Scales);
         foreach (var c in all.Where(c => string.IsNullOrWhiteSpace(c.Id)))
             r.Error("ID_EMPTY", $"Componente '{c.Name}' senza identificativo.");
         foreach (var g in all.Where(c => !string.IsNullOrWhiteSpace(c.Id)).GroupBy(c => c.Id).Where(g => g.Count() > 1))
@@ -156,6 +161,8 @@ public static class ProjectValidator
             {
                 if (pc.Activation != PhotocellActivation.WhenOccupied)
                     r.Error("PC_ACC", "La fotocellula di accumulo deve attivarsi con pacco presente.", pc.Id);
+                if (pc.DetectionMode != PhotocellDetectionMode.Presence)
+                    r.Error("PC_ACC_MODE", "La fotocellula di accumulo deve usare la logica di presenza.", pc.Id);
                 if (x < zone.StartM || x > zone.EndM)
                     r.Warn("PC_ACC_ZONE", $"Fotocellula di accumulo fuori dalla zona dell'inverter {zone.Id}.", pc.Id);
                 double v = zone.Inverter.HighSpeed;
@@ -285,6 +292,8 @@ public static class ProjectValidator
                 yield return $"Inverter '{g.InverterId}' non trovato."; break;
             case StrapperBusyCondition sb when !p.Strappers.Any(x => x.Id == sb.StrapperId):
                 yield return $"Legatrice '{sb.StrapperId}' non trovata."; break;
+            case DeviceStateCondition d when !DeviceIds(p).Contains(d.DeviceId):
+                yield return $"Dispositivo '{d.DeviceId}' non trovato."; break;
         }
     }
 
@@ -296,5 +305,169 @@ public static class ProjectValidator
         if (s.RecordIntervalMs < s.TimeStepMs) r.Warn("SIM_REC", "Intervallo di registrazione minore del passo: verrà usato il passo.");
         if (s.MaxFrictionDeceleration <= 0) r.Error("SIM_FRICTION", "Decelerazione d'attrito deve essere > 0.");
         if (s.DeadlockTimeoutS <= 0) r.Error("SIM_DEADLOCK", "Timeout deadlock deve essere > 0.");
+    }
+
+    private static HashSet<string> DeviceIds(LineProject p)
+    {
+        var ids = new HashSet<string>(p.Strappers.Select(x => x.Id)) { p.Stopper.Id, p.Transfer.Id };
+        if (p.BundleClamp.IsEnabled) ids.Add(p.BundleClamp.Id);
+        if (p.Compactor.IsEnabled) ids.Add(p.Compactor.Id);
+        if (p.Rejector.IsEnabled) ids.Add(p.Rejector.Id);
+        foreach (var s in p.IntermediateStops) ids.Add(s.Id);
+        foreach (var s in p.Scales) ids.Add(s.Id);
+        return ids;
+    }
+
+    private static void CheckDeviceCommon(LineProject p, SequenceDeviceConfig d, ValidationReport r, double closeTime)
+    {
+        foreach (var (text, label) in new[] { (d.StartConsent, "consenso di avvio"), (d.StopCondition, "condizione di arresto") })
+        {
+            if (string.IsNullOrWhiteSpace(text)) continue;
+            LogicCondition? c = null;
+            try { c = ConditionText.Parse(text); }
+            catch (FormatException ex) { r.Error("DEV_COND", $"Errore nella {label}: {ex.Message}", d.Id); }
+            if (c != null) foreach (var m in CheckCondition(p, c)) r.Error("DEV_COND", $"{label}: {m}", d.Id);
+        }
+        if (d.ConfirmDelayS < 0) r.Error("DEV_TIME", "Ritardo di conferma negativo.", d.Id);
+        if (d.ConfirmTimeoutS <= closeTime + d.ConfirmDelayS)
+            r.Error("DEV_TIMEOUT", $"Timeout conferma ({F(d.ConfirmTimeoutS)} s) non superiore a tempo movimento + ritardo conferma ({F(closeTime + d.ConfirmDelayS)} s).", d.Id);
+        if (d.FaultResetTimeS < 0) r.Error("DEV_TIME", "Tempo di ripristino negativo.", d.Id);
+        if (d.SimulatedFaultAtCycle < 0) r.Error("DEV_FAULT", "Ciclo di guasto simulato negativo.", d.Id);
+        if (d.SimulatedFaultAtCycle > 0) r.Info("DEV_FAULT_SIM", $"Guasto simulato attivo al ciclo {d.SimulatedFaultAtCycle}.", d.Id);
+    }
+
+    /// <summary>Fotocellula di ingresso, dispositivi di processo, fermi intermedi, trasferitore multi-pacco, bilici.</summary>
+    private static void ValidateProcessDevices(LineProject p, LineTopology topo, ValidationReport r)
+    {
+        // Fotocellula di ingresso obbligatoria
+        var entries = p.Photocells.Where(pc => pc.IsEntryPhotocell && pc.IsEnabled).ToList();
+        if (entries.Count == 0)
+            r.Error("PC_ENTRY", "Manca la fotocellula di ingresso (obbligatoria): marcare una fotocellula come 'Fotocellula di ingresso'.");
+        else
+        {
+            if (entries.Count > 1) r.Warn("PC_ENTRY_MULTI", "Più fotocellule di ingresso: l'identificazione avviene alla prima che rileva il pacco.");
+            var first = topo.Zones.FirstOrDefault();
+            double minLen = p.PackageTypes.Count > 0 ? p.PackageTypes.Min(t => t.LengthMm) : 0;
+            foreach (var e in entries)
+            {
+                if (e.DetectionMode != PhotocellDetectionMode.Presence)
+                    r.Error("PC_ENTRY_MODE", "La fotocellula di ingresso deve usare la logica di presenza.", e.Id);
+                if (first != null && Units.MmToM(e.PositionMm) > first.EndM)
+                    r.Warn("PC_ENTRY_POS", "La fotocellula di ingresso non si trova nella prima zona della linea.", e.Id);
+                if (e.PositionMm - Units.MToMm(topo.LineStartM) > minLen)
+                    r.Warn("PC_ENTRY_FAR", $"La fotocellula di ingresso è oltre la lunghezza del pacco più corto ({F(minLen)} mm) dall'inizio linea: l'identificazione avviene dopo l'ingresso.", e.Id);
+            }
+        }
+
+        var st = p.StrappingStation;
+        var stationZone = st.IsEnabled ? topo.Zone(st.InverterId) : null;
+
+        // Stringifascio KNOF
+        var k = p.BundleClamp;
+        if (k.IsEnabled)
+        {
+            if (stationZone == null) r.Error("KNOF_STATION", "Lo stringifascio richiede una stazione di legatura attiva.", k.Id);
+            else
+            {
+                double x = Units.MmToM(k.PositionMm);
+                if (x < stationZone.StartM || x > stationZone.EndM) r.Error("KNOF_POS", $"Stringifascio fuori dalla zona di legatura {stationZone.Id}.", k.Id);
+                var firstStr = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).FirstOrDefault();
+                if (firstStr != null && k.PositionMm > firstStr.PositionMm)
+                    r.Warn("KNOF_ENTRY", "Lo stringifascio dovrebbe essere installato in ingresso alla legatrice (a monte della prima legatrice).", k.Id);
+            }
+            if (k.CloseTimeS < 0 || k.OpenTimeS < 0 || k.HoldTimeS < 0) r.Error("KNOF_TIME", "Tempi stringifascio negativi.", k.Id);
+            CheckDeviceCommon(p, k, r, k.CloseTimeS);
+        }
+
+        // Compattatore laterale
+        var c = p.Compactor;
+        if (c.IsEnabled)
+        {
+            if (stationZone == null) r.Error("CMP_STATION", "Il compattatore richiede una stazione di legatura attiva.", c.Id);
+            else
+            {
+                double x = Units.MmToM(c.PositionMm);
+                if (x < stationZone.StartM || x > stationZone.EndM) r.Error("CMP_POS", $"Compattatore fuori dalla zona di legatura {stationZone.Id}.", c.Id);
+            }
+            if (c.CloseTimeS < 0 || c.OpenTimeS < 0 || c.HoldTimeS < 0) r.Error("CMP_TIME", "Tempi compattatore negativi.", c.Id);
+            if (c.OpenPhase == CompactorOpenPhase.AfterBundleClampClosed && !k.IsEnabled)
+                r.Error("CMP_PHASE", "Apertura 'dopo chiusura stringifascio' richiede lo stringifascio abilitato.", c.Id);
+            CheckDeviceCommon(p, c, r, c.CloseTimeS);
+        }
+
+        // Rigettatrice SMA
+        var sma = p.Rejector;
+        if (sma.IsEnabled)
+        {
+            var z = topo.ZoneAt(Units.MmToM(sma.PositionMm + sma.LengthMm / 2));
+            if (z == null) r.Error("SMA_POS", "Rigettatrice fuori dalla linea.", sma.Id);
+            else
+            {
+                if (z.Kind != ZoneKind.Transport) r.Error("SMA_ZONE", $"La rigettatrice deve trovarsi in una zona di trasporto (non legatura/stopper): {z.Id}.", sma.Id);
+                if (Units.MmToM(sma.PositionMm) < z.StartM - 1e-6 || Units.MmToM(sma.PositionMm + sma.LengthMm) > z.EndM + 1e-6)
+                    r.Warn("SMA_SPAN", $"Il campo di spinta esce dalla zona {z.Id}.", sma.Id);
+            }
+            if (sma.LengthMm <= 0) r.Error("SMA_LEN", "Lunghezza campo di spinta deve essere > 0.", sma.Id);
+            if (sma.EjectTimeS <= 0 || sma.ReturnTimeS < 0 || sma.RestartDelayS < 0) r.Error("SMA_TIME", "Tempi rigettatrice non validi.", sma.Id);
+            try { sma.ParseRejectNumbers(); }
+            catch (FormatException ex) { r.Error("SMA_LIST", ex.Message, sma.Id); }
+            foreach (var id in sma.RejectTypeIds.Where(id => !p.PackageTypes.Any(t => t.Id == id)))
+                r.Error("SMA_TYPE", $"Tipologia da rigettare '{id}' non definita.", sma.Id);
+            foreach (var t in p.PackageTypes.Where(t => t.LengthMm > sma.LengthMm))
+                r.Warn("SMA_PKG_LEN", $"Pacco {t.Id} più lungo del campo di spinta.", sma.Id);
+            CheckDeviceCommon(p, sma, r, sma.EjectTimeS);
+        }
+
+        // Fermi intermedi e trasferitore multi-pacco
+        var stops = p.IntermediateStops.Where(s => s.IsEnabled).ToList();
+        foreach (var s in stops)
+        {
+            double x = Units.MmToM(s.PositionMm);
+            var sz = topo.StopperZone;
+            if (sz == null || x < sz.StartM || x > sz.EndM)
+                r.Error("STOP_ZONE", "Il fermo intermedio deve trovarsi nella zona dello stopper.", s.Id);
+            if (s.PositionMm >= p.Stopper.PositionMm) r.Error("STOP_POS", "Il fermo intermedio deve essere a monte dello stopper finale.", s.Id);
+            if (s.PositionMm < p.Transfer.PositionMm || s.PositionMm > p.Transfer.EndMm)
+                r.Warn("STOP_TRF", "Il fermo intermedio è fuori dal campo del trasferitore.", s.Id);
+            if (s.AlignmentTimeS < 0) r.Error("STOP_TIME", "Tempo di intestatura negativo.", s.Id);
+        }
+        foreach (var g in stops.GroupBy(s => Math.Round(s.PositionMm)).Where(g => g.Count() > 1))
+            r.Error("STOP_DUP", $"Più fermi nella stessa posizione ({F(g.Key)} mm).");
+        var tr = p.Transfer;
+        if (tr.BatchSize < 1) r.Error("TRF_BATCH", "Pacchi per ciclo del trasferitore deve essere ≥ 1.", tr.Id);
+        else if (tr.BatchSize > 1 + stops.Count)
+            r.Warn("TRF_BATCH_STOPS", $"Pacchi per ciclo ({tr.BatchSize}) maggiore dei fermi disponibili ({1 + stops.Count}).", tr.Id);
+        if (tr.BatchWaitTimeoutS < 0) r.Error("TRF_BATCH", "Attesa gruppo negativa.", tr.Id);
+        if (stops.Count > 0 && p.PackageTypes.Count > 0)
+        {
+            double minLen = p.PackageTypes.Min(t => t.LengthMm);
+            var first = stops.OrderByDescending(s => s.PositionMm).First();
+            double head = first.Reference == StopReference.Head ? first.PositionMm : first.PositionMm + minLen;
+            if (head > p.Stopper.PositionMm - minLen - p.Simulation.MinSafetyDistanceMm + 1e-6)
+                r.Warn("STOP_OVERLAP", $"Con il pacco più corto ({F(minLen)} mm) il fermo {first.Id} si sovrappone al pacco allo stopper: verrà usato solo se c'è spazio.", first.Id);
+        }
+
+        // Bilici
+        var scales = p.Scales.Where(s => s.IsEnabled).OrderBy(s => s.StartMm).ToList();
+        foreach (var b in scales)
+        {
+            if (b.LengthMm <= 0) r.Error("SCALE_LEN", "Lunghezza bilico deve essere > 0.", b.Id);
+            if (b.StartMm < tr.PositionMm - 1 || b.EndMm > tr.EndMm + 500)
+                r.Warn("SCALE_TRF", "Il bilico non è allineato al campo di deposito del trasferitore.", b.Id);
+            if (b.StandardHeadPositionMm > 0 && (b.StandardHeadPositionMm < b.StartMm || b.StandardHeadPositionMm > b.EndMm))
+                r.Error("SCALE_STD", "Posizione standard fuori dal bilico.", b.Id);
+            if (b.IntermediateHeadPositionMm > 0 && (b.IntermediateHeadPositionMm < b.StartMm || b.IntermediateHeadPositionMm > b.EndMm))
+                r.Error("SCALE_INT", "Posizione intermedia fuori dal bilico.", b.Id);
+            if (b.PositioningSpeed <= 0 || b.Acceleration <= 0) r.Error("SCALE_SPEED", "Velocità e accelerazione del bilico devono essere > 0.", b.Id);
+            if (b.StabilizationTimeS < 0 || b.AcquisitionTimeS < 0 || b.ReleaseTimeS < 0) r.Error("SCALE_TIME", "Tempi bilico negativi.", b.Id);
+            if (b.ResolutionKg <= 0) r.Error("SCALE_RES", "Risoluzione deve essere > 0.", b.Id);
+            CheckDeviceCommon(p, b, r, b.StabilizationTimeS);
+        }
+        for (int i = 1; i < scales.Count; i++)
+            if (scales[i].StartMm < scales[i - 1].EndMm - 1e-6)
+                r.Error("SCALE_OVERLAP", $"Bilici {scales[i - 1].Id} e {scales[i].Id} sovrapposti.", scales[i].Id);
+
+        try { ProcessText.ParseWeights(p.Infeed.WeightOverrides); }
+        catch (FormatException ex) { r.Error("INF_WEIGHT", ex.Message); }
     }
 }

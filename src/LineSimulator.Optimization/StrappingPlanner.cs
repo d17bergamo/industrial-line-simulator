@@ -27,21 +27,38 @@ public static class StrappingPlanner
         error = null;
         var zone = topo.StrappingZone;
         if (zone == null) { error = "zona di legatura non definita o non valida"; return null; }
+        // Dispositivi di fermata: compattatore (prima della legatura) e stringifascio KNOF (chiuso durante la legatura).
+        // Il tempo di fermata diventa: pre + max_i(prep_i + leg_i + max(rit_i, post)), equivalente a cicli "efficaci"
+        // per legatrice: (prep_i + pre) + leg_i + max(rit_i, post). L'ottimizzatore esatto resta invariato.
+        var (pre, post) = StopOverhead(project);
         var specs = project.Strappers
             .Select((s, i) => (s, i))
             .Where(x => x.s.IsEnabled)
             .Select(x => new StrapperSpec(x.s.Id, x.s.Name, x.i, Units.MmToM(x.s.PositionMm),
-                x.s.PreparationTimeS, x.s.StrappingTimeS, x.s.ReturnTimeS, x.s.AllowCombinedWork))
+                x.s.PreparationTimeS + pre, x.s.StrappingTimeS, Math.Max(x.s.ReturnTimeS, post), x.s.AllowCombinedWork))
             .ToList();
         if (specs.Count == 0) { error = "nessuna legatrice abilitata"; return null; }
         double L = Units.MmToM(type.LengthMm);
+        double headMin = zone.StartM + L, headMax = zone.EndM;
+        // Il pacco deve trovarsi sotto stringifascio e compattatore a ogni fermata: H − L ≤ X ≤ H
+        if (project.StrappingStation.IsEnabled && project.BundleClamp.IsEnabled)
+        {
+            double x = Units.MmToM(project.BundleClamp.PositionMm);
+            headMin = Math.Max(headMin, x); headMax = Math.Min(headMax, x + L);
+        }
+        if (project.StrappingStation.IsEnabled && project.Compactor.IsEnabled)
+        {
+            double x = Units.MmToM(project.Compactor.PositionMm);
+            headMin = Math.Max(headMin, x); headMax = Math.Min(headMax, x + L);
+        }
+        if (headMin > headMax + 1e-9) { error = "nessuna posizione di legatura con il pacco sotto stringifascio e compattatore"; return null; }
         return new StrappingProblem
         {
             Strappers = specs,
             StrapPositionsM = type.StrapPositionsMm.Select(Units.MmToM).ToList(),
             PackageLengthM = L,
-            HeadMinM = zone.StartM + L,
-            HeadMaxM = zone.EndM,
+            HeadMinM = headMin,
+            HeadMaxM = headMax,
             ReferenceHeadM = zone.StartM,
             ExitHeadM = zone.EndM + L,
             TransportSpeed = zone.Inverter.HighSpeed,
@@ -50,6 +67,28 @@ public static class StrappingPlanner
             Deceleration = zone.Inverter.Deceleration,
             MatchToleranceM = Math.Max(0.0005, Units.MmToM(project.StrappingStation.PositioningToleranceMm) / 2)
         };
+    }
+
+    /// <summary>
+    /// Tempi aggiuntivi per fermata dovuti a compattatore e stringifascio:
+    /// pre = chiusura + conferma (+ mantenimento compattatore) prima della legatura;
+    /// post = mantenimento + apertura + conferma dopo la fine della legatura (sovrapposto al ritorno testa).
+    /// </summary>
+    public static (double Pre, double Post) StopOverhead(LineProject project)
+    {
+        if (!project.StrappingStation.IsEnabled) return (0, 0);
+        var k = project.BundleClamp;
+        var c = project.Compactor;
+        double pre = 0, post = 0;
+        if (c.IsEnabled) pre += c.CloseTimeS + c.ConfirmDelayS + c.HoldTimeS;
+        if (k.IsEnabled) pre += k.CloseTimeS + k.ConfirmDelayS;
+        double clampPost = k.IsEnabled ? k.HoldTimeS + k.OpenTimeS + k.ConfirmDelayS : 0;
+        double compOpen = c.IsEnabled ? c.OpenTimeS + c.ConfirmDelayS : 0;
+        if (!c.IsEnabled) post = clampPost;
+        else if (c.OpenPhase == CompactorOpenPhase.AfterBundleClampOpened) post = clampPost + compOpen;
+        else if (c.OpenPhase == CompactorOpenPhase.AfterStrapping) post = Math.Max(clampPost, (k.IsEnabled ? k.HoldTimeS : 0) + compOpen);
+        else post = clampPost;
+        return (pre, post);
     }
 
     public static StrategyComparison Compare(LineProject project, LineTopology topo, PackageType type)

@@ -24,7 +24,20 @@ public enum CycleState
     Lowering,
     Depositing,
     Consent,
-    Interlock
+    Interlock,
+    Waiting,
+    InPosition,
+    WaitConsent,
+    Completed,
+    Unloading,
+    Fault,
+    Closing,
+    Closed,
+    Opening,
+    Ejecting,
+    Stabilizing,
+    Acquiring,
+    Raised
 }
 
 public enum TrackGroup
@@ -34,7 +47,11 @@ public enum TrackGroup
     Strapper,
     Stopper,
     Transfer,
-    Interlock
+    Interlock,
+    Clamp,
+    Rejector,
+    Stop,
+    Scale
 }
 
 public sealed class CycleSegment
@@ -109,6 +126,16 @@ public sealed class SimFrame
     public TransferState TransferState { get; init; }
     public double TransferLiftM { get; init; }
     public double TransferLateralM { get; init; }
+    public StrapperProcessState[] StrapperProcessStates { get; init; } = Array.Empty<StrapperProcessState>();
+    public ClampState BundleClampState { get; init; }
+    public double BundleClampClosed { get; init; }
+    public ClampState CompactorState { get; init; }
+    public double CompactorClosed { get; init; }
+    public RejectorState RejectorState { get; init; }
+    public double RejectorStrokeM { get; init; }
+    public StopState[] StopStates { get; init; } = Array.Empty<StopState>();
+    public bool[] StopRaised { get; init; } = Array.Empty<bool>();
+    public ScaleState[] ScaleStates { get; init; } = Array.Empty<ScaleState>();
 }
 
 /// <summary>Registratore: tracce del ciclogramma (a segmenti) e fotogrammi periodici.</summary>

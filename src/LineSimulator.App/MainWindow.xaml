@@ -67,6 +67,8 @@
                 <Button Style="{StaticResource ToolButton}" Content="Legatrice" Command="{Binding AddStrapperCommand}" ToolTip="Massimo 3 legatrici"/>
                 <Button Style="{StaticResource ToolButton}" Content="Tipologia pacco" Command="{Binding AddPackageTypeCommand}"/>
                 <Button Style="{StaticResource ToolButton}" Content="Regola" Command="{Binding AddRuleCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="Fermo" Command="{Binding AddStopCommand}" ToolTip="Fermo intermedio nella zona dello stopper (intestatura di testa o di coda)"/>
+                <Button Style="{StaticResource ToolButton}" Content="Bilico" Command="{Binding AddScaleCommand}" ToolTip="Bilico di pesatura sul lato di deposito del trasferitore"/>
                 <Button Style="{StaticResource ToolButton}" Content="Elimina" Command="{Binding DeleteCommand}" Foreground="#C0392B"/>
                 <Rectangle Width="1" Fill="#D0D5DB" Margin="8,3"/>
                 <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
@@ -278,6 +280,20 @@
                                             <TextBlock Style="{StaticResource KpiValue}" Foreground="#C0392B" Text="{Binding Collisions}"/>
                                         </StackPanel>
                                     </Border>
+                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource KpiLabel}" Text="Rigettati / pesati"/>
+                                            <TextBlock Style="{StaticResource KpiValue}">
+                                                <Run Text="{Binding RejectedPackages, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding WeighedPackages, Mode=OneWay}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource KpiLabel}" Text="Allarmi dispositivi"/>
+                                            <TextBlock Style="{StaticResource KpiValue}" Foreground="#C0392B" Text="{Binding DeviceAlarms}"/>
+                                        </StackPanel>
+                                    </Border>
                                     <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="340">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Collo di bottiglia"/>
@@ -337,6 +353,9 @@
                                         <DataGridTextColumn Header="Tipo" Binding="{Binding TypeId}"/>
                                         <DataGridTextColumn Header="Ingresso [s]" Binding="{Binding EntryTimeS, StringFormat={}{0:0.0}}"/>
                                         <DataGridTextColumn Header="Uscita [s]" Binding="{Binding ExitTimeS, StringFormat={}{0:0.0}}"/>
+                                        <DataGridCheckBoxColumn Header="Rigettato" Binding="{Binding Rejected, Mode=OneWay}"/>
+                                        <DataGridTextColumn Header="Peso misurato [kg]" Binding="{Binding MeasuredWeightKg, StringFormat={}{0:0}}"/>
+                                        <DataGridTextColumn Header="Bilico" Binding="{Binding ScaleId}"/>
                                         <DataGridTextColumn Header="Attraversamento [s]" Binding="{Binding LeadTimeS, StringFormat={}{0:0.0}}"/>
                                         <DataGridTextColumn Header="Attesa [s]" Binding="{Binding WaitingTimeS, StringFormat={}{0:0.0}}"/>
                                         <DataGridTextColumn Header="Arresti accumulo" Binding="{Binding AccumulationStops}"/>

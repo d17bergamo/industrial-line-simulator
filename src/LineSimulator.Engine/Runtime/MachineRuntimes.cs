@@ -26,12 +26,26 @@ public sealed class PhotocellRuntime
     public PackageRuntime? LastPackage { get; private set; }
     private double? _pendingSince;
 
-    /// <summary>Condizione di attivazione soddisfatta (occupata o libera secondo configurazione).</summary>
-    public bool Active => Config.IsEnabled && (Config.Activation == PhotocellActivation.WhenOccupied ? Output : !Output);
+    public bool IsEntry => Config.IsEntryPhotocell;
+    /// <summary>Fronte di salita dell'uscita nella scansione corrente (arrivo testa pacco).</summary>
+    public bool RoseThisScan { get; private set; }
+    /// <summary>Fronte di discesa dell'uscita nella scansione corrente (uscita completa / passaggio coda).</summary>
+    public bool FellThisScan { get; private set; }
+    /// <summary>Pacco che ha attivato l'uscita (valido fino al fronte di discesa compreso).</summary>
+    public PackageRuntime? OutputPackage { get; private set; }
+
+    /// <summary>Condizione di attivazione soddisfatta secondo logica di rilevamento e configurazione.</summary>
+    public bool Active => Config.IsEnabled && Config.DetectionMode switch
+    {
+        PhotocellDetectionMode.ArrivalPulse => RoseThisScan,
+        PhotocellDetectionMode.ClearancePulse => FellThisScan,
+        _ => Config.Activation == PhotocellActivation.WhenOccupied ? Output : !Output
+    };
 
     /// <summary>Aggiorna lo stato; restituisce true se l'uscita ha commutato.</summary>
     internal bool Update(double time, PackageRuntime? detected)
     {
+        RoseThisScan = FellThisScan = false;
         if (!Config.IsEnabled) { Raw = false; RawPackage = null; bool ch = Output; Output = false; return ch; }
         Raw = detected != null;
         RawPackage = detected;
@@ -42,10 +56,15 @@ public sealed class PhotocellRuntime
         {
             Output = Raw;
             _pendingSince = null;
+            if (Output) { RoseThisScan = true; OutputPackage = detected; Arrivals++; }
+            else { FellThisScan = true; Passages++; }
             return true;
         }
         return false;
     }
+
+    public int Arrivals { get; private set; }
+    public int Passages { get; private set; }
 
     public double OccupiedTimeS { get; internal set; }
     public int Activations { get; internal set; }
@@ -76,27 +95,61 @@ public sealed class StrapperRuntime
     public StrapperState State { get; private set; } = StrapperState.Idle;
     public double PhaseElapsedS { get; private set; }
     public PackageRuntime? Package { get; private set; }
+    /// <summary>Ultimo pacco lavorato (per gli stati di processo KNCA).</summary>
+    public PackageRuntime? LastPackage { get; private set; }
     public int StrapIndex { get; private set; } = -1;
     public bool Busy => State != StrapperState.Idle;
 
     public double BusyTimeS { get; internal set; }
     public int CompletedCycles { get; private set; }
+    public int CyclesStarted { get; private set; }
+
+    /// <summary>Stato funzionale KNCA 7/800 calcolato dal motore a ogni scansione.</summary>
+    public StrapperProcessState ProcessState { get; internal set; } = StrapperProcessState.Available;
+    internal double ProcessStateSinceS;
+    internal bool ConsentAlarmRaised;
+
+    /// <summary>Guasto simulato: la testa resta bloccata fino al ripristino, poi il ciclo riparte.</summary>
+    public bool Faulted { get; private set; }
+    public double FaultElapsedS { get; private set; }
+    public int Faults { get; private set; }
+    internal bool FaultJustCleared;
 
     internal void Start(PackageRuntime p, int strapIndex)
     {
         if (Busy) throw new InvalidOperationException($"Legatrice {Id} già occupata.");
         Package = p;
+        LastPackage = p;
         StrapIndex = strapIndex;
         State = StrapperState.Preparing;
         PhaseElapsedS = 0;
+        CyclesStarted++;
+        if (Config.SimulatedFaultAtCycle > 0 && CyclesStarted == Config.SimulatedFaultAtCycle)
+        {
+            Faulted = true;
+            FaultElapsedS = 0;
+            Faults++;
+        }
     }
 
     /// <summary>Avanza il ciclo. Restituisce la fase appena iniziata (o Idle a fine ciclo), null se nessun cambio.</summary>
     internal StrapperState? Advance(double dt)
     {
         if (State == StrapperState.Idle) return null;
-        PhaseElapsedS += dt;
         BusyTimeS += dt;
+        if (Faulted)
+        {
+            FaultElapsedS += dt;
+            if (FaultElapsedS >= Config.FaultResetTimeS - 1e-9)
+            {
+                Faulted = false;
+                FaultJustCleared = true;
+                PhaseElapsedS = 0;
+                State = StrapperState.Preparing;
+            }
+            return null;
+        }
+        PhaseElapsedS += dt;
         StrapperState? changed = null;
         // Più fasi possono concludersi nello stesso passo se hanno durata nulla.
         for (int guard = 0; guard < 4; guard++)
@@ -166,7 +219,9 @@ public enum TransferState
     Translating,
     Lowering,
     Depositing,
-    Returning
+    Returning,
+    /// <summary>Traslato, in attesa che i bilici di destinazione siano liberi (interblocco).</summary>
+    WaitingDestination
 }
 
 public sealed class TransferRuntime
@@ -183,7 +238,9 @@ public sealed class TransferRuntime
     public double EndM { get; }
     public TransferState State { get; internal set; } = TransferState.Home;
     public double ElapsedS { get; internal set; }
-    public PackageRuntime? Package { get; internal set; }
+    /// <summary>Pacchi a bordo (più pacchi allineati possono essere prelevati nello stesso ciclo).</summary>
+    public List<PackageRuntime> Packages { get; } = new();
+    public PackageRuntime? Package => Packages.Count > 0 ? Packages[0] : null;
     /// <summary>Posizione verticale delle forche (0 = sotto il piano rulli).</summary>
     public double LiftM { get; internal set; }
     /// <summary>Posizione laterale del carro (0 = in linea).</summary>

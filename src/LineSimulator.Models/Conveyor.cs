@@ -60,6 +60,13 @@ public sealed class InverterConfig : ComponentBase
     [UiProperty("Inverter abilitato", "", "Funzionamento", Order = 6)]
     public bool IsEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Arresto automatico: quando nella zona e nella sezione precedente non ci sono pacchi
+    /// (né pacchi in arrivo) l'inverter si ferma; riparte appena un pacco si avvicina.
+    /// </summary>
+    [UiProperty("Arresto automatico senza pacchi", "", "Funzionamento", Order = 7)]
+    public bool AutoStopWhenEmpty { get; set; } = true;
+
     [JsonIgnore]
     [UiProperty("Tempo di accelerazione (0→alta)", "s", "Rampe", ReadOnly = true, Order = 20)]
     public double AccelerationTimeS => Acceleration > 0 ? HighSpeed / Acceleration : double.PositiveInfinity;
@@ -126,6 +133,13 @@ public sealed class PhotocellConfig : ComponentBase
 
     [UiProperty("Attiva", "", "Sensore", Order = 6)]
     public bool IsEnabled { get; set; } = true;
+
+    /// <summary>Fotocellula di ingresso: identifica ogni pacco (obbligatoria, almeno una).</summary>
+    [UiProperty("Fotocellula di ingresso (identificazione pacchi)", "", "Sensore", Order = 7)]
+    public bool IsEntryPhotocell { get; set; }
+
+    [UiProperty("Logica di rilevamento", "", "Logica", Order = 13)]
+    public PhotocellDetectionMode DetectionMode { get; set; } = PhotocellDetectionMode.Presence;
 
     [UiProperty("Inverter comandato", "", "Logica", Order = 10)]
     public string ControlledInverterId { get; set; } = string.Empty;

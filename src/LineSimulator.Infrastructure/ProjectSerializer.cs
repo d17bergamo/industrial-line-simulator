@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using LineSimulator.Core;
 using LineSimulator.Models;
 
 namespace LineSimulator.Infrastructure;
@@ -46,6 +47,8 @@ public static class ProjectSerializer
         Migrate(node, version);
 
         var p = node.Deserialize<LineProject>(Options) ?? throw new InvalidDataException("Progetto vuoto.");
+        // v1 → v2: la fotocellula di ingresso è obbligatoria; i nuovi dispositivi restano disabilitati.
+        if (version < 2) ProjectNormalizer.EnsureEntryPhotocell(p);
         p.SchemaVersion = LineProject.CurrentSchemaVersion;
         return p;
     }

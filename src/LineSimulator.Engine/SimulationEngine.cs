@@ -8,18 +8,21 @@ using LineSimulator.Optimization;
 namespace LineSimulator.Engine;
 
 /// <summary>
-/// Motore di simulazione a tempo discreto (passo fisso), deterministico e indipendente dalla UI.
+/// Motore di simulazione a tempo discreto (passo fisso), a eventi e stati, deterministico e indipendente dalla UI.
 ///
 /// Ciclo di scansione (come un PLC):
-///  1. ingresso pacchi;  2. fotocellule (con tempo di risposta);  3. prenotazione zone a pacco singolo;
+///  1. ingresso pacchi;  2. fotocellule (tempo di risposta, arrivo/presenza/uscita, identificazione all'ingresso);
+///  3. prenotazione zone a pacco singolo, assegnazione dei fermi, abilitazione rigetto;
 ///  4. regole logiche (ingressi della scansione precedente);  5. comandi zone da valle a monte
-///  (accumulo, legatura, allineamento, interblocchi);  6. rampe inverter;  7. moto pacchi
-///  (trascinamento dei rulli con limite d'attrito, battuta stopper, contatti e distanze);
-///  8. macchine (stazione di legatura, legatrici, stopper, trasferitore);  9. statistiche e registrazione.
+///  (rigetto, legatura, fermi/stopper, accumulo, arresto automatico, interblocchi);  6. rampe inverter;
+///  7. moto pacchi (trascinamento con limite d'attrito, battute, contatti e distanze);
+///  8. macchine (stazione KNCA + KNOF + compattatore, legatrici, rigettatrice SMA, stopper, fermi,
+///  trasferitore, bilici);  9. statistiche e registrazione (ciclogramma e fotogrammi 3D dallo stesso stato).
 ///
+/// Ogni movimento dipende da sensori, consensi e interblocchi: non esistono animazioni temporizzate indipendenti.
 /// Nessuna sorgente casuale: a parità di progetto i risultati sono identici.
 /// </summary>
-public sealed class SimulationEngine : ILogicContext
+public sealed partial class SimulationEngine : ILogicContext
 {
     private const double SpeedEps = 1e-4;
 
@@ -38,6 +41,8 @@ public sealed class SimulationEngine : ILogicContext
     private readonly HashSet<string> _reportedOnce = new();
     private readonly List<SimEvent> _events = new();
     private readonly List<PackageType> _typeSequence = new();
+    private readonly Dictionary<ZoneRuntime, HashSet<PackageRuntime>> _zoneOccupants = new();
+    private readonly Dictionary<int, double> _weights = new();
 
     private long _step;
     private long _eventSeq;
@@ -49,6 +54,8 @@ public sealed class SimulationEngine : ILogicContext
     private readonly double _minSafety;
     private readonly double _frictionDecel;
     private readonly double _transferClearanceM;
+    private readonly ZoneRuntime? _firstZone;
+    private readonly ZoneRuntime? _stationUpstream;
 
     public SimulationEngine(LineProject project)
     {
@@ -67,10 +74,22 @@ public sealed class SimulationEngine : ILogicContext
             _zones.Add(zr);
             _zoneById[z.Id] = zr;
             _requests[z.Id] = new InverterRequests();
+            _zoneOccupants[zr] = new HashSet<PackageRuntime>();
             foreach (var s in z.Sections)
                 _sections.Add((s.StartMm / 1000.0, s.EndMm / 1000.0, zr, s.IsEnabled));
         }
         _sections.Sort((a, b) => a.Start.CompareTo(b.Start));
+        _firstZone = _zones.FirstOrDefault();
+
+        // Distanza di preavviso per il riavvio automatico: almeno la sezione precedente e lo spazio
+        // percorso dal pacco in arrivo durante l'accelerazione della zona.
+        foreach (var zr in _zones)
+        {
+            var up = Topology.Upstream(zr.Info);
+            if (up == null) { zr.LookaheadM = 0; continue; }
+            double tAcc = zr.Config.Acceleration > 0 ? zr.Config.HighSpeed / zr.Config.Acceleration : 0;
+            zr.LookaheadM = Math.Max(up.LengthM, up.Inverter.HighSpeed * tAcc + 0.5);
+        }
 
         foreach (var pc in project.Photocells)
         {
@@ -88,7 +107,11 @@ public sealed class SimulationEngine : ILogicContext
         {
             Station = new StationRuntime(_zoneById[Topology.StrappingZone.Id], project.StrappingStation.PositioningSpeed,
                 project.StrappingStation.PositioningToleranceMm / 1000.0);
+            var upZone = Topology.Upstream(Topology.StrappingZone);
+            if (upZone != null) _stationUpstream = _zoneById[upZone.Id];
         }
+
+        InitDevices();
 
         foreach (var id in project.Infeed.TypeSequence)
         {
@@ -96,6 +119,8 @@ public sealed class SimulationEngine : ILogicContext
             if (t != null) _typeSequence.Add(t);
         }
         if (_typeSequence.Count == 0 && project.PackageTypes.Count > 0) _typeSequence.Add(project.PackageTypes[0]);
+        try { foreach (var kv in ProcessText.ParseWeights(project.Infeed.WeightOverrides)) _weights[kv.Key] = kv.Value; }
+        catch (FormatException) { /* segnalato dal validatore */ }
 
         InitRecorder();
 
@@ -174,6 +199,7 @@ public sealed class SimulationEngine : ILogicContext
         Infeed(t0);
         UpdatePhotocells(t0);
         UpdateReservations(t0);
+        UpdateRejectorEnable(t0);
         EvaluateLogic();
         ComputeZoneCommands(t0, dt);
         foreach (var z in _zones) z.UpdateDrive(dt, Stopper.Config.AlignmentRollerSpeed);
@@ -181,10 +207,16 @@ public sealed class SimulationEngine : ILogicContext
 
         _step++;
         double t1 = Time;
+        UpdateZoneTracking();
         UpdateStation(t1, dt);
         UpdateStrappers(t1, dt);
+        UpdateClamps(dt);
+        UpdateStrapperProcessStates(t1);
+        UpdateRejector(t1, dt);
         UpdateStopper(t1, dt);
+        UpdateIntermediateStops(dt);
         UpdateTransfer(t1, dt);
+        UpdateScales(t1, dt);
         UpdateStatistics(dt);
         RecordStates();
         if (t1 >= _nextRecordTime - 1e-9)
@@ -236,18 +268,30 @@ public sealed class SimulationEngine : ILogicContext
         StopperState = Stopper.State,
         TransferState = Transfer.State,
         TransferLiftM = Transfer.LiftM,
-        TransferLateralM = Transfer.LateralM
+        TransferLateralM = Transfer.LateralM,
+        StrapperProcessStates = _strappers.Select(s => s.ProcessState).ToArray(),
+        BundleClampState = BundleClamp?.State ?? ClampState.Open,
+        BundleClampClosed = BundleClamp?.ClosedFraction ?? 0,
+        CompactorState = Compactor?.State ?? ClampState.Open,
+        CompactorClosed = Compactor?.ClosedFraction ?? 0,
+        RejectorState = Rejector?.State ?? RejectorState.Idle,
+        RejectorStrokeM = Rejector?.StrokeM ?? 0,
+        StopStates = _stops.Select(s => s.State).ToArray(),
+        StopRaised = _stops.Select(s => s.Raised).ToArray(),
+        ScaleStates = _scales.Select(s => s.State).ToArray()
     };
 
     public ZoneRuntime? Zone(string id) => _zoneById.TryGetValue(id, out var z) ? z : null;
 
     // ------------------------------------------------------------------ 1. Ingresso
 
+    private double NextDueTime() => Project.Infeed.FirstEntryTimeS + _nextIndex * Project.Infeed.IntervalS;
+
     private void Infeed(double t)
     {
         var cfg = Project.Infeed;
         if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;
-        double due = cfg.FirstEntryTimeS + _nextIndex * cfg.IntervalS;
+        double due = NextDueTime();
         if (t < due - 1e-9) return;
 
         var type = _typeSequence[_nextIndex % _typeSequence.Count];
@@ -273,13 +317,14 @@ public sealed class SimulationEngine : ILogicContext
             EntryTimeS = t,
             StrapsTotal = type.StrapPositionsMm.Count
         };
+        if (_weights.TryGetValue(pkg.Sequence, out var w)) pkg.WeightKg = w;
         pkg.StrapStatus = Station != null && pkg.StrapsTotal > 0 ? StrapStatus.Pending : StrapStatus.NotRequired;
         pkg.Velocity = DriveSpeed(pkg);
         _nextIndex++;
         _packages.Add(pkg);
         _active.Add(pkg);
         _lastProgressTime = t;
-        Emit(SimEventType.PackageEntered, EventSeverity.Info, $"Ingresso {pkg.Id} ({type.Id}, {type.LengthMm:0} mm, {type.WeightKg:0} kg)", null, pkg.Id);
+        Emit(SimEventType.PackageEntered, EventSeverity.Info, $"Ingresso {pkg.Id} ({type.Id}, {type.LengthMm:0} mm, {pkg.WeightKg:0} kg)", null, pkg.Id);
     }
 
     // ------------------------------------------------------------------ 2. Fotocellule
@@ -294,12 +339,40 @@ public sealed class SimulationEngine : ILogicContext
                 bool detectable = p.OnRollers || (p.State == PackageState.OnTransfer && p.LateralM < 0.01);
                 if (detectable && p.TailM <= pc.PositionM && p.HeadM >= pc.PositionM) { found = p; break; }
             }
-            if (pc.Update(t, found))
+            if (!pc.Update(t, found)) continue;
+            var pk = pc.OutputPackage;
+            var sev = pc.IsEntry ? EventSeverity.Info : EventSeverity.Trace;
+            if (pc.Output)
             {
-                if (pc.Output) pc.Activations++;
-                Emit(SimEventType.PhotocellChanged, EventSeverity.Trace,
-                    $"{pc.Id} {(pc.Output ? "OCCUPATA" : "LIBERA")}", pc.Id, pc.RawPackage?.Id ?? pc.LastPackage?.Id);
+                pc.Activations++;
+                Emit(SimEventType.PhotocellArrival, sev, $"{pc.Id} OCCUPATA: arrivo {pk?.Id}", pc.Id, pk?.Id);
+                if (pc.IsEntry && pk != null && !pk.Identified) Identify(pk, pc, t);
             }
+            else
+            {
+                string len = "";
+                if (pc.IsEntry && pk != null)
+                {
+                    pk.MeasuredLengthM = pk.HeadM - pc.PositionM;
+                    len = $", lunghezza rilevata {pk.MeasuredLengthM.Value * 1000:0} mm";
+                }
+                Emit(SimEventType.PhotocellCleared, sev, $"{pc.Id} LIBERA: uscita completa di {pk?.Id}{len}", pc.Id, pk?.Id);
+            }
+        }
+    }
+
+    /// <summary>Identificazione del pacco alla fotocellula di ingresso (tracciamento, rigetto).</summary>
+    private void Identify(PackageRuntime p, PhotocellRuntime pc, double t)
+    {
+        p.Identified = true;
+        p.IdentifiedTimeS = t;
+        p.EntryTrackStartHeadM = p.HeadM;
+        Emit(SimEventType.PackageIdentified, EventSeverity.Info,
+            $"{p.Id} identificato da {pc.Id}: tipologia {p.Type.Id}, {p.LengthM * 1000:0} mm, {p.WeightKg:0} kg", pc.Id, p.Id);
+        if (Rejector != null && Rejector.ShouldReject(p))
+        {
+            p.RejectRequested = true;
+            Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{Rejector.Id}: {p.Id} identificato come pacco da rigettare", Rejector.Id, p.Id);
         }
     }
 
@@ -309,6 +382,7 @@ public sealed class SimulationEngine : ILogicContext
     {
         foreach (var z in _zones.Where(z => z.IsSinglePackage))
         {
+            if (z.MultiStop) { UpdateMultiStopReservations(z); continue; }
             var res = z.ReservedBy;
             if (res != null)
             {
@@ -418,6 +492,9 @@ public sealed class SimulationEngine : ILogicContext
             var z = _zones[i];
             var req = _requests[z.Id];
             var prevMode = z.Mode; var prevLevel = z.Level; var prevReason = z.Reason;
+            bool prevAuto = z.AutoStopped;
+            bool autoStop = false;
+            PackageRuntime? demandCause = null;
             InverterMode mode;
             string reason;
             z.BlockedByAccumulation = false;
@@ -426,18 +503,45 @@ public sealed class SimulationEngine : ILogicContext
             {
                 mode = InverterMode.Stop; reason = "Inverter disabilitato";
             }
+            else if (Rejector != null && z == Rejector.Zone && Rejector.State == RejectorState.Positioning)
+            {
+                mode = InverterMode.Position; reason = $"{Rejector.Id}: arresto e posizionamento {Rejector.Package?.Id}";
+                z.PositionCommand = Rejector.VelocityCommand(dt);
+            }
+            else if (Rejector != null && z == Rejector.Zone && Rejector.State is RejectorState.InPosition or RejectorState.Ejecting
+                         or RejectorState.Returning or RejectorState.RestartConsent or RejectorState.Fault)
+            {
+                mode = InverterMode.Stop; reason = $"{Rejector.Id}: ciclo di rigetto in corso ({Rejector.State})";
+            }
             else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning)
             {
                 mode = InverterMode.Position; reason = $"Posizionamento fermata {Station.StopIndex + 1}";
                 z.PositionCommand = Station.VelocityCommand(dt);
             }
-            else if (Station != null && z == Station.Zone && Station.State == StationState.Strapping)
+            else if (Station != null && z == Station.Zone && Station.State is StationState.Strapping or StationState.Compacting
+                         or StationState.Clamping or StationState.Unclamping)
             {
-                mode = InverterMode.Stop; reason = "Legatura in corso";
+                mode = InverterMode.Stop;
+                reason = Station.State switch
+                {
+                    StationState.Compacting => "Compattazione laterale in corso",
+                    StationState.Clamping => "Chiusura stringifascio in corso",
+                    StationState.Unclamping => "Apertura stringifascio/compattatore",
+                    _ => "Legatura in corso"
+                };
+            }
+            else if (z.MultiStop)
+            {
+                mode = MultiStopCommand(z, t, dt, out reason, out autoStop);
             }
             else if (z.Info.Kind == ZoneKind.Stopper && Stopper.Package != null)
             {
                 mode = InverterMode.Align; reason = Stopper.State == StopperState.Aligned ? "Allineato, attesa trasferitore" : "Allineamento allo stopper";
+            }
+            else if (z.Config.AutoStopWhenEmpty && !ZoneDemand(z, t, true, out demandCause))
+            {
+                mode = InverterMode.Stop; reason = "Arresto automatico: nessun pacco in zona, nella sezione precedente o in arrivo";
+                autoStop = true;
             }
             else
             {
@@ -470,15 +574,23 @@ public sealed class SimulationEngine : ILogicContext
                 mode = InverterMode.Stop;
                 reason = "Interblocco: " + string.Join(", ", req.StopReasons);
             }
+            if (req.Stop) autoStop = false;
 
             z.Mode = mode;
             z.Reason = reason;
+            z.AutoStopped = autoStop && mode == InverterMode.Stop;
             if (mode == InverterMode.Run)
             {
                 z.Level = req.Low ? SpeedLevel.Low : req.High ? SpeedLevel.High : z.Config.DefaultSpeed;
                 if (req.SpeedReasons.Count > 0) z.Reason += " (" + string.Join(", ", req.SpeedReasons) + ")";
             }
             z.Accepting = z.AcceptsFor(null);
+
+            if (z.AutoStopped && !prevAuto && t > 0)
+                Emit(SimEventType.AutoStop, EventSeverity.Info, $"{z.Id}: arresto automatico (nessun pacco da movimentare)", z.Id);
+            else if (prevAuto && !z.AutoStopped && mode != InverterMode.Stop)
+                Emit(SimEventType.AutoStart, EventSeverity.Info,
+                    $"{z.Id}: riavvio automatico{(demandCause != null ? $", {demandCause.Id} in arrivo" : ", pacco in ingresso")}", z.Id, demandCause?.Id);
 
             if (mode != prevMode || (mode == InverterMode.Run && z.Level != prevLevel) || (mode == InverterMode.Stop && reason != prevReason))
             {
@@ -492,6 +604,28 @@ public sealed class SimulationEngine : ILogicContext
                 Emit(SimEventType.InverterCommand, EventSeverity.Trace, $"{z.Id}: {what} - {z.Reason}", z.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// Presenza di pacchi da movimentare per la zona: pacco nella zona (se richiesto), pacco nella sezione
+    /// precedente o in arrivo entro la distanza di preavviso, oppure (prima zona) ingresso imminente.
+    /// </summary>
+    private bool ZoneDemand(ZoneRuntime z, double t, bool includeInside, out PackageRuntime? cause)
+    {
+        cause = null;
+        foreach (var p in _active)
+        {
+            if (!p.OnRollers) continue;
+            bool inside = p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9;
+            if (inside && (includeInside || !z.Assigned.Contains(p))) { cause = p; return true; }
+            if (!inside && p.HeadM <= z.Info.StartM + 1e-9 && p.HeadM > z.Info.StartM - z.LookaheadM) { cause = p; return true; }
+        }
+        if (z == _firstZone && _nextIndex < Project.Infeed.PackageCount && _typeSequence.Count > 0)
+        {
+            double tAcc = z.Config.Acceleration > 0 ? z.Config.HighSpeed / z.Config.Acceleration : 0;
+            if (t >= NextDueTime() - tAcc - 1e-9) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -545,8 +679,9 @@ public sealed class SimulationEngine : ILogicContext
             double vOld = p.Velocity;
             double vTarget = DriveSpeed(p);
             double vNew = Math.Clamp(vTarget, vOld - dvMax, vOld + dvMax);
-            // In battuta allo stopper i rulli slittano volutamente sotto il pacco: non è un'anomalia.
-            bool slipping = !p.InStopperContact && Math.Abs(vTarget - vNew) > 1e-9;
+            // In battuta (stopper o fermo) i rulli slittano volutamente sotto il pacco: non è un'anomalia.
+            bool restrained = p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop;
+            bool slipping = !restrained && Math.Abs(vTarget - vNew) > 1e-9;
             if (slipping && !p.IsSlipping && Math.Abs(vTarget - vOld) > 0.01)
             {
                 SlipEvents++;
@@ -573,6 +708,33 @@ public sealed class SimulationEngine : ILogicContext
                     }
                 }
                 newHead = Stopper.PositionM;
+                vNew = 0;
+            }
+
+            // Battuta su fermo intermedio con intestatura di testa (solo il pacco assegnato, fermo sollevato)
+            foreach (var s in _stops)
+            {
+                if (s.Package != p || s.Reference != StopReference.Head || !s.Raised) continue;
+                if (newHead >= s.PositionM - 1e-9 && p.HeadM <= s.PositionM + 1e-6)
+                {
+                    if (!p.InIntermediateStopContact)
+                    {
+                        p.InIntermediateStopContact = true;
+                        if (vNew > Stopper.Config.MaxImpactSpeed + 1e-9)
+                        {
+                            ExcessiveImpacts++;
+                            Emit(SimEventType.ExcessiveImpact, EventSeverity.Warning,
+                                $"Impatto di {p.Id} al fermo {s.Id} a {vNew:0.###} m/s.", s.Id, p.Id);
+                        }
+                    }
+                    newHead = s.PositionM;
+                    vNew = 0;
+                }
+            }
+            // Intestatura di coda: pacco trattenuto in posizione
+            if (p.HeldByTailStop)
+            {
+                newHead = p.HeadM;
                 vNew = 0;
             }
 
@@ -610,7 +772,7 @@ public sealed class SimulationEngine : ILogicContext
             }
 
             // Interferenza col trasferitore
-            if (transferInLine && p != Transfer.Package && newHead > Transfer.StartM && p.TailM < Transfer.EndM)
+            if (transferInLine && !Transfer.Packages.Contains(p) && newHead > Transfer.StartM && p.TailM < Transfer.EndM)
             {
                 if (!p.TransferInterference)
                 {
@@ -647,100 +809,40 @@ public sealed class SimulationEngine : ILogicContext
         }
     }
 
-    // ------------------------------------------------------------------ 8. Macchine
-
-    private void UpdateStation(double t, double dt)
+    /// <summary>Tracciamento per zona: evento di uscita completa del pacco dalla sezione comandata.</summary>
+    private void UpdateZoneTracking()
     {
-        var st = Station;
-        if (st == null || st.Package == null) return;
-        var p = st.Package;
-        if (st.State != StationState.Idle && st.Zone.ReservedBy == p)
+        foreach (var z in _zones)
         {
-            if (st.State == StationState.Releasing && !st.Zone.Running) st.BlockedTimeS += dt;
-            else st.BusyTimeS += dt;
-            p.StrappingStationTimeS += dt;
-        }
-
-        if (st.State == StationState.Positioning)
-        {
-            double r = st.TargetHeadM - p.HeadM;
-            bool arrived = r <= 2e-4 && r >= -st.ToleranceM;
-            bool overshoot = r < -st.ToleranceM;
-            if (arrived || (overshoot && p.IsStopped))
+            var set = _zoneOccupants[z];
+            foreach (var p in set.ToList())
             {
-                double err = Math.Abs(r);
-                if (err > st.MaxPositioningErrorM) st.MaxPositioningErrorM = err;
-                if (overshoot)
-                {
-                    PositioningErrors++;
-                    Emit(SimEventType.PositioningError, EventSeverity.Error,
-                        $"{p.Id} oltre la fermata di {err * 1000:0.0} mm (tolleranza {st.ToleranceM * 1000:0.0} mm).", st.Zone.Id, p.Id);
-                }
-                else
-                {
-                    p.HeadM = st.TargetHeadM; // posizionamento a encoder: errore residuo < 0.2 mm
-                }
-                p.Velocity = 0;
-                st.Zone.ActualSpeed = 0;
-                st.Zone.PositionCommand = 0;
-                StartStrappingAtStop(st, p, t);
+                bool inside = p.OnRollers && p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9;
+                if (inside) continue;
+                set.Remove(p);
+                if (p.OnRollers && p.TailM >= z.Info.EndM - 1e-9)
+                    Emit(SimEventType.ZoneCleared, EventSeverity.Trace, $"{z.Id}: {p.Id} uscito completamente dalla sezione", z.Id, p.Id);
             }
-        }
-        else if (st.State == StationState.Strapping)
-        {
-            if (st.ActiveStrappers.All(s => !s.Busy))
+            foreach (var p in _active)
             {
-                var stop = st.Plan!.Stops[st.StopIndex];
-                p.StrapsDone += stop.Tasks.Count;
-                foreach (var s in st.ActiveStrappers) s.ClearPackage();
-                st.ActiveStrappers.Clear();
-                st.StopIndex++;
-                if (st.StopIndex < st.Plan.Stops.Count)
-                {
-                    st.State = StationState.Positioning;
-                    st.TargetHeadM = st.Plan.Stops[st.StopIndex].HeadPositionM;
-                    p.State = PackageState.Positioning;
-                    Emit(SimEventType.PositioningStarted, EventSeverity.Info,
-                        $"{p.Id} verso fermata {st.StopIndex + 1}/{st.Plan.Stops.Count} (testa a {st.TargetHeadM * 1000:0} mm)", st.Zone.Id, p.Id);
-                }
-                else
-                {
-                    st.State = StationState.Releasing;
-                    p.StrapStatus = StrapStatus.Done;
-                    p.State = PackageState.Transport;
-                    Emit(SimEventType.StrappingCompleted, EventSeverity.Info,
-                        $"{p.Id} legato: {p.StrapsDone}/{p.StrapsTotal} legature in {st.Plan.Stops.Count} fermate.", st.Zone.Id, p.Id);
-                }
+                if (!p.OnRollers || !(p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9)) continue;
+                if (set.Add(p)) z.PackagesEntered++;
             }
         }
     }
 
-    private void StartStrappingAtStop(StationRuntime st, PackageRuntime p, double t)
-    {
-        var stop = st.Plan!.Stops[st.StopIndex];
-        st.State = StationState.Strapping;
-        p.State = PackageState.Strapping;
-        Emit(SimEventType.PositioningCompleted, EventSeverity.Info,
-            $"{p.Id} in fermata {st.StopIndex + 1}: {string.Join(", ", stop.Tasks.Select(x => $"{x.StrapperId}→#{x.StrapIndex + 1}"))}", st.Zone.Id, p.Id);
-        foreach (var task in stop.Tasks)
-        {
-            var s = _strappers.First(x => x.Id == task.StrapperId);
-            if (s.Busy)
-            {
-                Emit(SimEventType.StrappingPlanError, EventSeverity.Error, $"{s.Id} occupata: impossibile avviare la legatura.", s.Id, p.Id);
-                continue;
-            }
-            s.Start(p, task.StrapIndex);
-            st.ActiveStrappers.Add(s);
-            Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: preparazione legatura #{task.StrapIndex + 1} su {p.Id}", s.Id, p.Id);
-        }
-    }
+    // ------------------------------------------------------------------ 8. Macchine: legatrici e stopper
 
     private void UpdateStrappers(double t, double dt)
     {
         foreach (var s in _strappers)
         {
             var changed = s.Advance(dt);
+            if (s.FaultJustCleared)
+            {
+                s.FaultJustCleared = false;
+                Emit(SimEventType.StrapperFault, EventSeverity.Info, $"{s.Id}: guasto ripristinato, ciclo di legatura riavviato", s.Id, s.Package?.Id);
+            }
             if (changed != null)
             {
                 string phase = changed switch
@@ -782,6 +884,8 @@ public sealed class SimulationEngine : ILogicContext
         }
     }
 
+    // ------------------------------------------------------------------ 8. Trasferitore
+
     private void UpdateTransfer(double t, double dt)
     {
         var tr = Transfer;
@@ -789,15 +893,24 @@ public sealed class SimulationEngine : ILogicContext
         if (tr.State == TransferState.Home)
         {
             tr.LiftM = 0; tr.LateralM = 0;
-            if (Stopper.State == StopperState.Aligned && Stopper.Package != null)
+            var batch = ReadyBatch(t);
+            if (batch != null)
             {
-                tr.Package = Stopper.Package;
+                tr.Packages.Clear();
+                tr.Packages.AddRange(batch);
+                _batchWaitSince = null;
                 SetTransferPhase(tr, TransferState.Lifting, t);
             }
             return;
         }
 
         tr.BusyTimeS += dt;
+        if (tr.State == TransferState.WaitingDestination)
+        {
+            if (TryPlanScales(tr.Packages))
+                SetTransferPhase(tr, TransferState.Lowering, t);
+            return;
+        }
         tr.ElapsedS += dt;
         double dur = tr.PhaseDuration(tr.State);
         double f = dur > 0 ? Math.Clamp(tr.ElapsedS / dur, 0, 1) : 1;
@@ -810,44 +923,66 @@ public sealed class SimulationEngine : ILogicContext
             case TransferState.Depositing: tr.LiftM = 0; tr.LateralM = stroke; break;
             case TransferState.Returning: tr.LiftM = 0; tr.LateralM = stroke * (1 - f); break;
         }
-        if (tr.Package != null && tr.State != TransferState.Returning)
+        if (tr.State != TransferState.Returning)
         {
-            tr.Package.LiftM = tr.State == TransferState.Depositing ? 0 : tr.LiftM;
-            tr.Package.LateralM = tr.LateralM;
+            foreach (var pk in tr.Packages)
+            {
+                pk.LiftM = tr.State == TransferState.Depositing ? 0 : tr.LiftM;
+                pk.LateralM = tr.LateralM;
+            }
         }
         if (tr.ElapsedS < dur - 1e-9) return;
 
         switch (tr.State)
         {
             case TransferState.Lifting:
-                if (tr.Package != null)
+                foreach (var pk in tr.Packages)
                 {
-                    tr.Package.State = PackageState.OnTransfer;
-                    tr.Package.InStopperContact = false;
-                    tr.Package.Velocity = 0;
+                    pk.State = PackageState.OnTransfer;
+                    pk.InStopperContact = false;
+                    pk.InIntermediateStopContact = false;
+                    pk.HeldByTailStop = false;
+                    pk.AssignedStop = -1;
+                    pk.Velocity = 0;
                 }
-                Stopper.Package = null;
-                Stopper.State = StopperState.Free;
+                if (Stopper.Package == null || tr.Packages.Contains(Stopper.Package))
+                {
+                    Stopper.Package = null;
+                    Stopper.State = StopperState.Free;
+                }
+                ReleaseStopsFor(tr.Packages);
                 SetTransferPhase(tr, TransferState.Translating, t);
                 break;
             case TransferState.Translating:
+                if (_scales.Count > 0 && !TryPlanScales(tr.Packages))
+                {
+                    tr.State = TransferState.WaitingDestination;
+                    tr.ElapsedS = 0;
+                    Emit(SimEventType.TransferWaiting, EventSeverity.Info, "Trasferitore: attesa bilici di destinazione liberi (interblocco)", Project.Transfer.Id, tr.Package?.Id);
+                    break;
+                }
                 SetTransferPhase(tr, TransferState.Lowering, t);
                 break;
             case TransferState.Lowering:
                 SetTransferPhase(tr, TransferState.Depositing, t);
                 break;
             case TransferState.Depositing:
-                if (tr.Package != null)
+                foreach (var p in tr.Packages)
                 {
-                    var p = tr.Package;
+                    p.LiftM = 0;
+                    if (_scalePlan.TryGetValue(p, out var scales) && scales.Count > 0)
+                    {
+                        StartWeighing(p, scales, t);
+                        continue;
+                    }
                     p.State = PackageState.Exited;
                     p.ExitTimeS = t;
-                    p.LiftM = 0;
                     _active.Remove(p);
                     Emit(SimEventType.PackageExited, EventSeverity.Info,
                         $"{p.Id} depositato nella stazione successiva (attraversamento {p.LeadTimeS:0.0} s)", Project.Transfer.Id, p.Id);
                 }
-                tr.Package = null;
+                _scalePlan.Clear();
+                tr.Packages.Clear();
                 tr.Cycles++;
                 SetTransferPhase(tr, TransferState.Returning, t);
                 break;
@@ -871,7 +1006,8 @@ public sealed class SimulationEngine : ILogicContext
             TransferState.Returning => "ritorno",
             _ => "in posizione"
         };
-        Emit(SimEventType.TransferPhase, EventSeverity.Info, $"Trasferitore: {txt}", Project.Transfer.Id, tr.Package?.Id);
+        string pk = tr.Packages.Count > 1 ? $" ({string.Join("+", tr.Packages.Select(p => p.Id))})" : "";
+        Emit(SimEventType.TransferPhase, EventSeverity.Info, $"Trasferitore: {txt}{pk}", Project.Transfer.Id, tr.Package?.Id);
     }
 
     // ------------------------------------------------------------------ 9. Statistiche, registrazione, termine
@@ -910,10 +1046,17 @@ public sealed class SimulationEngine : ILogicContext
         foreach (var z in Topology.Zones) Recorder.Track("INV:" + z.Id, z.Inverter.Name.Length > 0 ? z.Inverter.Name : z.Id, TrackGroup.Inverter);
         foreach (var pc in Project.Photocells) Recorder.Track("PC:" + pc.Id, pc.Name.Length > 0 ? pc.Name : pc.Id, TrackGroup.Photocell);
         foreach (var s in Project.Strappers) Recorder.Track("STR:" + s.Id, s.Name.Length > 0 ? s.Name : s.Id, TrackGroup.Strapper);
+        if (BundleClamp != null) Recorder.Track("KNOF", Label(Project.BundleClamp), TrackGroup.Clamp);
+        if (Compactor != null) Recorder.Track("CMP", Label(Project.Compactor), TrackGroup.Clamp);
+        if (Rejector != null) Recorder.Track("SMA", Label(Project.Rejector), TrackGroup.Rejector);
         Recorder.Track("STOPPER", Project.Stopper.Name.Length > 0 ? Project.Stopper.Name : "Stopper", TrackGroup.Stopper);
+        foreach (var s in _stops) Recorder.Track("STOP:" + s.Id, s.Config.Name.Length > 0 ? s.Config.Name : s.Id, TrackGroup.Stop);
         Recorder.Track("TRANSFER", Project.Transfer.Name.Length > 0 ? Project.Transfer.Name : "Trasferitore", TrackGroup.Transfer);
+        foreach (var s in _scales) Recorder.Track("SCALE:" + s.Id, Label(s.Config), TrackGroup.Scale);
         foreach (var z in Topology.Zones) Recorder.Track("ACC:" + z.Id, "Consenso ingresso " + z.Id, TrackGroup.Interlock);
     }
+
+    private static string Label(ComponentBase c) => c.Name.Length > 0 ? c.Name : c.Id;
 
     private void RecordStates()
     {
@@ -921,19 +1064,52 @@ public sealed class SimulationEngine : ILogicContext
         foreach (var z in _zones) Recorder.Set("INV:" + z.Id, t, z.CycleStateCode, z.Reason);
         foreach (var pc in _photocells) Recorder.Set("PC:" + pc.Id, t, pc.Output ? CycleState.On : CycleState.Off);
         foreach (var s in _strappers)
-            Recorder.Set("STR:" + s.Id, t, s.State switch
+            Recorder.Set("STR:" + s.Id, t, s.ProcessState switch
             {
-                StrapperState.Preparing => CycleState.Preparing,
-                StrapperState.Strapping => CycleState.Working,
-                StrapperState.Returning => CycleState.Returning,
+                StrapperProcessState.WaitingPackage => CycleState.Waiting,
+                StrapperProcessState.Positioning => CycleState.Positioning,
+                StrapperProcessState.PackageInPosition => CycleState.InPosition,
+                StrapperProcessState.WaitingClampConsent => CycleState.WaitConsent,
+                StrapperProcessState.StrappingCycle => s.State switch
+                {
+                    StrapperState.Preparing => CycleState.Preparing,
+                    StrapperState.Returning => CycleState.Returning,
+                    _ => CycleState.Working
+                },
+                StrapperProcessState.CycleCompleted => CycleState.Completed,
+                StrapperProcessState.Unloading => CycleState.Unloading,
+                StrapperProcessState.Fault => CycleState.Fault,
                 _ => CycleState.Idle
-            }, s.Package?.Id ?? "");
+            }, ProcessLabel(s.ProcessState) + (s.Package != null ? " " + s.Package.Id : ""));
+        if (BundleClamp != null) Recorder.Set("KNOF", t, ClampCycle(BundleClamp.State), Station?.Package?.Id ?? "");
+        if (Compactor != null) Recorder.Set("CMP", t, ClampCycle(Compactor.State), Station?.Package?.Id ?? "");
+        if (Rejector != null)
+            Recorder.Set("SMA", t, Rejector.State switch
+            {
+                RejectorState.Enabled => CycleState.Consent,
+                RejectorState.Positioning => CycleState.Positioning,
+                RejectorState.InPosition => CycleState.InPosition,
+                RejectorState.Ejecting => CycleState.Ejecting,
+                RejectorState.Returning => CycleState.Returning,
+                RejectorState.RestartConsent => CycleState.Waiting,
+                RejectorState.Fault => CycleState.Fault,
+                _ => CycleState.Idle
+            }, Rejector.Package?.Id ?? "");
         Recorder.Set("STOPPER", t, Stopper.State switch
         {
             StopperState.Aligning => CycleState.Aligning,
             StopperState.Aligned => CycleState.Aligned,
             _ => CycleState.Idle
         }, Stopper.Package?.Id ?? "");
+        foreach (var s in _stops)
+            Recorder.Set("STOP:" + s.Id, t, s.State switch
+            {
+                StopState.Assigned => CycleState.Waiting,
+                StopState.Positioning => CycleState.Positioning,
+                StopState.Aligning => CycleState.Aligning,
+                StopState.Aligned => CycleState.Aligned,
+                _ => CycleState.Idle
+            }, (s.Package?.Id ?? "") + (s.Reference == StopReference.Tail ? " (coda)" : " (testa)"));
         Recorder.Set("TRANSFER", t, Transfer.State switch
         {
             TransferState.Lifting => CycleState.Lifting,
@@ -941,11 +1117,48 @@ public sealed class SimulationEngine : ILogicContext
             TransferState.Lowering => CycleState.Lowering,
             TransferState.Depositing => CycleState.Depositing,
             TransferState.Returning => CycleState.Returning,
+            TransferState.WaitingDestination => CycleState.Interlock,
             _ => CycleState.Idle
-        }, Transfer.Package?.Id ?? "");
+        }, string.Join("+", Transfer.Packages.Select(p => p.Id)));
+        foreach (var s in _scales)
+            Recorder.Set("SCALE:" + s.Id, t, s.State switch
+            {
+                ScaleState.Directed => CycleState.Waiting,
+                ScaleState.Positioning => CycleState.Positioning,
+                ScaleState.PositionCheck => CycleState.InPosition,
+                ScaleState.Stabilizing => CycleState.Stabilizing,
+                ScaleState.Acquiring => CycleState.Acquiring,
+                ScaleState.Completed => CycleState.Completed,
+                ScaleState.Releasing => CycleState.Unloading,
+                ScaleState.Fault => CycleState.Fault,
+                _ => CycleState.Idle
+            }, s.Package?.Id ?? "");
         foreach (var z in _zones) Recorder.Set("ACC:" + z.Id, t, z.Accepting ? CycleState.Consent : CycleState.Interlock,
-            z.ReservedBy != null ? "Riservata a " + z.ReservedBy.Id : z.Running ? "" : "Zona ferma");
+            z.ReservedBy != null ? "Riservata a " + z.ReservedBy.Id : z.AutoStopped ? "Arresto automatico" : z.Running ? "" : "Zona ferma");
     }
+
+    private static CycleState ClampCycle(ClampState s) => s switch
+    {
+        ClampState.Closing => CycleState.Closing,
+        ClampState.Closed => CycleState.Closed,
+        ClampState.Opening => CycleState.Opening,
+        ClampState.Fault => CycleState.Fault,
+        _ => CycleState.Idle
+    };
+
+    public static string ProcessLabel(StrapperProcessState s) => s switch
+    {
+        StrapperProcessState.Available => "Disponibile",
+        StrapperProcessState.WaitingPackage => "Attesa pacco",
+        StrapperProcessState.Positioning => "Posizionamento",
+        StrapperProcessState.PackageInPosition => "Pacco in posizione",
+        StrapperProcessState.WaitingClampConsent => "Attesa consenso stringifascio",
+        StrapperProcessState.StrappingCycle => "Ciclo di legatura",
+        StrapperProcessState.CycleCompleted => "Ciclo completato",
+        StrapperProcessState.Unloading => "Scarico pacco",
+        StrapperProcessState.Fault => "Guasto/blocco",
+        _ => s.ToString()
+    };
 
     private void CaptureFrameToRecorder() => Recorder.Frames.Add(CaptureFrame());
 
@@ -953,14 +1166,22 @@ public sealed class SimulationEngine : ILogicContext
     {
         if (IsFinished) return;
         bool allIn = _nextIndex >= Project.Infeed.PackageCount;
-        // Fine: tutti i pacchi usciti E macchine tornate a riposo (ultimo ritorno del trasferitore incluso nel ciclo).
-        if (allIn && _active.Count == 0 && Transfer.State == TransferState.Home && !_strappers.Any(s => s.Busy))
+        bool devicesIdle = !_strappers.Any(s => s.Busy) && (Rejector == null || !Rejector.Busy) && !_scales.Any(s => s.Busy)
+                           && (BundleClamp == null || BundleClamp.IsOpen) && (Compactor == null || Compactor.IsOpen);
+        // Fine: tutti i pacchi usciti/rigettati E macchine tornate a riposo (ultimo ritorno del trasferitore incluso).
+        if (allIn && _active.Count == 0 && Transfer.State == TransferState.Home && devicesIdle)
         {
-            Emit(SimEventType.Completed, EventSeverity.Info, $"Simulazione completata: {_packages.Count} pacchi usciti.");
+            string rej = RejectedPackages > 0 ? $", {RejectedPackages} rigettati" : "";
+            Emit(SimEventType.Completed, EventSeverity.Info, $"Simulazione completata: {_packages.Count - RejectedPackages} pacchi usciti{rej}.");
             Finish("Completata", true);
             return;
         }
-        bool busy = _strappers.Any(s => s.Busy) || Transfer.State != TransferState.Home || Stopper.State == StopperState.Aligning;
+        bool busy = _strappers.Any(s => s.Busy) || Transfer.State != TransferState.Home || Stopper.State == StopperState.Aligning
+                    || (Rejector != null && Rejector.Busy && Rejector.State != RejectorState.Enabled) || _scales.Any(s => s.Busy)
+                    || (BundleClamp != null && !BundleClamp.IsOpen && !BundleClamp.IsClosed)
+                    || (Compactor != null && !Compactor.IsOpen && !Compactor.IsClosed)
+                    || (Station != null && Station.State is StationState.Compacting or StationState.Clamping or StationState.Unclamping)
+                    || _stops.Any(s => s.State == StopState.Aligning) || _batchWaitSince != null;
         if (busy) _lastProgressTime = t;
         if (_active.Count > 0 && t - _lastProgressTime > Project.Simulation.DeadlockTimeoutS)
         {
@@ -1019,6 +1240,13 @@ public sealed class SimulationEngine : ILogicContext
             ahead = p;
         }
         return false;
+    }
+
+    bool ILogicContext.DeviceState(string deviceId, string state)
+    {
+        var info = DeviceStatus(deviceId);
+        if (info == null) return false;
+        return string.IsNullOrWhiteSpace(state) ? info.Value.Busy : string.Equals(info.Value.State, state.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     public override string ToString() => string.Format(CultureInfo.InvariantCulture, "t={0:0.000}s pacchi={1}", Time, _active.Count);

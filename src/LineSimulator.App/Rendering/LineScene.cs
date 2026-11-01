@@ -33,6 +33,11 @@ public sealed class LineScene
     private TranslateTransform3D _transferT = new();
     private SolidColorBrush? _stopperBrush;
     private SolidColorBrush? _transferBrush;
+    private SolidColorBrush? _knofBrush, _compactorBrush, _smaBrush;
+    private readonly TranslateTransform3D _knofT = new(), _jawLeftT = new(), _jawRightT = new(), _smaT = new();
+    private readonly List<(SolidColorBrush Brush, TranslateTransform3D T, IntermediateStopConfig Cfg)> _stopVisuals = new();
+    private readonly List<(SolidColorBrush Brush, WeighingScaleConfig Cfg)> _scaleVisuals = new();
+    private double _smaSideSign = 1;
     private object? _highlighted;
     private LineProject? _project;
     private double _zTop;
@@ -61,6 +66,9 @@ public sealed class LineScene
         _packageMeshes.Clear();
         _zoneOrder.Clear();
         _sectionFrameBrushes.Clear();
+        _stopVisuals.Clear();
+        _scaleVisuals.Clear();
+        _knofBrush = _compactorBrush = _smaBrush = null;
         _highlighted = null;
 
         var topo = new LineTopology(p);
@@ -89,6 +97,11 @@ public sealed class LineScene
         foreach (var st in p.Strappers) AddStrapper(st);
         AddStopper(p.Stopper);
         AddTransfer(p.Transfer);
+        if (p.BundleClamp.IsEnabled) AddBundleClamp(p.BundleClamp);
+        if (p.Compactor.IsEnabled) AddCompactor(p.Compactor);
+        if (p.Rejector.IsEnabled) AddRejector(p.Rejector, p.Transfer);
+        foreach (var fs in p.IntermediateStops.Where(x => x.IsEnabled)) AddIntermediateStop(fs);
+        foreach (var sc in p.Scales.Where(x => x.IsEnabled)) AddScale(sc, p.Transfer);
 
         _packagesGroup = new Model3DGroup();
         _group.Children.Add(_packagesGroup);
@@ -228,6 +241,100 @@ public sealed class LineScene
         Register(rm, t, rb, railColor);
     }
 
+    /// <summary>Stringifascio KNOF: portale con traversa di chiusura mobile (abbassata = chiuso).</summary>
+    private void AddBundleClamp(BundleClampConfig k)
+    {
+        double x = k.PositionMm / 1000.0, w = _lineWidth;
+        var frameColor = Color.FromRgb(0x2C, 0x3E, 0x50);
+        var f = new MeshFactory();
+        f.AddBox(new Point3D(x, w / 2 + 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
+        f.AddBox(new Point3D(x, -w / 2 - 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
+        f.AddBox(new Point3D(x, 0, _zTop + 1.45), 0.3, w + 0.7, 0.15);
+        var fm = MeshFactory.Model(f.ToMesh(), frameColor, out var fb);
+        _group.Children.Add(fm);
+        Register(fm, k, fb, frameColor);
+        var barColor = Color.FromRgb(0x95, 0xA5, 0xA6);
+        var bar = MeshFactory.Box(new Point3D(x, 0, _zTop + 1.2), 0.2, w + 0.2, 0.12, barColor, out var bb);
+        bar.Transform = _knofT;
+        _group.Children.Add(bar);
+        Register(bar, k, bb, barColor);
+        _knofBrush = bb;
+    }
+
+    /// <summary>Compattatore laterale: due ganasce che si chiudono verso l'asse linea.</summary>
+    private void AddCompactor(SideCompactorConfig c)
+    {
+        double x = c.PositionMm / 1000.0, w = _lineWidth, len = Math.Max(0.3, c.JawLengthMm / 1000.0);
+        var color = Color.FromRgb(0x7D, 0x3C, 0x98);
+        var left = MeshFactory.Box(new Point3D(x, w / 2 + 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var lb);
+        left.Transform = _jawLeftT;
+        var right = MeshFactory.Box(new Point3D(x, -w / 2 - 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var rb);
+        right.Transform = _jawRightT;
+        rb.Color = color;
+        _group.Children.Add(left);
+        _group.Children.Add(right);
+        Register(left, c, lb, color);
+        Register(right, c, rb, color);
+        _compactorBrush = lb;
+        _compactorRightBrush = rb;
+    }
+
+    private SolidColorBrush? _compactorRightBrush;
+
+    /// <summary>Rigettatrice SMA: spintore lungo il campo di spinta e tavola scarti sul lato di espulsione.</summary>
+    private void AddRejector(RejectorConfig r, TransferConfig t)
+    {
+        double x0 = r.PositionMm / 1000.0, len = Math.Max(0.5, r.LengthMm / 1000.0), w = _lineWidth;
+        _smaSideSign = r.Side == LateralSide.Left ? 1 : -1;
+        var color = Color.FromRgb(0xA0, 0x40, 0x00);
+        var pusher = MeshFactory.Box(new Point3D(x0 + len / 2, -_smaSideSign * (w / 2 + 0.15), _zTop + 0.25), len, 0.12, 0.3, color, out var pb);
+        pusher.Transform = _smaT;
+        _group.Children.Add(pusher);
+        Register(pusher, r, pb, color);
+        _smaBrush = pb;
+        double stroke = Math.Max(0.5, r.StrokeMm / 1000.0);
+        var table = new MeshFactory();
+        int n = Math.Max(2, (int)Math.Round(len / 2.0) + 1);
+        for (int i = 0; i < n; i++)
+        {
+            double x = x0 + 0.2 + (len - 0.4) * i / (n - 1);
+            table.AddBox(new Point3D(x, _smaSideSign * (w / 2 + stroke / 2), _zTop - 0.05), 0.1, stroke, 0.06);
+        }
+        var tColor = Color.FromRgb(0xCA, 0x6F, 0x1E);
+        var tm = MeshFactory.Model(table.ToMesh(), tColor, out var tb);
+        _group.Children.Add(tm);
+        Register(tm, r, tb, tColor);
+    }
+
+    /// <summary>Fermo intermedio: blocco che si solleva sopra il piano rulli quando armato.</summary>
+    private void AddIntermediateStop(IntermediateStopConfig s)
+    {
+        double x = s.PositionMm / 1000.0, h = Math.Max(0.05, s.GraphicHeightMm / 1000.0);
+        var color = Color.FromRgb(0x7F, 0x8C, 0x8D);
+        var m = MeshFactory.Box(new Point3D(x + 0.05, 0, _zTop - h / 2), 0.1, _lineWidth * 0.5, h, color, out var b);
+        var tt = new TranslateTransform3D();
+        m.Transform = tt;
+        _group.Children.Add(m);
+        Register(m, s, b, color);
+        _stopVisuals.Add((b, tt, s));
+    }
+
+    /// <summary>Bilico di pesatura sul lato di deposito del trasferitore.</summary>
+    private void AddScale(WeighingScaleConfig sc, TransferConfig t)
+    {
+        double x0 = sc.StartMm / 1000.0, len = Math.Max(0.3, sc.LengthMm / 1000.0);
+        double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
+        double y = sign * t.TranslationStrokeMm / 1000.0;
+        var color = Color.FromRgb(0x17, 0xA5, 0x89);
+        var f = new MeshFactory();
+        f.AddBox(new Point3D(x0 + len / 2, y, _zTop - 0.08), len - 0.05, _lineWidth * 0.9, 0.06);
+        f.AddBox(new Point3D(x0 + len / 2, y, (_zTop - 0.1) / 2), len * 0.8, _lineWidth * 0.5, _zTop - 0.1);
+        var m = MeshFactory.Model(f.ToMesh(), color, out var b);
+        _group.Children.Add(m);
+        Register(m, sc, b, color);
+        _scaleVisuals.Add((b, sc));
+    }
+
     private (MeshGeometry3D Plain, MeshGeometry3D Strapped) PackageMeshes(PackageSnapshot ps)
     {
         if (_packageMeshes.TryGetValue(ps.TypeId, out var m)) return m;
@@ -331,7 +438,82 @@ public sealed class LineScene
             _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? Color.FromRgb(0xFF, 0x6F, 0x00) : Color.FromRgb(0xC0, 0x39, 0x2B);
         if (_transferBrush != null && !IsHighlighted(p.Transfer))
             _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? Color.FromRgb(0xF3, 0x9C, 0x12) : Color.FromRgb(0xF1, 0xC4, 0x0F);
+
+        // Legatrici KNCA in guasto: rosso
+        for (int i = 0; i < p.Strappers.Count; i++)
+        {
+            if (f == null || i >= f.StrapperProcessStates.Length || f.StrapperProcessStates[i] != StrapperProcessState.Fault) continue;
+            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = Color.FromRgb(0xC0, 0x39, 0x2B);
+        }
+
+        // Stringifascio: traversa che scende in chiusura
+        _knofT.OffsetZ = -(f?.BundleClampClosed ?? 0) * 0.6;
+        if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
+            _knofBrush.Color = ClampColor(f?.BundleClampState ?? ClampState.Open, Color.FromRgb(0x95, 0xA5, 0xA6));
+
+        // Compattatore: ganasce verso l'asse
+        double jaw = (f?.CompactorClosed ?? 0) * 0.12;
+        _jawLeftT.OffsetY = -jaw;
+        _jawRightT.OffsetY = jaw;
+        if (_compactorBrush != null && !IsHighlighted(p.Compactor))
+        {
+            var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x7D, 0x3C, 0x98));
+            _compactorBrush.Color = cc;
+            if (_compactorRightBrush != null) _compactorRightBrush.Color = cc;
+        }
+
+        // Rigettatrice: spintore
+        _smaT.OffsetY = _smaSideSign * (f?.RejectorStrokeM ?? 0);
+        if (_smaBrush != null && !IsHighlighted(p.Rejector))
+            _smaBrush.Color = (f?.RejectorState ?? RejectorState.Idle) switch
+            {
+                RejectorState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
+                RejectorState.Idle => Color.FromRgb(0xA0, 0x40, 0x00),
+                _ => Color.FromRgb(0xFF, 0x8F, 0x00)
+            };
+
+        // Fermi intermedi: sollevati e colorati secondo lo stato
+        for (int i = 0; i < _stopVisuals.Count; i++)
+        {
+            var (brush, tt, cfg) = _stopVisuals[i];
+            bool raised = f != null && i < f.StopRaised.Length && f.StopRaised[i];
+            var state = f != null && i < f.StopStates.Length ? f.StopStates[i] : StopState.Free;
+            bool tailHold = cfg.Reference == StopReference.Tail && state is StopState.Aligning or StopState.Aligned;
+            tt.OffsetZ = raised || tailHold ? Math.Max(0.05, cfg.GraphicHeightMm / 1000.0) * 0.9 : 0;
+            if (IsHighlighted(cfg)) continue;
+            brush.Color = state switch
+            {
+                StopState.Aligning => Color.FromRgb(0xF3, 0x9C, 0x12),
+                StopState.Aligned => Color.FromRgb(0xF7, 0xDC, 0x6F),
+                StopState.Positioning or StopState.Assigned => Color.FromRgb(0xE7, 0x4C, 0x3C),
+                _ => Color.FromRgb(0x7F, 0x8C, 0x8D)
+            };
+        }
+
+        // Bilici
+        for (int i = 0; i < _scaleVisuals.Count; i++)
+        {
+            var (brush, cfg) = _scaleVisuals[i];
+            if (IsHighlighted(cfg)) continue;
+            var state = f != null && i < f.ScaleStates.Length ? f.ScaleStates[i] : ScaleState.Idle;
+            brush.Color = state switch
+            {
+                ScaleState.Idle => Color.FromRgb(0x17, 0xA5, 0x89),
+                ScaleState.Stabilizing or ScaleState.Acquiring => Color.FromRgb(0xF4, 0xD0, 0x3F),
+                ScaleState.Completed or ScaleState.Releasing => Color.FromRgb(0x28, 0xB4, 0x63),
+                ScaleState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
+                _ => Color.FromRgb(0x5D, 0xAD, 0xE2)
+            };
+        }
     }
+
+    private static Color ClampColor(ClampState s, Color idle) => s switch
+    {
+        ClampState.Closing or ClampState.Opening => Color.FromRgb(0xF3, 0x9C, 0x12),
+        ClampState.Closed => Color.FromRgb(0xE6, 0x7E, 0x22),
+        ClampState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
+        _ => idle
+    };
 
     private bool IsHighlighted(object o) => ReferenceEquals(_highlighted, o);
 

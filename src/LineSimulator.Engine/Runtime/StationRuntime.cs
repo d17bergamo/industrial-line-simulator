@@ -7,7 +7,13 @@ public enum StationState
     Idle,
     Positioning,
     Strapping,
-    Releasing
+    Releasing,
+    /// <summary>Pacco in posizione: compattatore laterale in chiusura / mantenimento.</summary>
+    Compacting,
+    /// <summary>Stringifascio KNOF in chiusura, attesa conferma (consenso legatura).</summary>
+    Clamping,
+    /// <summary>Fine legatura: mantenimento e apertura di stringifascio e compattatore.</summary>
+    Unclamping
 }
 
 /// <summary>
@@ -34,6 +40,12 @@ public sealed class StationRuntime
     public int StopIndex { get; internal set; }
     public double TargetHeadM { get; internal set; }
     internal List<StrapperRuntime> ActiveStrappers { get; } = new();
+    /// <summary>Tempo trascorso nella fase corrente (mantenimenti).</summary>
+    internal double PhaseElapsedS;
+    internal bool StrappingPhaseDone;
+    internal bool CompactorOpenCommanded;
+    internal bool ClampOpenCommanded;
+    internal bool InterlockReported;
 
     public double BusyTimeS { get; internal set; }
     public double BlockedTimeS { get; internal set; }

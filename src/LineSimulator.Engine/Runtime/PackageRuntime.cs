@@ -18,8 +18,14 @@ public enum PackageState
     Aligned,
     /// <summary>Sollevato dal trasferitore (fuori dai rulli).</summary>
     OnTransfer,
-    /// <summary>Depositato nella stazione successiva.</summary>
-    Exited
+    /// <summary>Depositato nella stazione successiva (o scaricato dal bilico).</summary>
+    Exited,
+    /// <summary>In espulsione dalla rigettatrice (fuori dai rulli).</summary>
+    Rejecting,
+    /// <summary>Rigettato: fuori linea.</summary>
+    Rejected,
+    /// <summary>Sul bilico di pesatura.</summary>
+    OnScale
 }
 
 public enum StrapStatus
@@ -47,7 +53,8 @@ public sealed class PackageRuntime
     public string Id { get; }
     public PackageType Type { get; }
     public double LengthM { get; }
-    public double WeightKg { get; }
+    /// <summary>Peso configurato (tipologia o peso specifico del pacco).</summary>
+    public double WeightKg { get; internal set; }
 
     public double HeadM { get; internal set; }
     public double TailM => HeadM - LengthM;
@@ -66,6 +73,28 @@ public sealed class PackageRuntime
     /// <summary>Offset laterale (traslazione trasferitore), m.</summary>
     public double LateralM { get; internal set; }
 
+    // Identificazione (fotocellula di ingresso)
+    public bool Identified { get; internal set; }
+    public double? IdentifiedTimeS { get; internal set; }
+    public double? MeasuredLengthM { get; internal set; }
+    internal double EntryTrackStartHeadM;
+
+    // Rigetto
+    public bool RejectRequested { get; internal set; }
+    public bool RejectHandled { get; internal set; }
+    public double? RejectedTimeS { get; internal set; }
+
+    // Pesatura
+    public double? MeasuredWeightKg { get; internal set; }
+    public double? WeighedTimeS { get; internal set; }
+    public bool WeighingValid { get; internal set; } = true;
+    public string? ScaleId { get; internal set; }
+
+    // Fermi (accumulo multi-pacco): -1 nessuno, 0 stopper finale, k = fermo intermedio k-1
+    public int AssignedStop { get; internal set; } = -1;
+    internal bool InIntermediateStopContact;
+    internal bool HeldByTailStop;
+
     public bool InStopperContact { get; internal set; }
     public bool IsSlipping { get; internal set; }
 
@@ -79,7 +108,8 @@ public sealed class PackageRuntime
     internal string? SafetyViolationWith;
     internal bool TransferInterference;
 
-    public bool OnRollers => State != PackageState.OnTransfer && State != PackageState.Exited;
+    public bool OnRollers => State is not (PackageState.OnTransfer or PackageState.Exited or PackageState.Rejecting
+        or PackageState.Rejected or PackageState.OnScale);
     public bool IsStopped => Math.Abs(Velocity) < 1e-4;
     public double? LeadTimeS => ExitTimeS.HasValue ? ExitTimeS.Value - EntryTimeS : null;
 

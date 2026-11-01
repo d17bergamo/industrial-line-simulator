@@ -28,7 +28,10 @@ public sealed record PackageResult(
     int AccumulationStops,
     StrapStatus StrapStatus,
     int StrapsDone,
-    int StrapsTotal);
+    int StrapsTotal,
+    bool Rejected = false,
+    double? MeasuredWeightKg = null,
+    string? ScaleId = null);
 
 public sealed record TheoreticalZoneResult(
     string ZoneId,
@@ -72,6 +75,10 @@ public sealed class SimulationResults
     public int AccumulationStops { get; init; }
     public int MaxSimultaneousAccumulated { get; init; }
     public int UnstrappedPackages { get; init; }
+    public int RejectedPackages { get; init; }
+    public int WeighedPackages { get; init; }
+    public int DeviceAlarms { get; init; }
+    public int InterlockEvents { get; init; }
 
     public List<ResourceUsage> Resources { get; init; } = new();
     public List<PackageResult> Packages { get; init; } = new();
@@ -85,7 +92,7 @@ public sealed class SimulationResults
     public List<string> StrategyReports { get; init; } = new();
     public List<SimEvent> Problems { get; init; } = new();
 
-    public bool HasProblems => Collisions > 0 || Deadlock || PositioningErrors > 0 || UnstrappedPackages > 0 || ZoneOverfills > 0;
+    public bool HasProblems => Collisions > 0 || Deadlock || PositioningErrors > 0 || UnstrappedPackages > 0 || ZoneOverfills > 0 || DeviceAlarms > 0;
 }
 
 public static class ResultsCalculator
@@ -132,10 +139,22 @@ public static class ResultsCalculator
             Math.Max(0, span - e.Stopper.OccupiedTimeS), 0, e.Stopper.Packages, e.Stopper.OccupiedTimeS / Math.Max(1, e.Stopper.Packages)));
         resources.Add(new ResourceUsage(e.Project.Transfer.Id, e.Project.Transfer.Name, "Trasferitore", e.Transfer.BusyTimeS, e.Transfer.BusyTimeS / span,
             Math.Max(0, span - e.Transfer.BusyTimeS), 0, e.Transfer.Cycles, e.Transfer.BusyTimeS / Math.Max(1, e.Transfer.Cycles)));
+        foreach (var (c, kind) in new[] { (e.BundleClamp, "Stringifascio"), (e.Compactor, "Compattatore") })
+            if (c != null)
+                resources.Add(new ResourceUsage(c.Id, c.Config.Name, kind, c.BusyTimeS, c.BusyTimeS / span, Math.Max(0, span - c.BusyTimeS), 0,
+                    c.Cycles, c.BusyTimeS / Math.Max(1, c.Cycles)));
+        if (e.Rejector != null)
+            resources.Add(new ResourceUsage(e.Rejector.Id, e.Rejector.Config.Name, "Rigettatrice", e.Rejector.BusyTimeS, e.Rejector.BusyTimeS / span,
+                Math.Max(0, span - e.Rejector.BusyTimeS), 0, e.Rejector.Cycles, e.Rejector.BusyTimeS / Math.Max(1, e.Rejector.Cycles)));
+        foreach (var sc in e.Scales)
+            resources.Add(new ResourceUsage(sc.Id, sc.Config.Name, "Bilico", sc.BusyTimeS, sc.BusyTimeS / span,
+                Math.Max(0, span - sc.BusyTimeS), 0, Math.Max(sc.Weighings, sc.Cycles), sc.BusyTimeS / Math.Max(1, Math.Max(sc.Weighings, sc.Cycles))));
 
         // Collo di bottiglia: risorsa con il maggior impegno per pacco (escluso il tempo bloccato da valle),
         // confrontato con l'intervallo di alimentazione.
-        var candidates = resources.Where(r => r.Kind != "Legatrice" && r.Count > 0).ToList();
+        // Dispositivi che lavorano solo su alcuni pacchi (rigettatrice) o in parallelo (bilici, stringifascio,
+        // compattatore: già inclusi nel tempo stazione) non sono candidati.
+        var candidates = resources.Where(r => r.Kind is not ("Legatrice" or "Rigettatrice" or "Bilico" or "Stringifascio" or "Compattatore") && r.Count > 0).ToList();
         string bnId = "", bnName = "", bnText = "";
         if (candidates.Count > 0 && exited.Count > 0)
         {
@@ -207,9 +226,14 @@ public static class ResultsCalculator
             AccumulationStops = e.AccumulationStops,
             MaxSimultaneousAccumulated = e.MaxSimultaneousAccumulated,
             UnstrappedPackages = e.Packages.Count(p => p.StrapStatus == StrapStatus.Failed || (p.ExitTimeS.HasValue && p.StrapStatus == StrapStatus.Pending)),
+            RejectedPackages = e.RejectedPackages,
+            WeighedPackages = e.WeighedPackages,
+            DeviceAlarms = e.DeviceAlarms,
+            InterlockEvents = e.InterlockEvents,
             Resources = resources,
             Packages = e.Packages.Select(p => new PackageResult(p.Id, p.Type.Id, p.Type.LengthMm, p.WeightKg, p.EntryTimeS, p.ExitTimeS,
-                p.LeadTimeS, p.WaitingTimeS, p.AccumulationStops, p.StrapStatus, p.StrapsDone, p.StrapsTotal)).ToList(),
+                p.LeadTimeS, p.WaitingTimeS, p.AccumulationStops, p.StrapStatus, p.StrapsDone, p.StrapsTotal,
+                p.State == PackageState.Rejected, p.MeasuredWeightKg, p.ScaleId)).ToList(),
             Theoretical = theo,
             TheoreticalPackagesPerHour = theoPph,
             TheoreticalTonnesPerHour = TheoreticalProductivity.TonnesPerHour(theoPph, refWeight),

@@ -16,6 +16,7 @@ internal static class TestLines
         var p = new LineProject { Name = "Test una zona" };
         p.Inverters.Add(new InverterConfig { Id = "INV1", Name = "INV1", LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6 });
         p.Sections.Add(new RollerSection { Id = "S1", Name = "S1", StartMm = 0, LengthMm = 30000, RollerCount = 100, RollerPitchMm = 300, RollerDiameterMm = 150, InverterId = "INV1" });
+        p.Photocells.Add(new PhotocellConfig { Id = "FC0", Name = "Ingresso", PositionMm = 300, IsEntryPhotocell = true });
         p.StrappingStation = new StrappingStationConfig { IsEnabled = false };
         p.Stopper = new StopperConfig { Id = "STP", Name = "Stopper", PositionMm = 29000, AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, MaxImpactSpeed = 0.25 };
         p.Transfer = new TransferConfig

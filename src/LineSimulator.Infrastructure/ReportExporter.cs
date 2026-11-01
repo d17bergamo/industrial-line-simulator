@@ -38,6 +38,10 @@ public static class ReportExporter
         ("Impatti eccessivi allo stopper", r.ExcessiveImpacts.ToString(It)),
         ("Errori di posizionamento", r.PositioningErrors.ToString(It)),
         ("Pacchi non legati", r.UnstrappedPackages.ToString(It)),
+        ("Pacchi rigettati (SMA)", r.RejectedPackages.ToString(It)),
+        ("Pacchi pesati", r.WeighedPackages.ToString(It)),
+        ("Allarmi dispositivi", r.DeviceAlarms.ToString(It)),
+        ("Interventi interblocchi", r.InterlockEvents.ToString(It)),
         ("Blocco linea (deadlock)", r.Deadlock ? "SÌ" : "no"),
         ("Collo di bottiglia", r.BottleneckName),
         ("Motivazione", r.BottleneckExplanation)
@@ -52,10 +56,11 @@ public static class ReportExporter
 
     public static string PackagesCsv(SimulationResults r)
     {
-        var sb = new StringBuilder("ID;Tipo;Lunghezza mm;Peso kg;Ingresso s;Uscita s;Attraversamento s;Attesa s;Arresti accumulo;Legatura;Legature eseguite\n");
+        var sb = new StringBuilder("ID;Tipo;Lunghezza mm;Peso kg;Ingresso s;Uscita s;Attraversamento s;Attesa s;Arresti accumulo;Legatura;Legature eseguite;Rigettato;Peso misurato kg;Bilico\n");
         foreach (var p in r.Packages)
             sb.Append(string.Join(";", p.Id, p.TypeId, N(p.LengthMm, "0"), N(p.WeightKg, "0"), N(p.EntryTimeS), N(p.ExitTimeS),
-                N(p.LeadTimeS), N(p.WaitingTimeS), p.AccumulationStops.ToString(It), p.StrapStatus.ToString(), $"{p.StrapsDone}/{p.StrapsTotal}")).Append('\n');
+                N(p.LeadTimeS), N(p.WaitingTimeS), p.AccumulationStops.ToString(It), p.StrapStatus.ToString(), $"{p.StrapsDone}/{p.StrapsTotal}",
+                p.Rejected ? "SÌ" : "no", N(p.MeasuredWeightKg, "0"), Esc(p.ScaleId ?? ""))).Append('\n');
         return sb.ToString();
     }
 
@@ -130,7 +135,7 @@ public static class ReportExporter
         ws.Column(2).Width = 80;
 
         var wp = wb.Worksheets.Add("Pacchi");
-        string[] ph = { "ID", "Tipo", "Lunghezza mm", "Peso kg", "Ingresso s", "Uscita s", "Attraversamento s", "Attesa s", "Arresti accumulo", "Legatura", "Legature" };
+        string[] ph = { "ID", "Tipo", "Lunghezza mm", "Peso kg", "Ingresso s", "Uscita s", "Attraversamento s", "Attesa s", "Arresti accumulo", "Legatura", "Legature", "Rigettato", "Peso misurato kg", "Bilico" };
         for (int i = 0; i < ph.Length; i++) wp.Cell(1, i + 1).Value = ph[i];
         row = 2;
         foreach (var p in r.Packages)
@@ -146,6 +151,9 @@ public static class ReportExporter
             wp.Cell(row, 9).Value = (double)p.AccumulationStops;
             wp.Cell(row, 10).Value = p.StrapStatus.ToString();
             wp.Cell(row, 11).Value = $"{p.StrapsDone}/{p.StrapsTotal}";
+            wp.Cell(row, 12).Value = p.Rejected ? "SÌ" : "no";
+            if (p.MeasuredWeightKg.HasValue) wp.Cell(row, 13).Value = p.MeasuredWeightKg.Value;
+            wp.Cell(row, 14).Value = p.ScaleId ?? "";
             row++;
         }
 

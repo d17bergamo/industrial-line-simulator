@@ -14,6 +14,8 @@ public interface ILogicContext
     bool AnyHeadInRange(double fromMm, double toMm);
     bool GapAheadLessThan(string inverterId, double gapMm);
     bool Signal(string name);
+    /// <summary>Stato di un dispositivo; stato vuoto = dispositivo impegnato.</summary>
+    bool DeviceState(string deviceId, string state);
 }
 
 /// <summary>Richieste sull'inverter prodotte da regole e fotocellule.</summary>
@@ -52,6 +54,7 @@ public static class LogicEvaluator
         PackageHeadInRangeCondition hr => ctx.AnyHeadInRange(hr.FromMm, hr.ToMm),
         GapAheadLessThanCondition g => ctx.GapAheadLessThan(g.InverterId, g.GapMm),
         SignalCondition s => ctx.Signal(s.SignalName),
+        DeviceStateCondition d => ctx.DeviceState(d.DeviceId, d.State),
         _ => throw new NotSupportedException($"Condizione non supportata: {c.GetType().Name}")
     };
 

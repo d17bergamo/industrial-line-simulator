@@ -67,4 +67,8 @@ public sealed class InfeedConfig
     /// <summary>Sequenza ciclica degli ID tipologia pacco. Vuota = prima tipologia.</summary>
     [UiProperty("Sequenza tipologie (ID)", "", "Ingresso", Order = 5)]
     public List<string> TypeSequence { get; set; } = new();
+
+    /// <summary>Pesi specifici per pacco: "3=2950; 5=3100" (altrimenti il peso della tipologia).</summary>
+    [UiProperty("Pesi per pacco (n=kg; ...)", "", "Ingresso", Order = 6)]
+    public string WeightOverrides { get; set; } = string.Empty;
 }

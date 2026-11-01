@@ -40,9 +40,22 @@ public sealed class ZoneRuntime
     public bool Occupied { get; internal set; }
     public bool BlockedByAccumulation { get; internal set; }
     public bool Accepting { get; internal set; }
+    /// <summary>Ferma per arresto automatico (nessun pacco in zona, nella sezione precedente o in arrivo).</summary>
+    public bool AutoStopped { get; internal set; }
+    /// <summary>Distanza a monte entro cui un pacco in arrivo riavvia la zona.</summary>
+    public double LookaheadM { get; internal set; }
+
+    /// <summary>Zona dello stopper con fermi intermedi: può contenere più pacchi, uno per fermo.</summary>
+    internal bool MultiStop;
+    internal bool MultiCanAcceptNew;
+    internal readonly List<PackageRuntime> Assigned = new();
+    /// <summary>Ingresso bloccato (es. rigetto in corso) tranne che per il pacco indicato.</summary>
+    internal bool EntryHeld;
+    internal PackageRuntime? EntryHeldFor;
 
     public bool Running => Mode != InverterMode.Stop;
     public bool IsMoving => ActualSpeed > 1e-4;
+    public IReadOnlyList<PackageRuntime> AssignedPackages => Assigned;
 
     // Statistiche
     public double RunningTimeS { get; internal set; }
@@ -56,7 +69,12 @@ public sealed class ZoneRuntime
 
     /// <summary>La zona può ricevere il pacco p dalla zona a monte?</summary>
     public bool AcceptsFor(PackageRuntime? p)
-        => Running && (!IsSinglePackage || ReservedBy == null || (p != null && ReservedBy == p));
+    {
+        if (!Running && !AutoStopped) return false;
+        if (EntryHeld && (p == null || p != EntryHeldFor)) return false;
+        if (MultiStop) return (p != null && Assigned.Contains(p)) || MultiCanAcceptNew;
+        return !IsSinglePackage || ReservedBy == null || (p != null && ReservedBy == p);
+    }
 
     internal void UpdateDrive(double dt, double alignSpeed)
     {

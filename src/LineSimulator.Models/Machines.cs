@@ -5,6 +5,9 @@ namespace LineSimulator.Models;
 /// <summary>Legatrice automatica fissa: lega nel piano trasversale alla sua posizione in linea.</summary>
 public sealed class StrapperConfig : ComponentBase
 {
+    [UiProperty("Modello", "", "Funzionamento", Order = 19)]
+    public string Model { get; set; } = "Sund Birsta KNCA 7/800";
+
     [UiProperty("Posizione piano di legatura", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
 
@@ -28,6 +31,15 @@ public sealed class StrapperConfig : ComponentBase
 
     [UiProperty("Può lavorare in combinazione", "", "Funzionamento", Order = 21)]
     public bool AllowCombinedWork { get; set; } = true;
+
+    [UiProperty("Allarme se attesa consenso stringifascio oltre", "s", "Interblocchi", Order = 30)]
+    public double ConsentTimeoutS { get; set; } = 30;
+
+    [UiProperty("Guasto simulato al ciclo n. (0 = nessuno)", "", "Diagnostica", Order = 40)]
+    public int SimulatedFaultAtCycle { get; set; }
+
+    [UiProperty("Tempo di ripristino dopo guasto", "s", "Diagnostica", Order = 41)]
+    public double FaultResetTimeS { get; set; } = 30;
 
     [JsonIgnore]
     [UiProperty("Tempo ciclo legatrice", "s", "Tempi", ReadOnly = true, Order = 13)]
@@ -156,6 +168,12 @@ public sealed class TransferConfig : ComponentBase
 
     [UiProperty("Blocca ingresso finché non torna in posizione", "", "Interblocchi", Order = 20)]
     public bool BlockInfeedUntilHome { get; set; } = true;
+
+    [UiProperty("Pacchi prelevati per ciclo (max)", "", "Funzionamento", Order = 21)]
+    public int BatchSize { get; set; } = 1;
+
+    [UiProperty("Attesa massima per completare il gruppo", "s", "Funzionamento", Order = 22)]
+    public double BatchWaitTimeoutS { get; set; } = 60;
 
     [JsonIgnore]
     [UiProperty("Tempo di traslazione effettivo", "s", "Tempi", ReadOnly = true, Order = 15)]

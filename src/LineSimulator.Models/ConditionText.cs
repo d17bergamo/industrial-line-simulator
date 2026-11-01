@@ -9,7 +9,8 @@ namespace LineSimulator.Models;
 /// Sintassi:  espr := termine ('|' termine)* ;  termine := fattore ('&amp;' fattore)* ;
 ///            fattore := '!' fattore | '(' espr ')' | atomo
 /// Atomi:  TRUE, FALSE, PC(id), RUN(inverter), ZONE(inverter), STR(legatrice), STOPPER,
-///         TRANSFER_HOME, HEAD(daMm,aMm), GAP(inverter,mm), SIG(nome)
+///         TRANSFER_HOME, HEAD(daMm,aMm), GAP(inverter,mm), SIG(nome),
+///         DEV(dispositivo) impegnato, DEV(dispositivo,STATO)
 /// Esempio:  PC(FC2) &amp; !RUN(INV3) | SIG(Consenso)
 /// </summary>
 public static class ConditionText
@@ -32,6 +33,7 @@ public static class ConditionText
         PackageHeadInRangeCondition h => $"HEAD({h.FromMm.ToString(Ci)},{h.ToMm.ToString(Ci)})",
         GapAheadLessThanCondition g => $"GAP({g.InverterId},{g.GapMm.ToString(Ci)})",
         SignalCondition s => $"SIG({s.SignalName})",
+        DeviceStateCondition d => string.IsNullOrWhiteSpace(d.State) ? $"DEV({d.DeviceId})" : $"DEV({d.DeviceId},{d.State})",
         _ => c.Describe()
     };
 
@@ -130,6 +132,7 @@ public static class ConditionText
                 "HEAD" => new PackageHeadInRangeCondition { FromMm = D(0), ToMm = D(1) },
                 "GAP" => new GapAheadLessThanCondition { InverterId = A(0), GapMm = D(1) },
                 "SIG" => new SignalCondition { SignalName = A(0) },
+                "DEV" => new DeviceStateCondition { DeviceId = A(0), State = args.Count > 1 ? args[1] : string.Empty },
                 _ => throw new FormatException($"Termine sconosciuto '{name}'.")
             };
         }

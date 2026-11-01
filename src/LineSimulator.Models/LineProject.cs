@@ -46,7 +46,7 @@ public sealed class LayoutSettings
 /// </summary>
 public sealed class LineProject
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string ProjectId { get; set; } = Guid.NewGuid().ToString("N");
@@ -65,6 +65,11 @@ public sealed class LineProject
     public StrappingStationConfig StrappingStation { get; set; } = new();
     public StopperConfig Stopper { get; set; } = new() { Id = "STP", Name = "Stopper" };
     public TransferConfig Transfer { get; set; } = new() { Id = "TRF", Name = "Trasferitore" };
+    public BundleClampConfig BundleClamp { get; set; } = new();
+    public SideCompactorConfig Compactor { get; set; } = new();
+    public RejectorConfig Rejector { get; set; } = new();
+    public List<IntermediateStopConfig> IntermediateStops { get; set; } = new();
+    public List<WeighingScaleConfig> Scales { get; set; } = new();
     public List<PackageType> PackageTypes { get; set; } = new();
     public InfeedConfig Infeed { get; set; } = new();
     public List<LogicRule> Rules { get; set; } = new();

@@ -36,7 +36,25 @@ public enum SimEventType
     Slip,
     Deadlock,
     TimeLimit,
-    Completed
+    Completed,
+    PackageIdentified,
+    PhotocellArrival,
+    PhotocellCleared,
+    ZoneCleared,
+    AutoStop,
+    AutoStart,
+    StrapperProcess,
+    StrapperFault,
+    BundleClampPhase,
+    CompactorPhase,
+    Interlock,
+    DeviceAlarm,
+    RejectorPhase,
+    PackageRejected,
+    StopPhase,
+    WeighingPhase,
+    WeightAcquired,
+    TransferWaiting
 }
 
 /// <summary>Evento di simulazione con marca temporale (registro per analisi e step-by-step).</summary>

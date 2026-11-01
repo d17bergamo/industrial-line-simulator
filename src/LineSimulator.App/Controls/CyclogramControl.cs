@@ -92,7 +92,20 @@ public sealed class CyclogramControl : FrameworkElement
         [CycleState.Lowering] = Make(0x7F, 0xB3, 0xD5),
         [CycleState.Depositing] = Make(0x1A, 0x52, 0x76),
         [CycleState.Consent] = Make(0xAB, 0xEB, 0xC6),
-        [CycleState.Interlock] = Make(0xF1, 0x94, 0x8A)
+        [CycleState.Interlock] = Make(0xF1, 0x94, 0x8A),
+        [CycleState.Waiting] = Make(0xD6, 0xEA, 0xF8),
+        [CycleState.InPosition] = Make(0xBB, 0x8F, 0xCE),
+        [CycleState.WaitConsent] = Make(0xFA, 0xD7, 0xA0),
+        [CycleState.Completed] = Make(0x82, 0xE0, 0xAA),
+        [CycleState.Unloading] = Make(0x48, 0xC9, 0xB0),
+        [CycleState.Fault] = Make(0xC0, 0x39, 0x2B),
+        [CycleState.Closing] = Make(0xAF, 0x60, 0x1A),
+        [CycleState.Closed] = Make(0x78, 0x42, 0x12),
+        [CycleState.Opening] = Make(0xE5, 0x98, 0x66),
+        [CycleState.Ejecting] = Make(0x94, 0x31, 0x26),
+        [CycleState.Stabilizing] = Make(0x76, 0xD7, 0xC4),
+        [CycleState.Acquiring] = Make(0x11, 0x78, 0x64),
+        [CycleState.Raised] = Make(0xE7, 0x4C, 0x3C)
     };
 
     private static Brush Make(byte r, byte g, byte b)
@@ -111,6 +124,11 @@ public sealed class CyclogramControl : FrameworkElement
         CycleState.Preparing => "Preparazione", CycleState.Working => "Lavorazione", CycleState.Returning => "Ritorno",
         CycleState.Lifting => "Sollevamento", CycleState.Translating => "Traslazione", CycleState.Lowering => "Abbassamento",
         CycleState.Depositing => "Deposito", CycleState.Consent => "Consenso", CycleState.Interlock => "Interblocco",
+        CycleState.Waiting => "Attesa", CycleState.InPosition => "In posizione", CycleState.WaitConsent => "Attesa consenso",
+        CycleState.Completed => "Completato", CycleState.Unloading => "Scarico", CycleState.Fault => "Guasto/allarme",
+        CycleState.Closing => "Chiusura", CycleState.Closed => "Chiuso", CycleState.Opening => "Apertura",
+        CycleState.Ejecting => "Espulsione", CycleState.Stabilizing => "Stabilizzazione", CycleState.Acquiring => "Acquisizione peso",
+        CycleState.Raised => "Sollevato",
         _ => s.ToString()
     };
 

@@ -77,6 +77,8 @@ public sealed class MainViewModel : ObservableObject
         AddStrapperCommand = new RelayCommand(AddStrapper, () => _project.Strappers.Count < LineProject.MaxStrappers);
         AddPackageTypeCommand = new RelayCommand(AddPackageType);
         AddRuleCommand = new RelayCommand(AddRule);
+        AddStopCommand = new RelayCommand(AddStop);
+        AddScaleCommand = new RelayCommand(AddScale);
         DeleteCommand = new RelayCommand(DeleteSelected, () => CanDelete(SelectedNode?.Model));
 
         PlayCommand = new RelayCommand(Play, () => !IsPlaying);
@@ -169,6 +171,8 @@ public sealed class MainViewModel : ObservableObject
     public ICommand AddStrapperCommand { get; }
     public ICommand AddPackageTypeCommand { get; }
     public ICommand AddRuleCommand { get; }
+    public ICommand AddStopCommand { get; }
+    public ICommand AddScaleCommand { get; }
     public ICommand DeleteCommand { get; }
     public ICommand PlayCommand { get; }
     public ICommand PauseCommand { get; }
@@ -343,11 +347,16 @@ public sealed class MainViewModel : ObservableObject
         root.Children.Add(Group("Inverter", "Inverter", p.Inverters));
         root.Children.Add(Group("Sezioni a rulli", "Section", p.Sections.OrderBy(s => s.StartMm)));
         root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm)));
+        root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
         var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
+        station.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio KNOF", p.BundleClamp), p.BundleClamp, "BundleClamp"));
+        station.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
         foreach (var s in p.Strappers) station.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
         root.Children.Add(station);
+        root.Children.Add(Group("Fermi intermedi", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel("Stopper", p.Stopper, "Stopper"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore", p.Transfer, "Transfer"));
+        root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm)));
         root.Children.Add(Group("Tipologie pacco", "PackageType", p.PackageTypes));
         root.Children.Add(new TreeNodeViewModel("Ingresso pacchi", p.Infeed, "Infeed"));
         root.Children.Add(Group("Regole logiche", "Rule", p.Rules));
@@ -366,6 +375,8 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private static string DeviceHeader(string label, SequenceDeviceConfig d) => d.IsEnabled ? $"{label} ({d.Id})" : $"{label} (disabilitato)";
+
     private static TreeNodeViewModel Group<T>(string header, string kind, IEnumerable<T> items) where T : ComponentBase
     {
         var g = new TreeNodeViewModel(header, null, kind + "Group");
@@ -377,7 +388,10 @@ public sealed class MainViewModel : ObservableObject
     {
         foreach (var n in Tree.SelectMany(t => t.SelfAndDescendants()))
         {
-            if (n.Model is ComponentBase c) n.Header = c.ToString();
+            if (n.Model is BundleClampConfig k) n.Header = DeviceHeader("Stringifascio KNOF", k);
+            else if (n.Model is SideCompactorConfig cm) n.Header = DeviceHeader("Compattatore laterale", cm);
+            else if (n.Model is RejectorConfig rj) n.Header = DeviceHeader("Rigettatrice SMA", rj);
+            else if (n.Model is ComponentBase c) n.Header = c.ToString();
             else if (n.Model is LineProject p) n.Header = "Progetto: " + p.Name;
         }
     }
@@ -411,7 +425,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void OnPropertyEdited(PropertyItemViewModel item)
     {
-        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "InverterId";
+        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "InverterId" or "IsEnabled";
         ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
@@ -428,7 +442,8 @@ public sealed class MainViewModel : ObservableObject
 
     private IEnumerable<ComponentBase> AllComponents() =>
         _project.Inverters.Cast<ComponentBase>().Concat(_project.Sections).Concat(_project.Photocells)
-            .Concat(_project.Strappers).Concat(_project.PackageTypes).Concat(_project.Rules);
+            .Concat(_project.Strappers).Concat(_project.PackageTypes).Concat(_project.Rules)
+            .Concat(_project.IntermediateStops).Concat(_project.Scales);
 
     private void AddInverter()
     {
@@ -483,13 +498,33 @@ public sealed class MainViewModel : ObservableObject
         AfterAdd(r);
     }
 
+    private void AddStop()
+    {
+        double pos = _project.Stopper.PositionMm - (_project.PackageTypes.Count > 0 ? _project.PackageTypes.Min(t => t.LengthMm) : 6000)
+                     - _project.Simulation.MinSafetyDistanceMm - 100;
+        var s = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = Math.Round(pos) };
+        _project.IntermediateStops.Add(s);
+        if (_project.Transfer.BatchSize < 1 + _project.IntermediateStops.Count(x => x.IsEnabled))
+            _project.Transfer.BatchSize = 1 + _project.IntermediateStops.Count(x => x.IsEnabled);
+        AfterAdd(s);
+    }
+
+    private void AddScale()
+    {
+        double start = _project.Scales.Count > 0 ? _project.Scales.Max(s => s.EndMm) + 100 : _project.Transfer.PositionMm;
+        var s = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", StartMm = start, LengthMm = 6000 };
+        _project.Scales.Add(s);
+        AfterAdd(s);
+    }
+
     private void AfterAdd(object model)
     {
         ProjectChanged(structural: true);
         SelectModel(model);
     }
 
-    private static bool CanDelete(object? m) => m is InverterConfig or RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule;
+    private static bool CanDelete(object? m) => m is InverterConfig or RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
+        or IntermediateStopConfig or WeighingScaleConfig;
 
     private void DeleteSelected()
     {
@@ -504,6 +539,8 @@ public sealed class MainViewModel : ObservableObject
             case StrapperConfig st: _project.Strappers.Remove(st); break;
             case PackageType t: _project.PackageTypes.Remove(t); break;
             case LogicRule r: _project.Rules.Remove(r); break;
+            case IntermediateStopConfig fs: _project.IntermediateStops.Remove(fs); break;
+            case WeighingScaleConfig sc: _project.Scales.Remove(sc); break;
         }
         _selectedNode = null;
         ProjectChanged(structural: true);
@@ -638,10 +675,13 @@ public sealed class MainViewModel : ObservableObject
             if (e.Severity >= EventSeverity.Info) EventLog.Add(e);
         }
         while (EventLog.Count > 5000) EventLog.RemoveAt(0);
-        int onLine = _engine.Packages.Count(p => p.ExitTimeS == null);
-        int exited = _engine.Packages.Count - onLine;
+        int exited = _engine.Packages.Count(p => p.ExitTimeS != null);
+        int rejected = _engine.RejectedPackages;
+        int onLine = _engine.Packages.Count - exited - rejected;
         if (IsPlaying || final)
-            Status = $"t = {_engine.Time:0.0} s · pacchi in linea {onLine} · usciti {exited}/{_engine.PackagesToSimulate} · collisioni {_engine.Collisions}"
+            Status = $"t = {_engine.Time:0.0} s · pacchi in linea {onLine} · usciti {exited}/{_engine.PackagesToSimulate}"
+                     + (rejected > 0 ? $" · rigettati {rejected}" : "") + $" · collisioni {_engine.Collisions}"
+                     + (_engine.DeviceAlarms > 0 ? $" · allarmi {_engine.DeviceAlarms}" : "")
                      + (_engine.IsFinished ? " · " + _engine.FinishReason : "");
     }
 

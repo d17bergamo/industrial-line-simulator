@@ -1,0 +1,1044 @@
+using LineSimulator.Core;
+using LineSimulator.Engine.Logic;
+using LineSimulator.Engine.Runtime;
+using LineSimulator.Models;
+
+namespace LineSimulator.Engine;
+
+/// <summary>
+/// Sequenze dei dispositivi di processo: stazione di legatura (KNCA 7/800 + stringifascio KNOF + compattatore),
+/// rigettatrice SMA, fermi intermedi con intestatura di testa/coda, trasferitore multi-pacco, bilici di pesatura.
+/// Ogni sequenza avanza solo quando condizioni, consensi e conferme sono soddisfatti.
+/// </summary>
+public sealed partial class SimulationEngine
+{
+    private readonly List<StopRuntime> _stops = new();
+    private readonly List<ScaleRuntime> _scales = new();
+    private readonly Dictionary<PackageRuntime, List<ScaleRuntime>> _scalePlan = new();
+    private readonly Dictionary<SequenceDeviceConfig, (LogicCondition? Consent, LogicCondition? Stop)> _deviceLogic = new();
+    private PackageRuntime? _finalAssigned;
+    private double? _batchWaitSince;
+
+    public ClampRuntime? BundleClamp { get; private set; }
+    public ClampRuntime? Compactor { get; private set; }
+    public RejectorRuntime? Rejector { get; private set; }
+    public IReadOnlyList<StopRuntime> IntermediateStops => _stops;
+    public IReadOnlyList<ScaleRuntime> Scales => _scales;
+    public int RejectedPackages { get; private set; }
+    public int WeighedPackages { get; private set; }
+    public int DeviceAlarms { get; private set; }
+    public int InterlockEvents { get; private set; }
+
+    private void InitDevices()
+    {
+        var p = Project;
+        if (Station != null && p.BundleClamp.IsEnabled)
+            BundleClamp = new ClampRuntime(p.BundleClamp, p.BundleClamp.CloseTimeS, p.BundleClamp.OpenTimeS, p.BundleClamp.HoldTimeS);
+        if (Station != null && p.Compactor.IsEnabled)
+            Compactor = new ClampRuntime(p.Compactor, p.Compactor.CloseTimeS, p.Compactor.OpenTimeS, p.Compactor.HoldTimeS);
+        if (p.Rejector.IsEnabled)
+        {
+            var rz = Topology.ZoneAt((p.Rejector.PositionMm + p.Rejector.LengthMm / 2) / 1000.0);
+            IReadOnlyList<int> numbers;
+            try { numbers = p.Rejector.ParseRejectNumbers(); } catch (FormatException) { numbers = Array.Empty<int>(); }
+            if (rz != null) Rejector = new RejectorRuntime(p.Rejector, _zoneById[rz.Id], numbers.ToList());
+        }
+        foreach (var s in p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm))
+            _stops.Add(new StopRuntime(s));
+        if (_stops.Count > 0 && Topology.StopperZone != null)
+            _zoneById[Topology.StopperZone.Id].MultiStop = true;
+        for (int i = 0; i < p.Scales.Count; i++)
+            if (p.Scales[i].IsEnabled) _scales.Add(new ScaleRuntime(p.Scales[i], i));
+
+        var devices = new List<SequenceDeviceConfig> { p.BundleClamp, p.Compactor, p.Rejector };
+        devices.AddRange(p.Scales);
+        foreach (var d in devices) _deviceLogic[d] = (ParseCondition(d.StartConsent), ParseCondition(d.StopCondition));
+    }
+
+    private static LogicCondition? ParseCondition(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        try { return ConditionText.Parse(text); }
+        catch (FormatException) { return new ConstantCondition { Value = false }; } // segnalato dal validatore
+    }
+
+    /// <summary>Consenso di avvio del dispositivo (vero se non configurato).</summary>
+    private bool Consent(SequenceDeviceConfig cfg)
+        => !_deviceLogic.TryGetValue(cfg, out var l) || l.Consent == null || LogicEvaluator.Evaluate(l.Consent, this);
+
+    /// <summary>Condizione di arresto attiva: la sequenza del dispositivo resta sospesa.</summary>
+    private bool StopActive(SequenceDeviceConfig cfg)
+        => _deviceLogic.TryGetValue(cfg, out var l) && l.Stop != null && LogicEvaluator.Evaluate(l.Stop, this);
+
+    private void Alarm(SimEventType type, string msg, string? comp, string? pkg)
+    {
+        DeviceAlarms++;
+        Emit(type, EventSeverity.Error, msg, comp, pkg);
+    }
+
+    // ================================================================== Stazione di legatura (KNCA + KNOF + compattatore)
+
+    private void UpdateStation(double t, double dt)
+    {
+        var st = Station;
+        if (st == null || st.Package == null) return;
+        var p = st.Package;
+        if (st.State != StationState.Idle && st.Zone.ReservedBy == p)
+        {
+            if (st.State == StationState.Releasing && !st.Zone.Running) st.BlockedTimeS += dt;
+            else st.BusyTimeS += dt;
+            p.StrappingStationTimeS += dt;
+        }
+
+        switch (st.State)
+        {
+            case StationState.Positioning:
+            {
+                double r = st.TargetHeadM - p.HeadM;
+                bool arrived = r <= 2e-4 && r >= -st.ToleranceM;
+                bool overshoot = r < -st.ToleranceM;
+                if (arrived || (overshoot && p.IsStopped))
+                {
+                    double err = Math.Abs(r);
+                    if (err > st.MaxPositioningErrorM) st.MaxPositioningErrorM = err;
+                    if (overshoot)
+                    {
+                        PositioningErrors++;
+                        Emit(SimEventType.PositioningError, EventSeverity.Error,
+                            $"{p.Id} oltre la fermata di {err * 1000:0.0} mm (tolleranza {st.ToleranceM * 1000:0.0} mm).", st.Zone.Id, p.Id);
+                    }
+                    else
+                    {
+                        p.HeadM = st.TargetHeadM; // posizionamento a encoder: errore residuo < 0.2 mm
+                    }
+                    p.Velocity = 0;
+                    st.Zone.ActualSpeed = 0;
+                    st.Zone.PositionCommand = 0;
+                    ArrivedAtStop(st, p, t);
+                }
+                break;
+            }
+            case StationState.Compacting:
+            {
+                var c = Compactor!;
+                if (c.IsOpen) { TryCommandClose(c, Project.Compactor.PositionMm, st, p); break; }
+                if (c.IsClosed)
+                {
+                    st.PhaseElapsedS += dt;
+                    if (st.PhaseElapsedS >= c.HoldS - 1e-9)
+                    {
+                        Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{c.Id}: {p.Id} compattato, consenso alla legatura", c.Id, p.Id);
+                        AfterCompaction(st, p, t);
+                    }
+                }
+                break;
+            }
+            case StationState.Clamping:
+            {
+                var k = BundleClamp!;
+                if (k.IsOpen) { TryCommandClose(k, Project.BundleClamp.PositionMm, st, p); break; }
+                if (k.IsClosed) TryStartStrapping(st, p, t);
+                break;
+            }
+            case StationState.Strapping:
+            {
+                if (BundleClamp == null && Compactor == null)
+                {
+                    if (st.ActiveStrappers.All(s => !s.Busy)) FinishStop(st, p);
+                    break;
+                }
+                if (!st.StrappingPhaseDone && st.ActiveStrappers.All(s => !s.Faulted && s.State is StrapperState.Returning or StrapperState.Idle))
+                {
+                    st.StrappingPhaseDone = true;
+                    st.PhaseElapsedS = 0;
+                    if (BundleClamp != null)
+                        Emit(SimEventType.BundleClampPhase, EventSeverity.Info, $"{BundleClamp.Id}: legatura terminata, mantenimento {BundleClamp.HoldS:0.##} s", BundleClamp.Id, p.Id);
+                }
+                if (st.StrappingPhaseDone)
+                {
+                    st.PhaseElapsedS += dt;
+                    if (BundleClamp == null || st.PhaseElapsedS >= BundleClamp.HoldS - 1e-9) BeginUnclamp(st, p);
+                }
+                break;
+            }
+            case StationState.Unclamping:
+            {
+                if (Compactor != null && !st.CompactorOpenCommanded && (BundleClamp == null || BundleClamp.IsOpen))
+                {
+                    if (Compactor.CommandOpen())
+                        Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{Compactor.Id}: comando di apertura", Compactor.Id, p.Id);
+                    st.CompactorOpenCommanded = true;
+                }
+                bool clampOk = BundleClamp == null || BundleClamp.IsOpen;
+                bool compOk = Compactor == null || Compactor.IsOpen;
+                if (clampOk && compOk && st.ActiveStrappers.All(s => !s.Busy)) FinishStop(st, p);
+                break;
+            }
+        }
+    }
+
+    private void ArrivedAtStop(StationRuntime st, PackageRuntime p, double t)
+    {
+        st.PhaseElapsedS = 0;
+        st.StrappingPhaseDone = false;
+        st.CompactorOpenCommanded = false;
+        st.ClampOpenCommanded = false;
+        st.InterlockReported = false;
+        if (Compactor != null)
+        {
+            st.State = StationState.Compacting;
+            p.State = PackageState.Strapping;
+            Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{p.Id} in posizione di compattazione, via a rulli ferma", Compactor.Id, p.Id);
+            TryCommandClose(Compactor, Project.Compactor.PositionMm, st, p);
+        }
+        else if (BundleClamp != null)
+        {
+            st.State = StationState.Clamping;
+            p.State = PackageState.Strapping;
+            Emit(SimEventType.BundleClampPhase, EventSeverity.Info, $"{p.Id} in posizione di legatura", BundleClamp.Id, p.Id);
+            TryCommandClose(BundleClamp, Project.BundleClamp.PositionMm, st, p);
+        }
+        else
+        {
+            StartStrappingAtStop(st, p, t);
+        }
+    }
+
+    private void AfterCompaction(StationRuntime st, PackageRuntime p, double t)
+    {
+        st.PhaseElapsedS = 0;
+        st.InterlockReported = false;
+        if (BundleClamp != null)
+        {
+            st.State = StationState.Clamping;
+            TryCommandClose(BundleClamp, Project.BundleClamp.PositionMm, st, p);
+        }
+        else TryStartStrapping(st, p, t);
+    }
+
+    /// <summary>Comando di chiusura con interblocchi: pacco presente sotto il dispositivo, via a rulli ferma, consenso.</summary>
+    private void TryCommandClose(ClampRuntime c, double positionMm, StationRuntime st, PackageRuntime p)
+    {
+        if (!c.IsOpen) return;
+        var type = c == BundleClamp ? SimEventType.BundleClampPhase : SimEventType.CompactorPhase;
+        double x = positionMm / 1000.0;
+        bool covers = p.TailM <= x + 1e-6 && p.HeadM >= x - 1e-6;
+        if (!covers)
+        {
+            if (!st.InterlockReported)
+            {
+                st.InterlockReported = true;
+                InterlockEvents++;
+                Alarm(SimEventType.Interlock, $"{c.Id}: {p.Id} non si trova sotto il dispositivo ({positionMm:0} mm): chiusura non consentita", c.Id, p.Id);
+            }
+            return;
+        }
+        bool still = !st.Zone.IsMoving && p.IsStopped;
+        bool consent = Consent(c.Config) && !StopActive(c.Config);
+        if (!still || !consent)
+        {
+            if (!st.InterlockReported)
+            {
+                st.InterlockReported = true;
+                InterlockEvents++;
+                Emit(SimEventType.Interlock, EventSeverity.Info,
+                    $"{c.Id}: chiusura in attesa ({(!still ? "via a rulli/pacco non fermi" : "consenso di avvio assente")})", c.Id, p.Id);
+            }
+            return;
+        }
+        if (c.CommandClose())
+        {
+            st.InterlockReported = false;
+            Emit(type, EventSeverity.Info, $"{c.Id}: comando di chiusura su {p.Id}", c.Id, p.Id);
+        }
+    }
+
+    private void TryStartStrapping(StationRuntime st, PackageRuntime p, double t)
+    {
+        bool clampOk = BundleClamp == null || BundleClamp.IsClosed;
+        var phase = Project.Compactor.OpenPhase;
+        if (Compactor != null && phase == CompactorOpenPhase.AfterBundleClampClosed && BundleClamp != null && BundleClamp.IsClosed && !st.CompactorOpenCommanded)
+        {
+            if (Compactor.CommandOpen())
+                Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{Compactor.Id}: apertura (fascio trattenuto dallo stringifascio)", Compactor.Id, p.Id);
+            st.CompactorOpenCommanded = true;
+        }
+        bool compOk = Compactor == null || Compactor.IsClosed || st.CompactorOpenCommanded;
+        if (!clampOk || !compOk) return;
+        StartStrappingAtStop(st, p, t);
+    }
+
+    /// <summary>Avvio delle legatrici della fermata. Interblocco: con stringifascio presente serve la chiusura confermata.</summary>
+    private bool StartStrappingAtStop(StationRuntime st, PackageRuntime p, double t)
+    {
+        if (BundleClamp != null && !BundleClamp.IsClosed)
+        {
+            InterlockEvents++;
+            Emit(SimEventType.Interlock, EventSeverity.Error, $"Legatura NON avviata su {p.Id}: stringifascio {BundleClamp.Id} non chiuso/confermato", BundleClamp.Id, p.Id);
+            return false;
+        }
+        var stop = st.Plan!.Stops[st.StopIndex];
+        st.State = StationState.Strapping;
+        st.StrappingPhaseDone = false;
+        p.State = PackageState.Strapping;
+        Emit(SimEventType.PositioningCompleted, EventSeverity.Info,
+            $"{p.Id} in fermata {st.StopIndex + 1}: {string.Join(", ", stop.Tasks.Select(x => $"{x.StrapperId}→#{x.StrapIndex + 1}"))}", st.Zone.Id, p.Id);
+        foreach (var task in stop.Tasks)
+        {
+            var s = _strappers.First(x => x.Id == task.StrapperId);
+            if (s.Busy)
+            {
+                Emit(SimEventType.StrappingPlanError, EventSeverity.Error, $"{s.Id} occupata: impossibile avviare la legatura.", s.Id, p.Id);
+                continue;
+            }
+            s.Start(p, task.StrapIndex);
+            st.ActiveStrappers.Add(s);
+            Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: preparazione legatura #{task.StrapIndex + 1} su {p.Id}", s.Id, p.Id);
+            if (s.Faulted)
+                Alarm(SimEventType.StrapperFault, $"{s.Id}: GUASTO/BLOCCO legatrice al ciclo {s.CyclesStarted} (ripristino in {s.Config.FaultResetTimeS:0.#} s)", s.Id, p.Id);
+        }
+        return true;
+    }
+
+    private void BeginUnclamp(StationRuntime st, PackageRuntime p)
+    {
+        st.State = StationState.Unclamping;
+        if (BundleClamp != null && !st.ClampOpenCommanded)
+        {
+            if (BundleClamp.CommandOpen())
+                Emit(SimEventType.BundleClampPhase, EventSeverity.Info, $"{BundleClamp.Id}: consenso all'apertura, comando di apertura", BundleClamp.Id, p.Id);
+            st.ClampOpenCommanded = true;
+        }
+        if (Compactor != null && !st.CompactorOpenCommanded && Project.Compactor.OpenPhase == CompactorOpenPhase.AfterStrapping)
+        {
+            if (Compactor.CommandOpen())
+                Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{Compactor.Id}: fine legatura, comando di apertura", Compactor.Id, p.Id);
+            st.CompactorOpenCommanded = true;
+        }
+    }
+
+    /// <summary>Fine lavorazione alla fermata: fermata successiva o rilascio del pacco.</summary>
+    private void FinishStop(StationRuntime st, PackageRuntime p)
+    {
+        var stop = st.Plan!.Stops[st.StopIndex];
+        p.StrapsDone += stop.Tasks.Count;
+        foreach (var s in st.ActiveStrappers) s.ClearPackage();
+        st.ActiveStrappers.Clear();
+        st.StopIndex++;
+        if (st.StopIndex < st.Plan.Stops.Count)
+        {
+            st.State = StationState.Positioning;
+            st.TargetHeadM = st.Plan.Stops[st.StopIndex].HeadPositionM;
+            p.State = PackageState.Positioning;
+            Emit(SimEventType.PositioningStarted, EventSeverity.Info,
+                $"{p.Id} verso fermata {st.StopIndex + 1}/{st.Plan.Stops.Count} (testa a {st.TargetHeadM * 1000:0} mm)", st.Zone.Id, p.Id);
+        }
+        else
+        {
+            st.State = StationState.Releasing;
+            p.StrapStatus = StrapStatus.Done;
+            p.State = PackageState.Transport;
+            Emit(SimEventType.StrappingCompleted, EventSeverity.Info,
+                $"{p.Id} legato: {p.StrapsDone}/{p.StrapsTotal} legature in {st.Plan.Stops.Count} fermate.", st.Zone.Id, p.Id);
+        }
+    }
+
+    private void UpdateClamps(double dt)
+    {
+        foreach (var (c, type) in new[] { (BundleClamp, SimEventType.BundleClampPhase), (Compactor, SimEventType.CompactorPhase) })
+        {
+            if (c == null) continue;
+            if (!c.IsOpen) c.BusyTimeS += dt;
+            var ev = c.Advance(dt, StopActive(c.Config));
+            if (ev == null) continue;
+            if (ev.Value.Alarm) Alarm(SimEventType.DeviceAlarm, $"{c.Id}: {ev.Value.Text}", c.Id, Station?.Package?.Id);
+            else Emit(type, EventSeverity.Info, $"{c.Id}: {ev.Value.Text}", c.Id, Station?.Package?.Id);
+        }
+    }
+
+    // ------------------------------------------------------------------ Stati di processo KNCA 7/800
+
+    private void UpdateStrapperProcessStates(double t)
+    {
+        foreach (var s in _strappers)
+        {
+            var ns = ComputeProcessState(s);
+            if (ns != s.ProcessState)
+            {
+                s.ProcessState = ns;
+                s.ProcessStateSinceS = t;
+                s.ConsentAlarmRaised = false;
+                Emit(SimEventType.StrapperProcess, EventSeverity.Info, $"{s.Id} ({s.Config.Model}): {ProcessLabel(ns)}", s.Id, Station?.Package?.Id);
+            }
+            else if (ns == StrapperProcessState.WaitingClampConsent && !s.ConsentAlarmRaised && t - s.ProcessStateSinceS > s.Config.ConsentTimeoutS)
+            {
+                s.ConsentAlarmRaised = true;
+                DeviceAlarms++;
+                Emit(SimEventType.DeviceAlarm, EventSeverity.Warning,
+                    $"{s.Id}: attesa consenso stringifascio oltre {s.Config.ConsentTimeoutS:0} s", s.Id, Station?.Package?.Id);
+            }
+        }
+    }
+
+    private StrapperProcessState ComputeProcessState(StrapperRuntime s)
+    {
+        if (!s.Config.IsEnabled) return StrapperProcessState.Available;
+        if (s.Faulted) return StrapperProcessState.Fault;
+        if (s.Busy) return StrapperProcessState.StrappingCycle;
+        var st = Station;
+        if (st == null) return StrapperProcessState.Available;
+        var p = st.Package;
+        if (p == null || st.State == StationState.Idle)
+        {
+            bool incoming = (_stationUpstream != null && _stationUpstream.Occupied) || st.Zone.Occupied;
+            return incoming ? StrapperProcessState.WaitingPackage : StrapperProcessState.Available;
+        }
+        var plan = st.Plan;
+        bool assignedNow = plan != null && st.StopIndex < plan.Stops.Count && plan.Stops[st.StopIndex].Tasks.Any(x => x.StrapperId == s.Id);
+        bool hasLater = plan != null && plan.Stops.Skip(st.StopIndex + 1).Any(x => x.Tasks.Any(k => k.StrapperId == s.Id));
+        bool worked = s.LastPackage == p;
+        if (st.State == StationState.Releasing) return worked ? StrapperProcessState.Unloading : StrapperProcessState.Available;
+        if (assignedNow)
+        {
+            return st.State switch
+            {
+                StationState.Positioning => StrapperProcessState.Positioning,
+                StationState.Compacting => StrapperProcessState.PackageInPosition,
+                StationState.Clamping => StrapperProcessState.WaitingClampConsent,
+                _ => StrapperProcessState.CycleCompleted
+            };
+        }
+        if (hasLater) return st.State == StationState.Positioning ? StrapperProcessState.Positioning : StrapperProcessState.WaitingPackage;
+        return worked ? StrapperProcessState.CycleCompleted : StrapperProcessState.Available;
+    }
+
+    // ================================================================== Rigettatrice SMA
+
+    /// <summary>Abilitazione del ciclo di rigetto e avvio del posizionamento (prima dei comandi zona).</summary>
+    private void UpdateRejectorEnable(double t)
+    {
+        var r = Rejector;
+        if (r == null) return;
+        var z = r.Zone;
+        if (r.State == RejectorState.Idle)
+        {
+            var p = _active.FirstOrDefault(x => x.OnRollers && x.RejectRequested && !x.RejectHandled);
+            if (p != null)
+            {
+                r.Package = p;
+                r.TargetHeadM = r.CenterM + p.LengthM / 2;
+                r.State = RejectorState.Enabled;
+                r.ElapsedS = 0;
+                Emit(SimEventType.RejectorPhase, EventSeverity.Info,
+                    $"{r.Id}: ciclo di rigetto abilitato per {p.Id} (posizione di rigetto: testa a {r.TargetHeadM * 1000:0} mm)", r.Id, p.Id);
+                if (p.LengthM > r.EndM - r.StartM + 1e-6 && _reportedOnce.Add("smalen:" + p.Id))
+                    Emit(SimEventType.DeviceAlarm, EventSeverity.Warning, $"{r.Id}: {p.Id} più lungo del campo di spinta", r.Id, p.Id);
+            }
+        }
+        if (r.State == RejectorState.Enabled && r.Package != null)
+        {
+            var p = r.Package;
+            if (!p.OnRollers) { r.State = RejectorState.Idle; r.Package = null; }
+            else if (p.HeadM > z.Info.StartM + 1e-9)
+            {
+                bool clearAhead = !_active.Any(q => q != p && q.OnRollers && q.HeadM > p.HeadM && q.TailM < z.Info.EndM - 1e-9);
+                if (p.HeadM > r.TargetHeadM + r.ToleranceM)
+                {
+                    p.RejectHandled = true;
+                    r.State = RejectorState.Idle;
+                    r.Package = null;
+                    Alarm(SimEventType.DeviceAlarm, $"{r.Id}: {p.Id} oltre la posizione di rigetto, NON rigettato (transita)", r.Id, p.Id);
+                }
+                else if (clearAhead)
+                {
+                    r.State = RejectorState.Positioning;
+                    p.State = PackageState.Positioning;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: arresto e posizionamento di {p.Id}", r.Id, p.Id);
+                }
+            }
+        }
+        bool hold = r.State is RejectorState.Positioning or RejectorState.InPosition or RejectorState.Ejecting
+            or RejectorState.Returning or RejectorState.RestartConsent or RejectorState.Fault;
+        z.EntryHeld = hold;
+        z.EntryHeldFor = hold && r.State == RejectorState.Positioning ? r.Package : null;
+    }
+
+    private void UpdateRejector(double t, double dt)
+    {
+        var r = Rejector;
+        if (r == null || r.State == RejectorState.Idle) return;
+        if (r.State != RejectorState.Enabled) r.BusyTimeS += dt;
+        var p = r.Package;
+        if (p == null) { r.State = RejectorState.Idle; return; }
+        var cfg = r.Config;
+        bool hold = StopActive(cfg);
+        double sign = cfg.Side == Project.Transfer.DestinationSide ? 1 : -1;
+        switch (r.State)
+        {
+            case RejectorState.Positioning:
+            {
+                double rem = r.TargetHeadM - p.HeadM;
+                bool arrived = rem <= 2e-4 && rem >= -r.ToleranceM;
+                bool overshoot = rem < -r.ToleranceM;
+                if (arrived || (overshoot && p.IsStopped))
+                {
+                    if (overshoot)
+                    {
+                        PositioningErrors++;
+                        Emit(SimEventType.PositioningError, EventSeverity.Error, $"{r.Id}: {p.Id} oltre la posizione di rigetto di {-rem * 1000:0.0} mm", r.Id, p.Id);
+                    }
+                    else p.HeadM = r.TargetHeadM;
+                    p.Velocity = 0;
+                    r.Zone.ActualSpeed = 0;
+                    r.Zone.PositionCommand = 0;
+                    r.State = RejectorState.InPosition;
+                    r.ElapsedS = 0;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: {p.Id} fermo in posizione di rigetto", r.Id, p.Id);
+                }
+                break;
+            }
+            case RejectorState.InPosition:
+            {
+                bool still = !r.Zone.IsMoving && p.IsStopped;
+                bool free = !_active.Any(q => q != p && q.OnRollers && q.HeadM > r.StartM && q.TailM < r.EndM);
+                if (!hold && still && free && Consent(cfg))
+                {
+                    r.State = RejectorState.Ejecting;
+                    r.ElapsedS = 0;
+                    r.Cycles++;
+                    r.FaultPending = cfg.SimulatedFaultAtCycle > 0 && r.Cycles == cfg.SimulatedFaultAtCycle;
+                    p.State = PackageState.Rejecting;
+                    p.Velocity = 0;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: comando di espulsione {p.Id}", r.Id, p.Id);
+                }
+                else if (_reportedOnce.Add($"smawait:{p.Id}"))
+                {
+                    InterlockEvents++;
+                    Emit(SimEventType.Interlock, EventSeverity.Info,
+                        $"{r.Id}: espulsione in attesa ({(!still ? "via a rulli in moto" : !free ? "altro pacco nel campo di spinta" : "consenso assente")})", r.Id, p.Id);
+                }
+                break;
+            }
+            case RejectorState.Ejecting:
+            {
+                if (hold) break;
+                r.ElapsedS += dt;
+                double f = cfg.EjectTimeS > 0 ? Math.Min(1, r.ElapsedS / cfg.EjectTimeS) : 1;
+                r.StrokeM = r.StrokeMaxM * f;
+                p.LateralM = sign * r.StrokeM;
+                if (!r.FaultPending && r.ElapsedS >= cfg.EjectTimeS + cfg.ConfirmDelayS - 1e-9)
+                {
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: espulsione di {p.Id} confermata", r.Id, p.Id);
+                    p.State = PackageState.Rejected;
+                    p.RejectedTimeS = t;
+                    p.RejectHandled = true;
+                    _active.Remove(p);
+                    RejectedPackages++;
+                    r.Rejected++;
+                    Emit(SimEventType.PackageRejected, EventSeverity.Info, $"{p.Id} rigettato fuori linea da {r.Id}", r.Id, p.Id);
+                    r.State = RejectorState.Returning;
+                    r.ElapsedS = 0;
+                }
+                else if (r.ElapsedS >= cfg.ConfirmTimeoutS - 1e-9)
+                {
+                    r.State = RejectorState.Fault;
+                    r.ElapsedS = 0;
+                    r.Faults++;
+                    Alarm(SimEventType.DeviceAlarm, $"{r.Id}: conferma di espulsione non ricevuta entro {cfg.ConfirmTimeoutS:0.#} s (guasto)", r.Id, p.Id);
+                }
+                break;
+            }
+            case RejectorState.Fault:
+                r.ElapsedS += dt;
+                if (r.ElapsedS >= cfg.FaultResetTimeS - 1e-9)
+                {
+                    r.FaultPending = false;
+                    r.State = RejectorState.Ejecting;
+                    r.ElapsedS = cfg.EjectTimeS;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: guasto ripristinato", r.Id, p.Id);
+                }
+                break;
+            case RejectorState.Returning:
+                if (hold) break;
+                r.ElapsedS += dt;
+                r.StrokeM = r.StrokeMaxM * (cfg.ReturnTimeS > 0 ? Math.Max(0, 1 - r.ElapsedS / cfg.ReturnTimeS) : 0);
+                if (r.ElapsedS >= cfg.ReturnTimeS - 1e-9)
+                {
+                    r.StrokeM = 0;
+                    r.State = RejectorState.RestartConsent;
+                    r.ElapsedS = 0;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: spintore tornato in posizione iniziale", r.Id, p.Id);
+                }
+                break;
+            case RejectorState.RestartConsent:
+                r.ElapsedS += dt;
+                if (r.ElapsedS >= cfg.RestartDelayS - 1e-9)
+                {
+                    r.State = RejectorState.Idle;
+                    r.Package = null;
+                    r.ElapsedS = 0;
+                    Emit(SimEventType.RejectorPhase, EventSeverity.Info, $"{r.Id}: consenso alla ripartenza della linea", r.Id, p.Id);
+                }
+                break;
+        }
+    }
+
+    // ================================================================== Fermi intermedi e accumulo multi-pacco
+
+    private void UpdateMultiStopReservations(ZoneRuntime z)
+    {
+        z.Assigned.RemoveAll(p => !p.OnRollers);
+        bool canAssign = !Transfer.Config.BlockInfeedUntilHome || Transfer.State == TransferState.Home;
+        foreach (var p in _active)
+        {
+            if (!p.OnRollers || z.Assigned.Contains(p)) continue;
+            if (!(p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9)) continue;
+            int stop = canAssign ? NextFreeStopFor(p) : -1;
+            if (stop >= 0) AssignStop(p, stop, z);
+            else if (_reportedOnce.Add($"overfill:{z.Id}:{p.Id}"))
+            {
+                ZoneOverfills++;
+                Emit(SimEventType.ZoneOverfilled, EventSeverity.Warning,
+                    $"{p.Id} entrato nella zona {z.Id} senza un fermo libero e compatibile: verificare accumulo e fermi.", z.Id, p.Id);
+            }
+        }
+        z.ReservedBy = z.Assigned.Count > 0 ? z.Assigned[0] : null;
+        var next = NextCandidate(z);
+        z.MultiCanAcceptNew = canAssign && (next != null ? NextFreeStopFor(next) >= 0 : FirstFreeStop() >= 0);
+    }
+
+    /// <summary>Primo pacco a monte non ancora assegnato che può arrivare ai fermi.</summary>
+    private PackageRuntime? NextCandidate(ZoneRuntime z)
+    {
+        foreach (var p in _active)
+        {
+            if (!p.OnRollers || p.AssignedStop >= 0 || z.Assigned.Contains(p)) continue;
+            if (p.RejectRequested && !p.RejectHandled && Rejector != null && Rejector.Zone.Info.Index < z.Info.Index) continue;
+            return p;
+        }
+        return null;
+    }
+
+    /// <summary>Primo fermo libero nell'ordine stopper finale → fermi intermedi da valle a monte (-1 se nessuno).</summary>
+    private int FirstFreeStop()
+    {
+        if (_finalAssigned == null && Stopper.Package == null) return 0;
+        for (int k = 0; k < _stops.Count; k++)
+            if (_stops[k].Package == null) return k + 1;
+        return -1;
+    }
+
+    private int NextFreeStopFor(PackageRuntime p)
+    {
+        int idx = FirstFreeStop();
+        if (idx <= 0) return idx;
+        return FitsAtStop(p, idx - 1) ? idx : -1;
+    }
+
+    private double StopTargetHead(StopRuntime s, PackageRuntime p) => s.Reference == StopReference.Head ? s.PositionM : s.PositionM + p.LengthM;
+
+    /// <summary>
+    /// Verifica geometrica: il pacco al fermo k deve stare sul trasferitore e nella zona, senza sovrapporsi
+    /// al pacco del fermo a valle (distanza minima di sicurezza inclusa).
+    /// </summary>
+    private bool FitsAtStop(PackageRuntime p, int k)
+    {
+        var s = _stops[k];
+        var zi = Topology.StopperZone!;
+        double head = StopTargetHead(s, p);
+        double tail = head - p.LengthM;
+        if (tail < Math.Max(zi.StartM, Transfer.StartM) - 1e-6) return false;
+        if (head > Stopper.PositionM + 1e-6) return false;
+        double aheadTail;
+        if (k == 0)
+        {
+            var a = Stopper.Package ?? _finalAssigned;
+            if (a == null) return false;
+            aheadTail = Stopper.PositionM - a.LengthM;
+        }
+        else
+        {
+            var prev = _stops[k - 1];
+            if (prev.Package == null) return false;
+            aheadTail = prev.TargetHeadM - prev.Package.LengthM;
+        }
+        return head <= aheadTail - _minSafety + 1e-6;
+    }
+
+    private void AssignStop(PackageRuntime p, int idx, ZoneRuntime z)
+    {
+        p.AssignedStop = idx;
+        z.Assigned.Add(p);
+        z.Reservations++;
+        if (idx == 0)
+        {
+            _finalAssigned = p;
+            Emit(SimEventType.StopPhase, EventSeverity.Info, $"{p.Id} destinato allo stopper finale (testa a {Stopper.PositionM * 1000:0} mm)", Project.Stopper.Id, p.Id);
+            return;
+        }
+        var s = _stops[idx - 1];
+        s.Package = p;
+        s.State = StopState.Assigned;
+        s.TargetHeadM = StopTargetHead(s, p);
+        s.Packages++;
+        Emit(SimEventType.StopPhase, EventSeverity.Info,
+            $"{p.Id} destinato al fermo {s.Id}, intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")} (testa a {s.TargetHeadM * 1000:0} mm, coda a {(s.TargetHeadM - p.LengthM) * 1000:0} mm)", s.Id, p.Id);
+    }
+
+    /// <summary>Comando della zona dello stopper con fermi intermedi.</summary>
+    private InverterMode MultiStopCommand(ZoneRuntime z, double t, double dt, out string reason, out bool autoStop)
+    {
+        autoStop = false;
+        if (Stopper.State == StopperState.Aligning) { reason = "Allineamento allo stopper finale"; return InverterMode.Align; }
+        var headAligning = _stops.FirstOrDefault(s => s.State == StopState.Aligning && s.Reference == StopReference.Head);
+        if (headAligning != null) { reason = $"Intestatura di testa al fermo {headAligning.Id}"; return InverterMode.Align; }
+        if (_finalAssigned != null && Stopper.Package == null) { reason = "Avanzamento verso lo stopper finale"; return InverterMode.Run; }
+        var active = _stops.FirstOrDefault(s => s.State is StopState.Assigned or StopState.Positioning);
+        if (active != null && active.Package != null)
+        {
+            if (active.State == StopState.Assigned)
+            {
+                active.State = StopState.Positioning;
+                Emit(SimEventType.StopPhase, EventSeverity.Info, $"{active.Id}: posizionamento di {active.Package.Id}", active.Id, active.Package.Id);
+            }
+            z.PositionCommand = PositioningProfile.Command(active.TargetHeadM - active.Package.HeadM, z.Config.HighSpeed, z.Config.Deceleration, dt);
+            reason = $"Posizionamento al fermo {active.Id}";
+            return InverterMode.Position;
+        }
+        if (_stops.Any(s => s.State == StopState.Aligning)) { reason = "Intestatura di coda in corso"; return InverterMode.Stop; }
+        if (z.MultiCanAcceptNew && ZoneDemand(z, t, false, out _)) { reason = "Marcia: ingresso del pacco successivo"; return InverterMode.Run; }
+        bool anyHeld = Stopper.Package != null || _stops.Any(s => s.Package != null);
+        autoStop = z.MultiCanAcceptNew;
+        reason = anyHeld ? "Pacchi allineati: attesa trasferitore/pacco successivo" : "Arresto automatico: nessun pacco da movimentare";
+        return InverterMode.Stop;
+    }
+
+    private void UpdateIntermediateStops(double dt)
+    {
+        var zone = Topology.StopperZone != null ? _zoneById[Topology.StopperZone.Id] : null;
+        foreach (var s in _stops)
+        {
+            var p = s.Package;
+            if (p != null) s.OccupiedTimeS += dt;
+            s.Raised = p != null && s.Reference == StopReference.Head
+                       && !_active.Any(q => q.OnRollers && q != p && q.TailM < s.PositionM - 1e-6 && q.HeadM > s.PositionM + 1e-6);
+            if (p == null) continue;
+            if (s.State == StopState.Positioning)
+            {
+                double r = s.TargetHeadM - p.HeadM;
+                bool arrived = r <= 2e-4 && r >= -s.ToleranceM;
+                bool overshoot = r < -s.ToleranceM;
+                if (!(arrived || (overshoot && p.IsStopped))) continue;
+                if (overshoot)
+                {
+                    PositioningErrors++;
+                    Emit(SimEventType.PositioningError, EventSeverity.Error, $"{p.Id} oltre il fermo {s.Id} di {-r * 1000:0.0} mm", s.Id, p.Id);
+                }
+                else p.HeadM = s.TargetHeadM;
+                p.Velocity = 0;
+                if (zone != null) { zone.ActualSpeed = 0; zone.PositionCommand = 0; }
+                if (s.Reference == StopReference.Head && !s.Raised)
+                {
+                    InterlockEvents++;
+                    Alarm(SimEventType.Interlock, $"{s.Id}: fermo non sollevabile, un pacco occupa la posizione del fermo", s.Id, p.Id);
+                }
+                if (s.Reference == StopReference.Tail) p.HeldByTailStop = true;
+                s.State = StopState.Aligning;
+                s.ElapsedS = 0;
+                p.State = PackageState.Aligning;
+                Emit(SimEventType.StopPhase, EventSeverity.Info,
+                    $"{p.Id} al fermo {s.Id}: intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")} (testa {p.HeadM * 1000:0} mm, coda {p.TailM * 1000:0} mm)", s.Id, p.Id);
+            }
+            else if (s.State == StopState.Aligning)
+            {
+                s.ElapsedS += dt;
+                if (s.ElapsedS >= s.Config.AlignmentTimeS - 1e-9)
+                {
+                    s.State = StopState.Aligned;
+                    p.State = PackageState.Aligned;
+                    Emit(SimEventType.AlignmentCompleted, EventSeverity.Info, $"{p.Id} allineato al fermo {s.Id} ({s.Config.AlignmentTimeS:0.##} s)", s.Id, p.Id);
+                }
+            }
+        }
+    }
+
+    /// <summary>Gruppo di pacchi pronto per il trasferitore (null se non ancora pronto).</summary>
+    private List<PackageRuntime>? ReadyBatch(double t)
+    {
+        if (_stops.Count == 0)
+            return Stopper.State == StopperState.Aligned && Stopper.Package != null ? new List<PackageRuntime> { Stopper.Package } : null;
+
+        var aligned = new List<PackageRuntime>();
+        if (Stopper.State == StopperState.Aligned && Stopper.Package != null) aligned.Add(Stopper.Package);
+        foreach (var s in _stops) if (s.State == StopState.Aligned && s.Package != null) aligned.Add(s.Package);
+        if (aligned.Count == 0) { _batchWaitSince = null; return null; }
+        bool approaching = (_finalAssigned != null && Stopper.State != StopperState.Aligned)
+                           || _stops.Any(s => s.State is StopState.Assigned or StopState.Positioning or StopState.Aligning);
+        if (approaching) return null;
+        _batchWaitSince ??= t;
+        int target = Math.Max(1, Math.Min(Transfer.Config.BatchSize, 1 + _stops.Count));
+        if (aligned.Count >= target) return aligned;
+        var zone = _zoneById[Topology.StopperZone!.Id];
+        var cand = NextCandidate(zone);
+        bool more = cand != null ? NextFreeStopFor(cand) >= 0 : _nextIndex < Project.Infeed.PackageCount && FirstFreeStop() >= 0;
+        if (!more) return aligned;
+        if (t - _batchWaitSince.Value >= Transfer.Config.BatchWaitTimeoutS - 1e-9)
+        {
+            Emit(SimEventType.TransferWaiting, EventSeverity.Info,
+                $"Trasferitore: attesa gruppo scaduta ({Transfer.Config.BatchWaitTimeoutS:0} s), prelievo di {aligned.Count} pacchi", Project.Transfer.Id);
+            return aligned;
+        }
+        return null;
+    }
+
+    private void ReleaseStopsFor(List<PackageRuntime> lifted)
+    {
+        if (_finalAssigned != null && lifted.Contains(_finalAssigned)) _finalAssigned = null;
+        foreach (var s in _stops)
+        {
+            if (s.Package == null || !lifted.Contains(s.Package)) continue;
+            s.Package = null;
+            s.State = StopState.Free;
+            s.Raised = false;
+            s.ElapsedS = 0;
+        }
+        if (Topology.StopperZone != null) _zoneById[Topology.StopperZone.Id].Assigned.RemoveAll(lifted.Contains);
+    }
+
+    // ================================================================== Bilici di pesatura
+
+    /// <summary>Pianifica i bilici di destinazione: false se un bilico necessario è ancora occupato (interblocco).</summary>
+    private bool TryPlanScales(List<PackageRuntime> pkgs)
+    {
+        _scalePlan.Clear();
+        var used = new HashSet<ScaleRuntime>();
+        foreach (var p in pkgs)
+        {
+            var cover = _scales.Where(s => Math.Min(s.EndM, p.HeadM) - Math.Max(s.StartM, p.TailM) > 0.05).OrderBy(s => s.StartM).ToList();
+            if (cover.Count == 0)
+            {
+                if (_reportedOnce.Add("noscale:" + p.Id))
+                    Emit(SimEventType.DeviceAlarm, EventSeverity.Warning, $"{p.Id}: nessun bilico sotto il pacco, deposito senza pesatura", Project.Transfer.Id, p.Id);
+                _scalePlan[p] = new List<ScaleRuntime>();
+                continue;
+            }
+            if (cover.Any(used.Contains))
+            {
+                if (_reportedOnce.Add("scaleshare:" + p.Id))
+                    Alarm(SimEventType.DeviceAlarm, $"{p.Id}: bilico già destinato a un altro pacco dello stesso gruppo, deposito senza pesatura", Project.Transfer.Id, p.Id);
+                _scalePlan[p] = new List<ScaleRuntime>();
+                continue;
+            }
+            foreach (var s in cover) used.Add(s);
+            _scalePlan[p] = cover;
+        }
+        if (used.Any(s => s.Busy)) { _scalePlan.Clear(); return false; }
+        return true;
+    }
+
+    private void StartWeighing(PackageRuntime p, List<ScaleRuntime> scales, double t)
+    {
+        var lead = scales[0];
+        lead.Lead = null;
+        lead.Followers.Clear();
+        lead.Package = p;
+        foreach (var f in scales.Skip(1))
+        {
+            f.Package = p;
+            f.Lead = lead;
+            f.State = ScaleState.Directed;
+            lead.Followers.Add(f);
+        }
+        lead.State = ScaleState.Directed;
+        lead.ElapsedS = 0;
+        lead.Speed = 0;
+        lead.Cycles++;
+        lead.FaultPending = lead.Config.SimulatedFaultAtCycle > 0 && lead.Cycles == lead.Config.SimulatedFaultAtCycle;
+        p.State = PackageState.OnScale;
+        p.Velocity = 0;
+        p.ScaleId = string.Join("+", scales.Select(s => s.Id));
+        var cfg = lead.Config;
+        string where;
+        if (lead.Combined)
+        {
+            lead.TargetHeadM = p.HeadM;
+            lead.ShortPosition = false;
+            where = "pesatura combinata, nessuno spostamento";
+        }
+        else
+        {
+            lead.ShortPosition = p.LengthM <= cfg.ShortPackageMaxLengthMm / 1000.0 + 1e-9;
+            lead.TargetHeadM = lead.ShortPosition
+                ? (cfg.IntermediateHeadPositionMm > 0 ? cfg.IntermediateHeadPositionMm / 1000.0 : (lead.StartM + lead.EndM + p.LengthM) / 2)
+                : (cfg.StandardHeadPositionMm > 0 ? cfg.StandardHeadPositionMm / 1000.0 : lead.EndM);
+            where = lead.ShortPosition ? "pacco corto: posizione intermedia" : "posizione standard";
+        }
+        Emit(SimEventType.WeighingPhase, EventSeverity.Info,
+            $"{p.Id} indirizzato al bilico {p.ScaleId} ({where}, testa a {lead.TargetHeadM * 1000:0} mm)", lead.Id, p.Id);
+    }
+
+    private void UpdateScales(double t, double dt)
+    {
+        foreach (var lead in _scales.Where(s => s.Package != null && s.Lead == null).ToList())
+        {
+            var p = lead.Package!;
+            var cfg = lead.Config;
+            lead.BusyTimeS += dt;
+            foreach (var f in lead.Followers) f.BusyTimeS += dt;
+            bool hold = StopActive(cfg);
+            switch (lead.State)
+            {
+                case ScaleState.Directed:
+                    lead.State = Math.Abs(lead.TargetHeadM - p.HeadM) <= 2e-4 ? ScaleState.PositionCheck : ScaleState.Positioning;
+                    if (lead.State == ScaleState.Positioning)
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{lead.Id}: arresto e posizionamento di {p.Id}", lead.Id, p.Id);
+                    break;
+                case ScaleState.Positioning:
+                {
+                    if (hold) break;
+                    double r = lead.TargetHeadM - p.HeadM;
+                    double dist = Math.Abs(r), dir = Math.Sign(r);
+                    double vcmd = PositioningProfile.Command(dist, cfg.PositioningSpeed, cfg.Acceleration, dt);
+                    double vOld = lead.Speed;
+                    double vNew = vOld < vcmd ? Math.Min(vcmd, vOld + cfg.Acceleration * dt) : vcmd;
+                    double step = 0.5 * (vOld + vNew) * dt;
+                    if (dist <= 2e-4 || step >= dist)
+                    {
+                        p.HeadM = lead.TargetHeadM;
+                        lead.Speed = 0;
+                        p.Velocity = 0;
+                        lead.State = ScaleState.PositionCheck;
+                    }
+                    else
+                    {
+                        p.HeadM += dir * step;
+                        lead.Speed = vNew;
+                        p.Velocity = dir * vNew;
+                        _lastProgressTime = t;
+                    }
+                    break;
+                }
+                case ScaleState.PositionCheck:
+                {
+                    double sStart = lead.Combined ? Math.Min(lead.StartM, lead.Followers.Min(f => f.StartM)) : lead.StartM;
+                    double sEnd = lead.Combined ? Math.Max(lead.EndM, lead.Followers.Max(f => f.EndM)) : lead.EndM;
+                    double tol = lead.ToleranceM;
+                    bool ok = p.TailM >= sStart - tol && p.HeadM <= sEnd + tol && Math.Abs(p.HeadM - lead.TargetHeadM) <= tol;
+                    if (ok)
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{lead.Id}: posizionamento di {p.Id} verificato, stabilizzazione", lead.Id, p.Id);
+                    else
+                    {
+                        p.WeighingValid = false;
+                        Alarm(SimEventType.DeviceAlarm, $"{lead.Id}: {p.Id} non correttamente posizionato sul bilico (pacco {p.TailM * 1000:0}-{p.HeadM * 1000:0} mm), pesata non valida", lead.Id, p.Id);
+                    }
+                    lead.State = ScaleState.Stabilizing;
+                    lead.ElapsedS = 0;
+                    break;
+                }
+                case ScaleState.Stabilizing:
+                    if (hold) break;
+                    lead.ElapsedS += dt;
+                    if (lead.FaultPending && lead.ElapsedS >= cfg.ConfirmTimeoutS - 1e-9)
+                    {
+                        lead.State = ScaleState.Fault;
+                        lead.ElapsedS = 0;
+                        lead.Faults++;
+                        Alarm(SimEventType.DeviceAlarm, $"{lead.Id}: peso non stabile entro {cfg.ConfirmTimeoutS:0.#} s (guasto)", lead.Id, p.Id);
+                    }
+                    else if (!lead.FaultPending && lead.ElapsedS >= cfg.StabilizationTimeS - 1e-9)
+                    {
+                        lead.State = ScaleState.Acquiring;
+                        lead.ElapsedS = 0;
+                    }
+                    break;
+                case ScaleState.Fault:
+                    lead.ElapsedS += dt;
+                    if (lead.ElapsedS >= cfg.FaultResetTimeS - 1e-9)
+                    {
+                        lead.FaultPending = false;
+                        lead.State = ScaleState.Stabilizing;
+                        lead.ElapsedS = 0;
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{lead.Id}: guasto ripristinato, nuova stabilizzazione", lead.Id, p.Id);
+                    }
+                    break;
+                case ScaleState.Acquiring:
+                    lead.ElapsedS += dt;
+                    if (lead.ElapsedS >= cfg.AcquisitionTimeS - 1e-9)
+                    {
+                        double res = cfg.ResolutionKg > 0 ? cfg.ResolutionKg : 1;
+                        double kg = Math.Round(p.WeightKg / res, MidpointRounding.AwayFromZero) * res;
+                        p.MeasuredWeightKg = kg;
+                        p.WeighedTimeS = t;
+                        lead.LastMeasuredKg = kg;
+                        lead.Weighings++;
+                        WeighedPackages++;
+                        Emit(SimEventType.WeightAcquired, EventSeverity.Info, $"{p.ScaleId}: peso di {p.Id} acquisito = {kg:0} kg{(p.WeighingValid ? "" : " (NON VALIDO)")}", lead.Id, p.Id);
+                        double capacity = cfg.CapacityKg + lead.Followers.Sum(f => f.Config.CapacityKg);
+                        if (kg > capacity)
+                            Alarm(SimEventType.DeviceAlarm, $"{lead.Id}: peso {kg:0} kg oltre la portata {capacity:0} kg", lead.Id, p.Id);
+                        lead.State = ScaleState.Completed;
+                        lead.ElapsedS = 0;
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{lead.Id}: pesatura di {p.Id} completata", lead.Id, p.Id);
+                    }
+                    break;
+                case ScaleState.Completed:
+                    if (!hold && Consent(cfg))
+                    {
+                        lead.State = ScaleState.Releasing;
+                        lead.ElapsedS = 0;
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{lead.Id}: consenso a proseguire, scarico di {p.Id}", lead.Id, p.Id);
+                    }
+                    break;
+                case ScaleState.Releasing:
+                    lead.ElapsedS += dt;
+                    if (lead.ElapsedS >= cfg.ReleaseTimeS - 1e-9)
+                    {
+                        p.State = PackageState.Exited;
+                        p.ExitTimeS = t;
+                        _active.Remove(p);
+                        Emit(SimEventType.PackageExited, EventSeverity.Info,
+                            $"{p.Id} pesato ({p.MeasuredWeightKg:0} kg) e scaricato dal bilico {p.ScaleId} (attraversamento {p.LeadTimeS:0.0} s)", lead.Id, p.Id);
+                        foreach (var f in lead.Followers) { f.State = ScaleState.Idle; f.Package = null; f.Lead = null; }
+                        lead.Followers.Clear();
+                        lead.State = ScaleState.Idle;
+                        lead.Package = null;
+                        lead.ElapsedS = 0;
+                        continue;
+                    }
+                    break;
+            }
+            foreach (var f in lead.Followers) f.State = lead.State;
+        }
+
+        // Verifica sovrapposizioni tra pacchi sui bilici
+        var onScale = _active.Where(x => x.State == PackageState.OnScale).OrderBy(x => x.HeadM).ToList();
+        for (int i = 1; i < onScale.Count; i++)
+        {
+            var a = onScale[i - 1]; var b = onScale[i];
+            if (b.TailM < a.HeadM - 1e-6 && _reportedOnce.Add($"scaleoverlap:{a.Id}:{b.Id}"))
+            {
+                Collisions++;
+                Emit(SimEventType.Collision, EventSeverity.Error, $"COLLISIONE sui bilici: {a.Id} e {b.Id} sovrapposti", null, b.Id);
+            }
+        }
+    }
+
+    // ================================================================== Stato dispositivi (logica DEV, UI)
+
+    /// <summary>Stato testuale e impegno di un dispositivo per identificativo (null se inesistente).</summary>
+    public (string State, bool Busy)? DeviceStatus(string id)
+    {
+        var s = _strappers.FirstOrDefault(x => x.Id == id);
+        if (s != null) return (s.ProcessState.ToString(), s.ProcessState != StrapperProcessState.Available);
+        if (BundleClamp != null && BundleClamp.Id == id) return (BundleClamp.State.ToString(), !BundleClamp.IsOpen);
+        if (Compactor != null && Compactor.Id == id) return (Compactor.State.ToString(), !Compactor.IsOpen);
+        if (Rejector != null && Rejector.Id == id) return (Rejector.State.ToString(), Rejector.Busy);
+        var stop = _stops.FirstOrDefault(x => x.Id == id);
+        if (stop != null) return (stop.State.ToString(), stop.State != StopState.Free);
+        var sc = _scales.FirstOrDefault(x => x.Id == id);
+        if (sc != null) return (sc.State.ToString(), sc.Busy);
+        if (Project.Transfer.Id == id) return (Transfer.State.ToString(), Transfer.State != TransferState.Home);
+        if (Project.Stopper.Id == id) return (Stopper.State.ToString(), Stopper.Package != null);
+        return null;
+    }
+}
