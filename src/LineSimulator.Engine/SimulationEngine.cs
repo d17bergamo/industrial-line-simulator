@@ -953,7 +953,8 @@ public sealed class SimulationEngine : ILogicContext
     {
         if (IsFinished) return;
         bool allIn = _nextIndex >= Project.Infeed.PackageCount;
-        if (allIn && _active.Count == 0)
+        // Fine: tutti i pacchi usciti E macchine tornate a riposo (ultimo ritorno del trasferitore incluso nel ciclo).
+        if (allIn && _active.Count == 0 && Transfer.State == TransferState.Home && !_strappers.Any(s => s.Busy))
         {
             Emit(SimEventType.Completed, EventSeverity.Info, $"Simulazione completata: {_packages.Count} pacchi usciti.");
             Finish("Completata", true);
