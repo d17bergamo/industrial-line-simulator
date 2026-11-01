@@ -102,7 +102,7 @@ public class ProcessLogicTests
     {
         var p = SampleProjects.CreateStandardLine();
         p.Photocells.RemoveAll(x => x.IsEntryPhotocell);
-        string json = ProjectSerializer.Serialize(p).Replace("\"schemaVersion\": 2", "\"schemaVersion\": 1");
+        string json = ProjectSerializer.Serialize(p).Replace($"\"schemaVersion\": {LineProject.CurrentSchemaVersion}", "\"schemaVersion\": 1");
         var loaded = ProjectSerializer.Deserialize(json);
         Assert.Equal(LineProject.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Single(loaded.Photocells, x => x.IsEntryPhotocell);
@@ -350,7 +350,7 @@ public class ProcessLogicTests
         var e = RunChecked(p, en =>
         {
             var r = en.Rejector!;
-            if (r.State == RejectorState.Ejecting && en.Zone("INV2")!.ActualSpeed > 1e-9) zoneStoppedDuringEject = false;
+            if (r.State == RejectorState.Ejecting && en.Zone("M2")!.ActualSpeed > 1e-9) zoneStoppedDuringEject = false;
             if (r.State == RejectorState.InPosition && headInPosition == null) headInPosition = r.Package!.HeadM;
         });
         Assert.True(e.CompletedNormally, Diag(e));
@@ -426,8 +426,8 @@ public class ProcessLogicTests
         p.Infeed.IntervalS = 200;
         var e = RunChecked(p);
         Assert.True(e.CompletedNormally, Diag(e));
-        var inv1Stops = e.Events.Where(x => x.Type == SimEventType.AutoStop && x.ComponentId == "INV1").ToList();
-        var inv1Starts = e.Events.Where(x => x.Type == SimEventType.AutoStart && x.ComponentId == "INV1").ToList();
+        var inv1Stops = e.Events.Where(x => x.Type == SimEventType.AutoStop && x.ComponentId == "M1").ToList();
+        var inv1Starts = e.Events.Where(x => x.Type == SimEventType.AutoStart && x.ComponentId == "M1").ToList();
         Assert.NotEmpty(inv1Stops);
         Assert.NotEmpty(inv1Starts);
         // Riavvio anticipato del tempo di accelerazione (0.6/0.5 = 1.2 s) rispetto all'ingresso del secondo pacco
@@ -446,12 +446,12 @@ public class ProcessLogicTests
     {
         var p = SampleProjects.CreateStandardLine();
         p.Infeed.PackageCount = 1;
-        foreach (var inv in p.Inverters) inv.AutoStopWhenEmpty = false;
+        foreach (var m in p.Sections) m.AutoStopWhenEmpty = false;
         var e = new SimulationEngine(p);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.DoesNotContain(e.Events, x => x.Type == SimEventType.AutoStop);
-        Assert.True(e.Zone("INV1")!.Running);
+        Assert.True(e.Zone("M1")!.Running);
     }
 
     [Fact]

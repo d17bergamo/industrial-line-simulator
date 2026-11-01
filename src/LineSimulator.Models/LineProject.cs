@@ -46,7 +46,7 @@ public sealed class LayoutSettings
 /// </summary>
 public sealed class LineProject
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string ProjectId { get; set; } = Guid.NewGuid().ToString("N");
@@ -58,7 +58,7 @@ public sealed class LineProject
     public string Description { get; set; } = string.Empty;
 
     public LayoutSettings Layout { get; set; } = new();
-    public List<InverterConfig> Inverters { get; set; } = new();
+    /// <summary>Moduli di via a rulli (ognuno con il proprio inverter).</summary>
     public List<RollerSection> Sections { get; set; } = new();
     public List<PhotocellConfig> Photocells { get; set; } = new();
     public List<StrapperConfig> Strappers { get; set; } = new();

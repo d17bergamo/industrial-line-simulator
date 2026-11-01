@@ -43,7 +43,7 @@ public class EngineMotionTests
         proj.Photocells.Add(new PhotocellConfig
         {
             Id = "FCS", Name = "Arresto", PositionMm = 20000, ResponseTimeMs = 20,
-            ControlledInverterId = "INV1", Action = PhotocellAction.Stop
+            ControlledInverterId = "M1", Action = PhotocellAction.Stop
         });
         var e = new SimulationEngine(proj);
         e.RunUntil(25);
@@ -52,14 +52,14 @@ public class EngineMotionTests
         double expected = 20.0 + Kinematics.StoppingDistance(0.6, 0.02, 0.6);
         // tolleranza: ritardo di scansione massimo 2 passi a 0.6 m/s
         Assert.InRange(p.HeadM, expected - 0.002, expected + 0.02);
-        Assert.Equal(InverterMode.Stop, e.Zone("INV1")!.Mode);
+        Assert.Equal(InverterMode.Stop, e.Zone("M1")!.Mode);
     }
 
     [Fact]
     public void Braking_DecelerationEqualsConfiguredRamp()
     {
         var proj = TestLines.SingleZone();
-        proj.Photocells.Add(new PhotocellConfig { Id = "FCS", PositionMm = 20000, ResponseTimeMs = 0, ControlledInverterId = "INV1", Action = PhotocellAction.Stop });
+        proj.Photocells.Add(new PhotocellConfig { Id = "FCS", PositionMm = 20000, ResponseTimeMs = 0, ControlledInverterId = "M1", Action = PhotocellAction.Stop });
         var e = new SimulationEngine(proj);
         var p0 = (PackageRuntime?)null;
         double? vPrev = null; double maxDecel = 0;
@@ -78,12 +78,12 @@ public class EngineMotionTests
     public void SlowDownPhotocell_SwitchesToLowSpeed_AndLimitsImpact()
     {
         var proj = TestLines.SingleZone();
-        proj.Photocells.Add(new PhotocellConfig { Id = "FCR", PositionMm = 26000, ControlledInverterId = "INV1", Action = PhotocellAction.SlowDown });
+        proj.Photocells.Add(new PhotocellConfig { Id = "FCR", PositionMm = 26000, ControlledInverterId = "M1", Action = PhotocellAction.SlowDown });
         var e = new SimulationEngine(proj);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, e.FinishReason);
         Assert.Equal(0, e.ExcessiveImpacts);
-        Assert.Contains(e.Recorder.Tracks.Single(t => t.Key == "INV:INV1").Segments, s => s.State == CycleState.Low);
+        Assert.Contains(e.Recorder.Tracks.Single(t => t.Key == "INV:M1").Segments, s => s.State == CycleState.Low);
     }
 
     [Fact]
@@ -101,13 +101,13 @@ public class EngineMotionTests
         var proj = TestLines.SingleZone();
         proj.Rules.Add(new LogicRule
         {
-            Id = "R1", Name = "Bassa sempre", TargetInverterId = "INV1", Action = RuleAction.SetLowSpeed,
+            Id = "R1", Name = "Bassa sempre", TargetInverterId = "M1", Action = RuleAction.SetLowSpeed,
             Condition = new PackageHeadInRangeCondition { FromMm = 0, ToMm = 100000 }
         });
         var e = new SimulationEngine(proj);
         e.RunUntil(10);
         Assert.Equal(0.15, e.Packages.Single().Velocity, 9);
-        Assert.Equal(SpeedLevel.Low, e.Zone("INV1")!.Level);
+        Assert.Equal(SpeedLevel.Low, e.Zone("M1")!.Level);
     }
 
     [Fact]
@@ -117,12 +117,12 @@ public class EngineMotionTests
         proj.Rules.Add(new LogicRule { Id = "R1", Action = RuleAction.SetSignal, SignalName = "OK", Condition = new ConstantCondition { Value = true } });
         proj.Rules.Add(new LogicRule
         {
-            Id = "R2", TargetInverterId = "INV1", Action = RuleAction.StopInverter,
+            Id = "R2", TargetInverterId = "M1", Action = RuleAction.StopInverter,
             Condition = new AndCondition { Children = { new SignalCondition { SignalName = "OK" }, new NotCondition { Child = new TransferAtHomeCondition() } } }
         });
         proj.Rules.Add(new LogicRule
         {
-            Id = "R3", TargetInverterId = "INV1", Action = RuleAction.SetLowSpeed,
+            Id = "R3", TargetInverterId = "M1", Action = RuleAction.SetLowSpeed,
             Condition = new OrCondition { Children = { new ConstantCondition { Value = false }, new SignalCondition { SignalName = "OK" } } }
         });
         var e = new SimulationEngine(proj);
@@ -130,8 +130,8 @@ public class EngineMotionTests
         Assert.Contains("OK", e.ActiveSignals);
         e.RunUntil(5);
         // R2 falsa (trasferitore a casa) → marcia; R3 vera → bassa
-        Assert.Equal(SpeedLevel.Low, e.Zone("INV1")!.Level);
-        Assert.True(e.Zone("INV1")!.Running);
+        Assert.Equal(SpeedLevel.Low, e.Zone("M1")!.Level);
+        Assert.True(e.Zone("M1")!.Running);
     }
 
     [Fact]
@@ -173,9 +173,9 @@ public class EngineMotionTests
             Assert.Equal(e.Stopper.PositionM, p.HeadM, 9);
             Assert.Equal(0, p.Velocity, 9);
             // i rulli restano accesi alla velocità di allineamento
-            Assert.Equal(InverterMode.Align, e.Zone("INV1")!.Mode);
+            Assert.Equal(InverterMode.Align, e.Zone("M1")!.Mode);
         }
-        Assert.True(e.Zone("INV1")!.ActualSpeed > 0.09);
+        Assert.True(e.Zone("M1")!.ActualSpeed > 0.09);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class EngineMotionTests
     {
         var proj = TestLines.SingleZone();
         proj.Simulation.DeadlockTimeoutS = 5;
-        proj.Rules.Add(new LogicRule { Id = "R1", TargetInverterId = "INV1", Action = RuleAction.StopInverter, Condition = new ConstantCondition { Value = true } });
+        proj.Rules.Add(new LogicRule { Id = "R1", TargetInverterId = "M1", Action = RuleAction.StopInverter, Condition = new ConstantCondition { Value = true } });
         var e = new SimulationEngine(proj);
         e.RunToCompletion();
         Assert.True(e.Deadlocked);
@@ -195,7 +195,7 @@ public class EngineMotionTests
     public void InvalidConfiguration_IsNotSimulated()
     {
         var proj = TestLines.SingleZone();
-        proj.Inverters[0].HighSpeed = 0;
+        proj.Sections[0].HighSpeed = 0;
         var e = new SimulationEngine(proj);
         Assert.True(e.IsFinished);
         Assert.Contains(e.Events, x => x.Type == SimEventType.ConfigurationError);

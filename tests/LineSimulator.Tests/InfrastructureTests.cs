@@ -13,13 +13,13 @@ public class InfrastructureTests
         var p = SampleProjects.CreateStandardLine();
         p.Rules.Add(new LogicRule
         {
-            Id = "R1", Name = "Esempio", TargetInverterId = "INV2", Action = RuleAction.SetLowSpeed,
+            Id = "R1", Name = "Esempio", TargetInverterId = "M2", Action = RuleAction.SetLowSpeed,
             Condition = new AndCondition
             {
                 Children =
                 {
                     new PhotocellCondition { PhotocellId = "FC2", Occupied = true },
-                    new OrCondition { Children = { new GapAheadLessThanCondition { InverterId = "INV2", GapMm = 2000 }, new NotCondition { Child = new TransferAtHomeCondition() } } }
+                    new OrCondition { Children = { new GapAheadLessThanCondition { InverterId = "M2", GapMm = 2000 }, new NotCondition { Child = new TransferAtHomeCondition() } } }
                 }
             }
         });
@@ -30,7 +30,7 @@ public class InfrastructureTests
         var and = Assert.IsType<AndCondition>(q.Rules[0].Condition);
         Assert.IsType<PhotocellCondition>(and.Children[0]);
         Assert.Equal(new List<double> { 1500, 6000, 10500 }, q.PackageTypes[0].StrapPositionsMm);
-        Assert.Equal(p.Inverters.Count, q.Inverters.Count);
+        Assert.Equal(p.Sections.Select(x => (x.Id, x.HighSpeed, x.Deceleration)), q.Sections.Select(x => (x.Id, x.HighSpeed, x.Deceleration)));
     }
 
     [Fact]

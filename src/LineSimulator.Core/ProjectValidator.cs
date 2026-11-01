@@ -60,7 +60,7 @@ public static class ProjectValidator
     private static void ValidateIds(LineProject p, ValidationReport r)
     {
         var all = new List<ComponentBase>();
-        all.AddRange(p.Inverters); all.AddRange(p.Sections); all.AddRange(p.Photocells);
+        all.AddRange(p.Sections); all.AddRange(p.Photocells);
         all.AddRange(p.Strappers); all.AddRange(p.PackageTypes); all.AddRange(p.Rules);
         all.Add(p.Stopper); all.Add(p.Transfer);
         if (p.BundleClamp.IsEnabled) all.Add(p.BundleClamp);
@@ -75,15 +75,14 @@ public static class ProjectValidator
 
     private static void ValidateInverters(LineProject p, ValidationReport r)
     {
-        foreach (var inv in p.Inverters)
+        // Parametri inverter di ogni modulo di via a rulli
+        foreach (var inv in p.Sections)
         {
             if (inv.HighSpeed <= 0) r.Error("INV_SPEED", "Velocità alta deve essere > 0 m/s.", inv.Id);
             if (inv.LowSpeed <= 0) r.Error("INV_SPEED", "Velocità bassa deve essere > 0 m/s.", inv.Id);
             if (inv.LowSpeed > inv.HighSpeed) r.Error("INV_SPEED", "Velocità bassa maggiore della velocità alta.", inv.Id);
             if (inv.Acceleration <= 0) r.Error("INV_RAMP", "Accelerazione deve essere > 0 m/s².", inv.Id);
             if (inv.Deceleration <= 0) r.Error("INV_RAMP", "Decelerazione deve essere > 0 m/s².", inv.Id);
-            if (!p.Sections.Any(s => s.InverterId == inv.Id))
-                r.Warn("INV_UNUSED", "Inverter non associato ad alcuna sezione.", inv.Id);
             if (inv.Deceleration > p.Simulation.MaxFrictionDeceleration)
                 r.Warn("INV_SLIP", $"Decelerazione {F(inv.Deceleration)} m/s² superiore al limite d'attrito ({F(p.Simulation.MaxFrictionDeceleration)}): il pacco slitterà.", inv.Id);
         }
@@ -105,10 +104,8 @@ public static class ProjectValidator
                 r.Error("SEC_ROLLERS", "Diametro rulli maggiore del passo: i rulli si compenetrano.", s.Id);
             if (s.Direction == TransportDirection.Reverse)
                 r.Error("SEC_DIR", "Direzione inversa non supportata dal motore v1 (solo flusso in avanti).", s.Id);
-            if (string.IsNullOrEmpty(s.InverterId) || !p.Inverters.Any(i => i.Id == s.InverterId))
-                r.Error("SEC_INV", $"Inverter '{s.InverterId}' non trovato.", s.Id);
             if (!s.IsEnabled)
-                r.Warn("SEC_OFF", "Sezione non operativa: i rulli restano fermi.", s.Id);
+                r.Warn("SEC_OFF", "Modulo non operativo: inverter fermo, i rulli restano fermi.", s.Id);
         }
         var ordered = p.Sections.OrderBy(s => s.StartMm).ToList();
         for (int i = 1; i < ordered.Count; i++)
@@ -156,7 +153,7 @@ public static class ProjectValidator
             if (pc.ResponseTimeMs < 0) r.Error("PC_RESP", "Tempo di risposta negativo.", pc.Id);
             if (pc.Action == PhotocellAction.None) continue;
             var zone = topo.Zone(pc.ControlledInverterId);
-            if (zone == null) { r.Error("PC_INV", $"Inverter comandato '{pc.ControlledInverterId}' non trovato.", pc.Id); continue; }
+            if (zone == null) { r.Error("PC_INV", $"Modulo comandato '{pc.ControlledInverterId}' non trovato.", pc.Id); continue; }
             if (pc.Action == PhotocellAction.Accumulation)
             {
                 if (pc.Activation != PhotocellActivation.WhenOccupied)
@@ -185,7 +182,7 @@ public static class ProjectValidator
         if (!st.IsEnabled) { r.Info("STATION_OFF", "Stazione di legatura disabilitata: i pacchi transitano senza legatura."); return; }
         if (p.Strappers.Count(s => s.IsEnabled) == 0) r.Error("STR_NONE", "Nessuna legatrice abilitata.");
         var zone = topo.Zone(st.InverterId);
-        if (zone == null) { r.Error("STATION_INV", $"Inverter della zona di legatura '{st.InverterId}' non trovato."); return; }
+        if (zone == null) { r.Error("STATION_INV", $"Modulo della zona di legatura '{st.InverterId}' non trovato."); return; }
         if (topo.StopperZone != null && zone == topo.StopperZone)
             r.Error("STATION_STOPPER", "La zona di legatura non può coincidere con la zona dello stopper.");
         if (st.PositioningSpeed <= 0 || st.PositioningSpeed > zone.Inverter.HighSpeed + 1e-9)
@@ -265,8 +262,8 @@ public static class ProjectValidator
     {
         foreach (var rule in p.Rules.Where(x => x.IsEnabled))
         {
-            if (rule.Action != RuleAction.SetSignal && !p.Inverters.Any(i => i.Id == rule.TargetInverterId))
-                r.Error("RULE_TARGET", $"Inverter destinazione '{rule.TargetInverterId}' non trovato.", rule.Id);
+            if (rule.Action != RuleAction.SetSignal && !p.Sections.Any(i => i.Id == rule.TargetInverterId))
+                r.Error("RULE_TARGET", $"Modulo destinazione '{rule.TargetInverterId}' non trovato.", rule.Id);
             if (rule.Action == RuleAction.SetSignal && string.IsNullOrWhiteSpace(rule.SignalName))
                 r.Error("RULE_SIGNAL", "Nome segnale mancante.", rule.Id);
             foreach (var msg in CheckCondition(p, rule.Condition))
@@ -284,12 +281,12 @@ public static class ProjectValidator
             case NotCondition n: foreach (var m in CheckCondition(p, n.Child)) yield return m; break;
             case PhotocellCondition pc when !p.Photocells.Any(x => x.Id == pc.PhotocellId):
                 yield return $"Fotocellula '{pc.PhotocellId}' non trovata."; break;
-            case InverterRunningCondition ir when !p.Inverters.Any(x => x.Id == ir.InverterId):
-                yield return $"Inverter '{ir.InverterId}' non trovato."; break;
-            case ZoneOccupiedCondition zo when !p.Inverters.Any(x => x.Id == zo.InverterId):
-                yield return $"Inverter '{zo.InverterId}' non trovato."; break;
-            case GapAheadLessThanCondition g when !p.Inverters.Any(x => x.Id == g.InverterId):
-                yield return $"Inverter '{g.InverterId}' non trovato."; break;
+            case InverterRunningCondition ir when !p.Sections.Any(x => x.Id == ir.InverterId):
+                yield return $"Modulo '{ir.InverterId}' non trovato."; break;
+            case ZoneOccupiedCondition zo when !p.Sections.Any(x => x.Id == zo.InverterId):
+                yield return $"Modulo '{zo.InverterId}' non trovato."; break;
+            case GapAheadLessThanCondition g when !p.Sections.Any(x => x.Id == g.InverterId):
+                yield return $"Modulo '{g.InverterId}' non trovato."; break;
             case StrapperBusyCondition sb when !p.Strappers.Any(x => x.Id == sb.StrapperId):
                 yield return $"Legatrice '{sb.StrapperId}' non trovata."; break;
             case DeviceStateCondition d when !DeviceIds(p).Contains(d.DeviceId):

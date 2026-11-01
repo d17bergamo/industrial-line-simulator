@@ -72,7 +72,6 @@ public sealed class MainViewModel : ObservableObject
         ExportExcelCommand = new RelayCommand(ExportExcel, () => _engine != null);
 
         AddSectionCommand = new RelayCommand(AddSection);
-        AddInverterCommand = new RelayCommand(AddInverter);
         AddPhotocellCommand = new RelayCommand(AddPhotocell);
         AddStrapperCommand = new RelayCommand(AddStrapper, () => _project.Strappers.Count < LineProject.MaxStrappers);
         AddPackageTypeCommand = new RelayCommand(AddPackageType);
@@ -166,7 +165,6 @@ public sealed class MainViewModel : ObservableObject
     public ICommand ExportCsvCommand { get; }
     public ICommand ExportExcelCommand { get; }
     public ICommand AddSectionCommand { get; }
-    public ICommand AddInverterCommand { get; }
     public ICommand AddPhotocellCommand { get; }
     public ICommand AddStrapperCommand { get; }
     public ICommand AddPackageTypeCommand { get; }
@@ -191,8 +189,8 @@ public sealed class MainViewModel : ObservableObject
     private static LineProject NewEmptyProject()
     {
         var p = new LineProject { Name = "Nuova linea" };
-        p.Inverters.Add(new InverterConfig { Id = "INV1", Name = "Inverter 1" });
-        p.Sections.Add(new RollerSection { Id = "S1", Name = "Sezione 1", StartMm = 0, LengthMm = 14000, RollerCount = 47, InverterId = "INV1" });
+        p.Sections.Add(new RollerSection { Id = "M1", Name = "Modulo 1", StartMm = 0, LengthMm = 14000, RollerCount = 47 });
+        ProjectNormalizer.EnsureEntryPhotocell(p);
         p.Stopper = new StopperConfig { Id = "STP", Name = "Stopper", PositionMm = 13500 };
         p.Transfer = new TransferConfig { Id = "TRF", Name = "Trasferitore", PositionMm = 1500, LengthMm = 12000 };
         p.StrappingStation.IsEnabled = false;
@@ -344,8 +342,7 @@ public sealed class MainViewModel : ObservableObject
         var p = _project;
         var root = new TreeNodeViewModel("Progetto: " + p.Name, p, "Project");
         root.Children.Add(new TreeNodeViewModel("Layout 3D", p.Layout, "Layout"));
-        root.Children.Add(Group("Inverter", "Inverter", p.Inverters));
-        root.Children.Add(Group("Sezioni a rulli", "Section", p.Sections.OrderBy(s => s.StartMm)));
+        root.Children.Add(Group("Moduli via a rulli (inverter)", "Section", p.Sections.OrderBy(s => s.StartMm)));
         root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
         var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
@@ -418,7 +415,7 @@ public sealed class MainViewModel : ObservableObject
 
     private IReadOnlyList<string>? IdOptions(string propertyName) => propertyName switch
     {
-        "InverterId" or "ControlledInverterId" or "TargetInverterId" => _project.Inverters.Select(i => i.Id).ToList(),
+        "InverterId" or "ControlledInverterId" or "TargetInverterId" => _project.Sections.OrderBy(i => i.StartMm).Select(i => i.Id).ToList(),
         "PackageTypeId" => _project.PackageTypes.Select(i => i.Id).ToList(),
         _ => null
     };
@@ -441,23 +438,23 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private IEnumerable<ComponentBase> AllComponents() =>
-        _project.Inverters.Cast<ComponentBase>().Concat(_project.Sections).Concat(_project.Photocells)
+        _project.Sections.Cast<ComponentBase>().Concat(_project.Photocells)
             .Concat(_project.Strappers).Concat(_project.PackageTypes).Concat(_project.Rules)
             .Concat(_project.IntermediateStops).Concat(_project.Scales);
 
-    private void AddInverter()
-    {
-        var inv = new InverterConfig { Id = NextId("INV", AllComponents()), Name = "Nuovo inverter" };
-        _project.Inverters.Add(inv);
-        AfterAdd(inv);
-    }
-
+    /// <summary>Nuovo modulo di via a rulli in coda alla linea (con il proprio inverter, parametri copiati dall'ultimo modulo).</summary>
     private void AddSection()
     {
-        double start = _project.Sections.Count > 0 ? _project.Sections.Max(s => s.EndMm) : 0;
-        string inv = _project.Inverters.LastOrDefault()?.Id ?? "";
-        if (inv == "") { AddInverter(); inv = _project.Inverters.Last().Id; }
-        var s = new RollerSection { Id = NextId("S", AllComponents()), Name = "Nuova sezione", StartMm = start, LengthMm = 6000, RollerCount = 20, InverterId = inv };
+        var last = _project.Sections.OrderBy(x => x.StartMm).LastOrDefault();
+        double start = last?.EndMm ?? 0;
+        var s = new RollerSection { Id = NextId("M", AllComponents()), StartMm = start, LengthMm = 6000, RollerCount = 20 };
+        s.Name = "Modulo " + s.Id;
+        if (last != null)
+        {
+            s.WidthMm = last.WidthMm; s.RollerPitchMm = last.RollerPitchMm; s.RollerDiameterMm = last.RollerDiameterMm;
+            s.LowSpeed = last.LowSpeed; s.HighSpeed = last.HighSpeed; s.Acceleration = last.Acceleration; s.Deceleration = last.Deceleration;
+            s.DefaultSpeed = last.DefaultSpeed; s.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
+        }
         _project.Sections.Add(s);
         AfterAdd(s);
     }
@@ -491,7 +488,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var r = new LogicRule
         {
-            Id = NextId("R", AllComponents()), Name = "Nuova regola", TargetInverterId = _project.Inverters.FirstOrDefault()?.Id ?? "",
+            Id = NextId("R", AllComponents()), Name = "Nuova regola", TargetInverterId = _project.Sections.OrderBy(x => x.StartMm).FirstOrDefault()?.Id ?? "",
             Action = RuleAction.SetLowSpeed, Condition = new ConstantCondition { Value = false }
         };
         _project.Rules.Add(r);
@@ -523,7 +520,7 @@ public sealed class MainViewModel : ObservableObject
         SelectModel(model);
     }
 
-    private static bool CanDelete(object? m) => m is InverterConfig or RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
+    private static bool CanDelete(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
         or IntermediateStopConfig or WeighingScaleConfig;
 
     private void DeleteSelected()
@@ -533,7 +530,6 @@ public sealed class MainViewModel : ObservableObject
         if (MessageBox.Show($"Eliminare {m}?", "Conferma", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         switch (m)
         {
-            case InverterConfig i: _project.Inverters.Remove(i); break;
             case RollerSection s: _project.Sections.Remove(s); break;
             case PhotocellConfig pc: _project.Photocells.Remove(pc); break;
             case StrapperConfig st: _project.Strappers.Remove(st); break;
