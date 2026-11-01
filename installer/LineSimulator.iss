@@ -1,8 +1,8 @@
 ; Installer Inno Setup per Industrial Line Simulator
-; Uso: ISCC.exe /DAppVersion=0.1.0 /DSourceDir=<cartella publish> /O<cartella output> LineSimulator.iss
+; Uso: ISCC.exe /DAppVersion=0.2.0 /DSourceDir=<cartella publish> /O<cartella output> LineSimulator.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\publish\IndustrialLineSimulator"
