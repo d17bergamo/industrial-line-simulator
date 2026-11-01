@@ -28,8 +28,9 @@ public static class MultiEdit
     /// <summary>True se tutti gli oggetti hanno lo stesso tipo (condizione per la modifica contemporanea).</summary>
     public static bool SameType(IReadOnlyList<object> targets, out Type? type)
     {
-        type = targets.Count > 0 ? targets[0].GetType() : null;
-        return targets.Count > 0 && targets.All(t => t.GetType() == type);
+        var first = targets.Count > 0 ? targets[0].GetType() : null;
+        type = first;
+        return first != null && targets.All(t => t.GetType() == first);
     }
 
     /// <summary>Valore comune della proprietà, oppure Mixed = true se i componenti differiscono.</summary>
