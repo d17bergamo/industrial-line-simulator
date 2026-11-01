@@ -164,7 +164,9 @@ public class ProcessLogicTests
         var exited = e.Packages.Where(p => p.State == PackageState.Exited).ToList();
         Assert.Equal(7, exited.Count);
         Assert.All(exited, p => Assert.Equal(StrapStatus.Done, p.StrapStatus));
-        Assert.All(exited, p => Assert.Equal(p.WeightKg, p.MeasuredWeightKg!.Value));
+        // peso acquisito = peso configurato arrotondato alla risoluzione del bilico (2 kg)
+        Assert.All(exited, p => Assert.Equal(Math.Round(p.WeightKg / 2, MidpointRounding.AwayFromZero) * 2, p.MeasuredWeightKg!.Value));
+        Assert.Equal(1526.0, e.Packages.Single(p => p.Sequence == 6).MeasuredWeightKg!.Value);
         Assert.Equal(new[] { "P6", "P12", "P4" }.OrderBy(x => x), exited.Select(p => p.Type.Id).Distinct().OrderBy(x => x));
         Assert.Equal(1480.0, e.Packages.Single(p => p.Sequence == 2).MeasuredWeightKg!.Value);
         var r = e.ComputeResults();
@@ -182,12 +184,14 @@ public class ProcessLogicTests
             x.Rejector.RejectPackageNumbers = "";
         });
         PackageRuntime[]? lifted = null;
+        var heads = new Dictionary<int, (double Head, double Tail)>();
         var e = RunChecked(p, en =>
         {
             if (lifted == null && en.Transfer.State == TransferState.Lifting)
             {
                 lifted = en.Transfer.Packages.ToArray();
                 Assert.All(lifted, k => Assert.Equal(PackageState.Aligned, k.State));
+                foreach (var k in lifted) heads[k.Sequence] = (k.HeadM, k.TailM);
             }
         });
         Assert.True(e.CompletedNormally, Diag(e));
@@ -195,10 +199,10 @@ public class ProcessLogicTests
         Assert.Equal(2, lifted!.Length);
         var first = lifted.Single(k => k.Sequence == 1);
         var second = lifted.Single(k => k.Sequence == 2);
-        // Coordinate: il primo allo stopper finale, il secondo al fermo intermedio con intestatura di testa
-        Assert.Equal(56.5, first.HeadM, 6);
-        Assert.InRange(second.HeadM, 50.1 - 0.003, 50.1 + 1e-6);
-        Assert.True(second.HeadM <= first.TailM - e.Project.Simulation.MinSafetyDistanceMm / 1000.0 + 1e-6);
+        // Coordinate al prelievo: il primo allo stopper finale, il secondo al fermo intermedio con intestatura di testa
+        Assert.Equal(56.5, heads[1].Head, 6);
+        Assert.InRange(heads[2].Head, 50.1 - 0.003, 50.1 + 1e-6);
+        Assert.True(heads[2].Head <= heads[1].Tail - e.Project.Simulation.MinSafetyDistanceMm / 1000.0 + 1e-6);
         Assert.Equal(1, e.Transfer.Cycles);
         Assert.Contains(e.Events, x => x.Type == SimEventType.StopPhase && x.Message.Contains("intestatura di testa"));
         // Depositati e pesati sui due bilici
@@ -320,7 +324,10 @@ public class ProcessLogicTests
         {
             if (en.Compactor!.State is ClampState.Closing or ClampState.Closed)
             {
-                Assert.Equal(InverterMode.Stop, en.Station!.Zone.Mode);
+                // via a rulli ferma (comando di arresto attivo dalla scansione successiva al comando di chiusura)
+                Assert.Equal(0, en.Station!.Zone.ActualSpeed, 9);
+                Assert.True(en.Station.Package!.IsStopped);
+                if (en.Compactor.State == ClampState.Closed) Assert.Equal(InverterMode.Stop, en.Station.Zone.Mode);
                 sawClosedWhileStopped = true;
             }
         });
