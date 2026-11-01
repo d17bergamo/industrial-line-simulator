@@ -48,13 +48,14 @@ public class MultiEditTests
         Assert.False(MultiEdit.SameType(mixed, out _));
 
         var p = SampleProjects.CreateStandardLine();
+        var idsBefore = p.Photocells.Select(x => x.Id).ToList();
         var pcs = p.Photocells.Cast<object>().ToList();
         Assert.True(MultiEdit.SameType(pcs, out var t));
         Assert.Equal(typeof(PhotocellConfig), t);
         var resp = MultiEdit.Describe(typeof(PhotocellConfig)).Single(x => x.Name == nameof(PhotocellConfig.ResponseTimeMs)).Property;
         MultiEdit.Apply(pcs, resp, 35.0);
         Assert.All(p.Photocells, x => Assert.Equal(35.0, x.ResponseTimeMs));
-        Assert.Equal(new[] { "FC1", "FC2", "FC3", "FC4", "FC5" }, p.Photocells.Select(x => x.Id)); // identificativi intatti
+        Assert.Equal(idsBefore, p.Photocells.Select(x => x.Id).ToList()); // identificativi intatti
     }
 
     // ------------------------------------------------------------ interferenze e validazione
