@@ -14,6 +14,12 @@ namespace LineSimulator.App.Rendering;
 /// </summary>
 public sealed class LineScene
 {
+    // Macchine SUND BIRSTA (legatrice KNCA, stringifascio KNOF, rigettatrice SMA): modelli semplificati in grigio neutro.
+    private static readonly Color GreyBody = Color.FromRgb(0x8C, 0x92, 0x98);
+    private static readonly Color GreyMoving = Color.FromRgb(0xB5, 0xBA, 0xBF);
+    private static readonly Color GreyOff = Color.FromRgb(0xC8, 0xCB, 0xCE);
+    private static readonly Color FaultRed = Color.FromRgb(0xC0, 0x39, 0x2B);
+
     private static readonly Color[] Palette =
     {
         Color.FromRgb(0x2E, 0x86, 0xC1), Color.FromRgb(0x28, 0xB4, 0x63), Color.FromRgb(0xAF, 0x7A, 0xC5),
@@ -182,16 +188,22 @@ public sealed class LineScene
         _beamBrushes[pc.Id] = bb;
     }
 
+    /// <summary>
+    /// Legatrice KNCA (modello semplificato): basamento con armadio laterale, montante e arco di legatura
+    /// che avvolge la linea. Le quote derivano dalla configurazione (ingombro in linea, altezza).
+    /// </summary>
     private void AddStrapper(StrapperConfig st)
     {
         double x = st.PositionMm / 1000.0, w = _lineWidth, fp = Math.Max(0.3, st.FootprintLengthMm / 1000.0);
-        var color = st.IsEnabled ? Color.FromRgb(0x5D, 0x6D, 0x7E) : Color.FromRgb(0xBB, 0xBB, 0xBB);
-        var f = new MeshFactory();
+        double h = _zTop + 1.3;
+        var color = st.IsEnabled ? GreyBody : GreyOff;
         double side = st.Side == LateralSide.Left ? 1 : -1;
-        f.AddBox(new Point3D(x, side * (w / 2 + 0.45), (_zTop + 1.3) / 2), fp, 0.5, _zTop + 1.3);   // corpo macchina
-        f.AddBox(new Point3D(x, -side * (w / 2 + 0.2), (_zTop + 1.3) / 2), 0.2, 0.2, _zTop + 1.3);   // montante opposto
-        f.AddBox(new Point3D(x, 0, _zTop + 1.2), 0.25, w + 0.9, 0.2);                                // arco
-        f.AddBox(new Point3D(x, 0, _zTop + 0.02), 0.03, w + 0.3, 0.03);                             // piano di legatura
+        var f = new MeshFactory();
+        f.AddBox(new Point3D(x, side * (w / 2 + 0.45), 0.45), fp, 0.5, 0.9);                          // basamento / armadio
+        f.AddBox(new Point3D(x, side * (w / 2 + 0.3), h / 2), Math.Min(fp, 0.35), 0.2, h);             // montante
+        f.AddBox(new Point3D(x, -side * (w / 2 + 0.2), h / 2), 0.2, 0.2, h);                           // montante opposto
+        f.AddBox(new Point3D(x, 0, h - 0.1), 0.25, w + 0.9, 0.2);                                      // arco di legatura
+        f.AddBox(new Point3D(x, 0, _zTop + 0.02), 0.03, w + 0.3, 0.03);                                // piano di legatura
         var m = MeshFactory.Model(f.ToMesh(), color, out var b);
         _group.Children.Add(m);
         Register(m, st, b, color);
@@ -245,7 +257,7 @@ public sealed class LineScene
     private void AddBundleClamp(BundleClampConfig k)
     {
         double x = k.PositionMm / 1000.0, w = _lineWidth;
-        var frameColor = Color.FromRgb(0x2C, 0x3E, 0x50);
+        var frameColor = GreyBody;
         var f = new MeshFactory();
         f.AddBox(new Point3D(x, w / 2 + 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
         f.AddBox(new Point3D(x, -w / 2 - 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
@@ -253,7 +265,7 @@ public sealed class LineScene
         var fm = MeshFactory.Model(f.ToMesh(), frameColor, out var fb);
         _group.Children.Add(fm);
         Register(fm, k, fb, frameColor);
-        var barColor = Color.FromRgb(0x95, 0xA5, 0xA6);
+        var barColor = GreyMoving;
         var bar = MeshFactory.Box(new Point3D(x, 0, _zTop + 1.2), 0.2, w + 0.2, 0.12, barColor, out var bb);
         bar.Transform = _knofT;
         _group.Children.Add(bar);
@@ -286,7 +298,13 @@ public sealed class LineScene
     {
         double x0 = r.PositionMm / 1000.0, len = Math.Max(0.5, r.LengthMm / 1000.0), w = _lineWidth;
         _smaSideSign = r.Side == LateralSide.Left ? 1 : -1;
-        var color = Color.FromRgb(0xA0, 0x40, 0x00);
+        var color = GreyMoving;
+        var body = new MeshFactory();
+        body.AddBox(new Point3D(x0 + 0.4, -_smaSideSign * (w / 2 + 0.5), 0.5), 0.8, 0.5, 1.0);        // corpo macchina
+        body.AddBox(new Point3D(x0 + 0.4, -_smaSideSign * (w / 2 + 0.3), (_zTop + 0.6) / 2), 0.3, 0.2, _zTop + 0.6); // montante
+        var bm = MeshFactory.Model(body.ToMesh(), GreyBody, out var bbr);
+        _group.Children.Add(bm);
+        Register(bm, r, bbr, GreyBody);
         var pusher = MeshFactory.Box(new Point3D(x0 + len / 2, -_smaSideSign * (w / 2 + 0.15), _zTop + 0.25), len, 0.12, 0.3, color, out var pb);
         pusher.Transform = _smaT;
         _group.Children.Add(pusher);
@@ -300,7 +318,7 @@ public sealed class LineScene
             double x = x0 + 0.2 + (len - 0.4) * i / (n - 1);
             table.AddBox(new Point3D(x, _smaSideSign * (w / 2 + stroke / 2), _zTop - 0.05), 0.1, stroke, 0.06);
         }
-        var tColor = Color.FromRgb(0xCA, 0x6F, 0x1E);
+        var tColor = GreyOff;
         var tm = MeshFactory.Model(table.ToMesh(), tColor, out var tb);
         _group.Children.Add(tm);
         Register(tm, r, tb, tColor);
@@ -409,13 +427,8 @@ public sealed class LineScene
             var st = p.Strappers[i];
             if (!_strapperBrushes.TryGetValue(st.Id, out var b) || IsHighlighted(st)) continue;
             var state = f != null && i < f.StrapperStates.Length ? f.StrapperStates[i] : StrapperState.Idle;
-            b.Color = state switch
-            {
-                StrapperState.Preparing => Color.FromRgb(0xF4, 0xD0, 0x3F),
-                StrapperState.Strapping => Color.FromRgb(0xE6, 0x7E, 0x22),
-                StrapperState.Returning => Color.FromRgb(0x5D, 0xAD, 0xE2),
-                _ => st.IsEnabled ? Color.FromRgb(0x5D, 0x6D, 0x7E) : Color.FromRgb(0xBB, 0xBB, 0xBB)
-            };
+            // Grigio neutro: la fase si vede dal ciclogramma; in lavoro la macchina si schiarisce leggermente.
+            b.Color = !st.IsEnabled ? GreyOff : state == StrapperState.Idle ? GreyBody : Blend(GreyBody, GreyMoving, 0.6);
         }
 
         // Zone: struttura accesa se l'inverter è in moto
@@ -443,13 +456,13 @@ public sealed class LineScene
         for (int i = 0; i < p.Strappers.Count; i++)
         {
             if (f == null || i >= f.StrapperProcessStates.Length || f.StrapperProcessStates[i] != StrapperProcessState.Fault) continue;
-            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = Color.FromRgb(0xC0, 0x39, 0x2B);
+            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = FaultRed;
         }
 
         // Stringifascio: traversa che scende in chiusura
         _knofT.OffsetZ = -(f?.BundleClampClosed ?? 0) * 0.6;
         if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
-            _knofBrush.Color = ClampColor(f?.BundleClampState ?? ClampState.Open, Color.FromRgb(0x95, 0xA5, 0xA6));
+            _knofBrush.Color = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed => Blend(GreyMoving, GreyBody, 0.5), _ => GreyMoving };
 
         // Compattatore: ganasce verso l'asse
         double jaw = (f?.CompactorClosed ?? 0) * 0.12;
@@ -467,9 +480,9 @@ public sealed class LineScene
         if (_smaBrush != null && !IsHighlighted(p.Rejector))
             _smaBrush.Color = (f?.RejectorState ?? RejectorState.Idle) switch
             {
-                RejectorState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
-                RejectorState.Idle => Color.FromRgb(0xA0, 0x40, 0x00),
-                _ => Color.FromRgb(0xFF, 0x8F, 0x00)
+                RejectorState.Fault => FaultRed,
+                RejectorState.Idle => GreyMoving,
+                _ => Blend(GreyMoving, GreyBody, 0.5)
             };
 
         // Fermi intermedi: sollevati e colorati secondo lo stato
