@@ -36,7 +36,7 @@ public class InfrastructureTests
     [Fact]
     public void Json_NewerSchemaIsRejected()
     {
-        var json = ProjectSerializer.Serialize(SampleProjects.CreateStandardLine()).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 999");
+        var json = ProjectSerializer.Serialize(SampleProjects.CreateStandardLine()).Replace($"\"schemaVersion\": {LineProject.CurrentSchemaVersion}", "\"schemaVersion\": 999");
         Assert.Throws<InvalidDataException>(() => ProjectSerializer.Deserialize(json));
     }
 

@@ -457,6 +457,12 @@ public sealed partial class SimulationEngine
                 }
             }
         }
+        // Il pacco da rigettare entra nella zona della rigettatrice solo quando la zona è libera da altri pacchi
+        // (la zona è comandata da un unico inverter: il posizionamento muoverebbe anche gli altri pacchi).
+        z.EntryBlockedFor = null;
+        if (r.State == RejectorState.Enabled && r.Package != null && r.Package.HeadM <= z.Info.StartM + 1e-9
+            && _active.Any(q => q != r.Package && q.OnRollers && q.HeadM > z.Info.StartM + 1e-9 && q.TailM < z.Info.EndM - 1e-9))
+            z.EntryBlockedFor = r.Package;
         bool hold = r.State is RejectorState.Positioning or RejectorState.InPosition or RejectorState.Ejecting
             or RejectorState.Returning or RejectorState.RestartConsent or RejectorState.Fault;
         z.EntryHeld = hold;

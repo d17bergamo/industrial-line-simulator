@@ -52,6 +52,8 @@ public sealed class ZoneRuntime
     /// <summary>Ingresso bloccato (es. rigetto in corso) tranne che per il pacco indicato.</summary>
     internal bool EntryHeld;
     internal PackageRuntime? EntryHeldFor;
+    /// <summary>Ingresso negato a un pacco specifico (es. pacco da rigettare finché la zona non è libera).</summary>
+    internal PackageRuntime? EntryBlockedFor;
 
     public bool Running => Mode != InverterMode.Stop;
     public bool IsMoving => ActualSpeed > 1e-4;
@@ -72,6 +74,7 @@ public sealed class ZoneRuntime
     {
         if (!Running && !AutoStopped) return false;
         if (EntryHeld && (p == null || p != EntryHeldFor)) return false;
+        if (EntryBlockedFor != null && p == EntryBlockedFor) return false;
         if (MultiStop) return (p != null && Assigned.Contains(p)) || MultiCanAcceptNew;
         return !IsSinglePackage || ReservedBy == null || (p != null && ReservedBy == p);
     }
