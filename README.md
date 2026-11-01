@@ -13,10 +13,13 @@ Applicazione desktop Windows (C# / .NET 10 / WPF) per **disegnare, configurare e
 | Regole logiche AND/OR/NOT, segnali di consenso, azioni sulle fotocellule | Implementato, coperto da test |
 | Risultati, collo di bottiglia, export CSV / Excel | Implementato, coperto da test |
 | Progetti JSON versionati, autosave, duplicazione, esempi | Implementato, coperto da test |
+| Logiche di processo: fotocellula di ingresso obbligatoria (identificazione), arrivo/presenza/uscita completa, arresto automatico degli inverter senza pacchi | Implementato, coperto da test |
+| Legatrice Sund Birsta KNCA 7/800 (stati di processo), stringifascio KNOF, compattatore laterale, con consensi, conferme, timeout e guasti simulati | Implementato, coperto da test |
+| Rigettatrice Sund Birsta SMA, fermi intermedi con intestatura di testa/coda, trasferitore multi-pacco, bilici di pesatura (pacchi corti in posizione intermedia, pesatura combinata) | Implementato, coperto da test |
 | Interfaccia WPF: vista 3D (HelixToolkit), albero, proprietà, timeline, ciclogramma sincronizzato, dashboard | Implementata; da verificare a vista su Windows |
 | CI GitHub Actions: build, test, EXE self-contained, ZIP, installer Inno Setup | Configurata |
 
-**Verifica:** la GitHub Action su `windows-latest` compila l'intera soluzione (WPF compresa), esegue i 61 test automatici (tutti superati) e produce EXE self-contained, ZIP e installer. L'interfaccia grafica va ancora collaudata a vista su un PC Windows.
+**Verifica:** la GitHub Action su `windows-latest` compila l'intera soluzione (WPF compresa), esegue tutti i test automatici (motore, ottimizzatore, logiche di processo) e produce EXE self-contained, ZIP e installer. L'interfaccia grafica va ancora collaudata a vista su un PC Windows.
 
 ## Requisiti
 
@@ -28,7 +31,8 @@ Applicazione desktop Windows (C# / .NET 10 / WPF) per **disegnare, configurare e
 1. Scaricare da *Actions → ultimo run → Artifacts* (o dalla pagina *Releases* per i tag `v*`):
    - `IndustrialLineSimulator-win-x64.zip` → estrarre e avviare `IndustrialLineSimulator.exe`, oppure
    - `IndustrialLineSimulator-Setup-x.y.z.exe` → installer con collegamenti nel menu Start.
-2. All'avvio viene caricata la linea di esempio; altri esempi in *File → Esempi*.
+2. All'avvio viene caricata la linea di esempio; altri esempi in *File → Esempi* (tra cui *Linea completa - SMA, KNOF, compattatore, fermi, bilici*).
+3. Se Windows SmartScreen blocca l'avvio: *Ulteriori informazioni → Esegui comunque* (l'EXE non è firmato digitalmente), oppure *Proprietà → Annulla blocco* sullo ZIP scaricato prima di estrarlo.
 
 ## Compilazione
 
@@ -56,6 +60,16 @@ Installer: `ISCC.exe /DSourceDir=publish\IndustrialLineSimulator installer\LineS
 - **Strategie di legatura**: confronto tra combinazioni di legatrici, strategia predefinita e manuale, con motivazione della scelta.
 - **Risultati**: tempo ciclo medio/min/max, pacchi/h e t/h effettivi (separati da quelli teorici), utilizzo risorse, tempi morti e blocchi, collisioni, collo di bottiglia. Export *File → Esporta CSV/Excel*.
 
+### Logiche di processo
+
+- **Fotocellula di ingresso** (obbligatoria): ogni pacco viene identificato al fronte di salita (tipologia, peso, eventuale rigetto) e al fronte di discesa viene registrata la lunghezza rilevata. Ogni fotocellula ha una *logica di rilevamento*: presenza, impulso di arrivo, impulso di uscita completa.
+- **Arresto automatico degli inverter**: una zona si ferma quando non ci sono pacchi nella zona, nella sezione precedente o in arrivo (distanza di preavviso = sezione precedente o spazio di accelerazione); riparte prima dell'arrivo del pacco. Disattivabile per inverter.
+- **Stazione di legatura**: pacco in posizione → via a rulli ferma → compattatore chiude e conferma → mantenimento → stringifascio KNOF chiude e conferma → solo allora la KNCA 7/800 avvia il ciclo → fine legatura → mantenimento e consenso all'apertura → KNOF e compattatore aprono e confermano → il pacco prosegue. Senza conferma di chiusura la legatura non parte (interblocco). Gli stati della legatrice sono: disponibile, attesa pacco, posizionamento, pacco in posizione, attesa consenso stringifascio, ciclo di legatura, ciclo completato, scarico pacco, guasto.
+- **Rigettatrice SMA**: identificazione all'ingresso (numeri dei pacchi o tipologie), abilitazione del ciclo, ingresso nella zona solo se libera, arresto e posizionamento al centro del campo di spinta, comando e movimento di espulsione, conferma, ritorno, consenso alla ripartenza.
+- **Fermi intermedi**: nella zona dello stopper, ognuno con intestatura di **testa** (battuta) o di **coda** (coda sul riferimento). I pacchi vengono assegnati in ordine (stopper finale, poi fermi da valle a monte) solo se le coordinate non si sovrappongono; il trasferitore preleva fino a *N pacchi per ciclo*.
+- **Bilici**: il trasferitore deposita solo su bilici liberi (interblocco); posizionamento (standard o **intermedio per pacchi corti**), verifica posizione, stabilizzazione, acquisizione del peso (risoluzione), consenso a proseguire, scarico. Un pacco più lungo di un bilico viene pesato da più bilici insieme.
+- Ogni dispositivo ha **consenso di avvio** e **condizione di arresto** (stessa sintassi delle regole), ritardo e **timeout di conferma**, **guasto simulato** al ciclo n e tempo di ripristino. Allarmi e interblocchi compaiono nel registro eventi, nel ciclogramma e nei risultati.
+
 ### Condizioni logiche (regole)
 
 Nel campo *Condizione* di una regola:
@@ -64,7 +78,7 @@ Nel campo *Condizione* di una regola:
 PC(FC2) & !RUN(INV3) | SIG(Consenso)
 ```
 
-Atomi: `TRUE`, `FALSE`, `PC(id)` fotocellula occupata, `RUN(inv)` inverter in moto, `ZONE(inv)` zona occupata, `STR(id)` legatrice occupata, `STOPPER` pacco allo stopper, `TRANSFER_HOME`, `HEAD(daMm,aMm)` testa di un pacco nell'intervallo, `GAP(inv,mm)` distanza dal pacco precedente minore di, `SIG(nome)` segnale. Operatori: `!` NOT, `&` AND, `|` OR, parentesi. Azioni: arresto (interblocco, priorità massima), velocità bassa, velocità alta, imposta segnale.
+Atomi: `TRUE`, `FALSE`, `PC(id)` fotocellula occupata, `RUN(inv)` inverter in moto, `ZONE(inv)` zona occupata, `STR(id)` legatrice occupata, `STOPPER` pacco allo stopper, `TRANSFER_HOME`, `HEAD(daMm,aMm)` testa di un pacco nell'intervallo, `GAP(inv,mm)` distanza dal pacco precedente minore di, `SIG(nome)` segnale, `DEV(id)` dispositivo impegnato, `DEV(id,STATO)` dispositivo in uno stato (es. `DEV(KNOF,Closed)`, `DEV(L1,StrappingCycle)`, `DEV(SMA,Ejecting)`, `DEV(B1,Stabilizing)`). Operatori: `!` NOT, `&` AND, `|` OR, parentesi. Azioni: arresto (interblocco, priorità massima), velocità bassa, velocità alta, imposta segnale.
 
 ### Piano di legatura manuale
 

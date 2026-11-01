@@ -54,6 +54,7 @@ public enum ClampState
 public sealed class ClampRuntime
 {
     private bool _faultPending;
+    private bool _justCommanded;
 
     public ClampRuntime(SequenceDeviceConfig config, double closeS, double openS, double holdS)
     {
@@ -91,6 +92,7 @@ public sealed class ClampRuntime
         if (State != ClampState.Open) return false;
         State = ClampState.Closing;
         ElapsedS = 0;
+        _justCommanded = true;
         Cycles++;
         _faultPending = Config.SimulatedFaultAtCycle > 0 && Cycles == Config.SimulatedFaultAtCycle;
         return true;
@@ -101,6 +103,7 @@ public sealed class ClampRuntime
         if (State != ClampState.Closed) return false;
         State = ClampState.Opening;
         ElapsedS = 0;
+        _justCommanded = true;
         return true;
     }
 
@@ -108,6 +111,8 @@ public sealed class ClampRuntime
     internal (string Text, bool Alarm)? Advance(double dt, bool hold)
     {
         if (State is ClampState.Open or ClampState.Closed || hold) return null;
+        // Il movimento inizia alla scansione successiva al comando (come un'uscita PLC)
+        if (_justCommanded) { _justCommanded = false; return null; }
         ElapsedS += dt;
         switch (State)
         {

@@ -4,6 +4,7 @@
 
 ```
 Models ◄── Core ◄── Optimization ◄── Engine ◄── Infrastructure ◄── App (WPF)
+            (Engine: SimulationEngine.cs = ciclo di scansione, SimulationEngine.Devices.cs = sequenze dei dispositivi)
                                          ▲                          
                                        Tests (Models, Core, Optimization, Engine, Infrastructure)
 ```
@@ -59,6 +60,17 @@ Lo spazio di frenatura non è solo verificato in simulazione: il **validatore** 
 ### Posizionamento in legatura
 Profilo di velocità calcolato sulla distanza residua `r`: `v = min(vmax, √(2·0,95·d·r), r/Δt)` (equivalente a un posizionatore con encoder). La prima fermata usa la velocità alta, le successive la velocità di posizionamento. Errore residuo < 0,2 mm; oltre la tolleranza viene registrato un errore.
 
+### Logiche di processo (v0.2)
+
+- **Fotocellule**: uscita ritardata del tempo di risposta; fronte di salita = *arrivo*, livello = *presenza*, fronte di discesa = *uscita completa/passaggio*. La fotocellula di ingresso (obbligatoria, controllata dal validatore e aggiunta automaticamente ai progetti v1) identifica il pacco e ne misura la lunghezza (testa − posizione fotocellula al fronte di discesa, quindi con l'errore dovuto al tempo di risposta). A livello di zona viene registrata l'uscita completa del pacco dalla sezione.
+- **Arresto automatico**: nel ramo di marcia normale una zona con *arresto automatico* si ferma se non esiste un pacco nella zona, né un pacco con la testa entro la *distanza di preavviso* a monte (max tra lunghezza della sezione precedente e `v_monte · v_zona / a_zona + 0,5 m`), né (prima zona) un ingresso previsto entro il tempo di accelerazione. Una zona ferma per arresto automatico continua a dare il consenso all'ingresso (non blocca l'accumulo a monte).
+- **Stazione di legatura**: macchina a stati `Posizionamento → Compattazione → Chiusura stringifascio → Legatura → Apertura → (fermata successiva | Rilascio)`. Ogni comando di chiusura richiede: pacco sotto il dispositivo, via a rulli e pacco fermi, consenso di avvio, condizione di arresto non attiva. Lo stato *chiuso* esiste solo dopo il segnale di conferma (tempo di movimento + ritardo); oltre il timeout il dispositivo va in guasto e dopo il tempo di ripristino ripete il comando. L'avvio delle legatrici verifica di nuovo lo stringifascio chiuso (interblocco). Lo stringifascio si apre solo quando tutte le legatrici della fermata hanno finito la fase di legatura e il mantenimento è scaduto; il pacco riparte solo con dispositivi aperti e teste tornate.
+- **Ottimizzatore con dispositivi**: le posizioni ammesse della testa sono ristrette affinché il pacco copra stringifascio e compattatore (`H − L ≤ X ≤ H`); il tempo di fermata diventa `pre + max_i(prep_i + leg_i + max(rit_i, post))`, ottenuto con cicli "efficaci" per legatrice: l'algoritmo esatto resta invariato.
+- **Stati KNCA 7/800** calcolati a ogni scansione dallo stato della stazione e della testa (disponibile, attesa pacco, posizionamento, pacco in posizione, attesa consenso stringifascio, ciclo di legatura, ciclo completato, scarico pacco, guasto). Il guasto simulato blocca la testa per il tempo di ripristino, poi il ciclo riparte.
+- **Rigettatrice SMA**: il pacco marcato viene identificato all'ingresso; il ciclo si abilita, il pacco entra nella zona solo quando è libera da altri pacchi (zona comandata da un unico inverter), viene posizionato al centro del campo di spinta (profilo a encoder), espulso lateralmente (conferma con ritardo/timeout), poi spintore in ritorno e consenso alla ripartenza. Durante il ciclo la zona non accetta altri pacchi.
+- **Fermi intermedi**: la zona dello stopper diventa multi-pacco. Assegnazione in ordine (stopper finale, poi fermi da valle a monte) solo se il pacco sta sul trasferitore e non si sovrappone al pacco del fermo a valle (distanza di sicurezza inclusa). Il pacco del fermo viene portato con posizionamento a encoder: intestatura di **testa** = battuta sul fermo sollevato con rulli in allineamento; intestatura di **coda** = coda sul riferimento e pacco trattenuto (il flusso inverso non è modellato). Il trasferitore parte quando tutti i pacchi assegnati sono allineati e il gruppo è completo, oppure il pacco successivo non può entrare, oppure è scaduta l'attesa massima.
+- **Bilici**: alla fine della traslazione il trasferitore verifica che i bilici sotto i pacchi siano liberi (altrimenti attende); un pacco che copre più bilici viene pesato in modo combinato. Posizionamento (standard: testa a fine bilico; pacchi corti: centrato o posizione intermedia configurata), verifica posizione, stabilizzazione, acquisizione (risoluzione), consenso a proseguire, scarico. L'uscita del pacco (tempo ciclo) coincide con lo scarico dal bilico.
+
 ## 4. Ottimizzazione delle legature
 
 Per una legatrice in posizione `X` e una legatura a distanza `d` dalla testa, il pacco deve fermarsi con la testa in `H = X + d`. Le posizioni ammesse sono quelle con il pacco interamente nella zona di legatura. Più legature con la stessa `H` possono essere eseguite **in parallelo** (tempo = ciclo più lungo).
@@ -83,7 +95,7 @@ Strategie confrontate: **automatica** (ottimo), **predefinita** (una legatura pe
 
 JSON camelCase con `schemaVersion`; condizioni polimorfiche con discriminatore `$type`. File più recenti del programma vengono rifiutati; il punto di estensione `ProjectSerializer.Migrate` gestisce gli aggiornamenti futuri. Salvataggio atomico (file temporaneo + sostituzione), autosave ogni 2 minuti in `%LOCALAPPDATA%\IndustrialLineSimulator\Autosave`.
 
-## 7. Limiti noti (v0.1)
+## 7. Limiti noti (v0.2)
 
 - Flusso solo in avanti (sezioni in direzione inversa segnalate come errore dal validatore).
 - La stazione di legatura usa **un** inverter e lavora **un pacco alla volta**; non è modellato il lavoro contemporaneo di legatrici diverse su pacchi diversi.
@@ -92,3 +104,8 @@ JSON camelCase con `schemaVersion`; condizioni polimorfiche con discriminatore `
 - La geometria laterale (larghezza pacco, distanza di rilevamento) è grafica: il modello di rilevamento è monodimensionale lungo la linea.
 - L'avvio del trasferitore è comandato dalla logica integrata (pacco allineato + carro a casa); le regole agiscono sugli inverter.
 - Interfaccia: l'editor delle condizioni è testuale; non c'è annullamento (undo).
+- Intestatura di coda: simulata come posizionamento a encoder con coda sul riferimento e pacco trattenuto; la spinta all'indietro contro un fermo posteriore non è modellata.
+- I fermi intermedi esistono solo nella zona dello stopper; altrove si usano fotocellule e regole.
+- La rigettatrice espelle un pacco alla volta, con il pacco completamente nel campo di spinta; i pacchi da rigettare a valle della stazione di legatura vengono legati prima del rigetto.
+- Pesatura combinata su più bilici senza movimento di posizionamento (i rulli dei bilici non sono sincronizzati).
+- Guasti simulati deterministici (al ciclo n) con ripristino automatico dopo il tempo impostato; non ci sono guasti casuali.
