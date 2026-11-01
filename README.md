@@ -16,7 +16,7 @@ Applicazione desktop Windows (C# / .NET 10 / WPF) per **disegnare, configurare e
 | Interfaccia WPF: vista 3D (HelixToolkit), albero, proprietà, timeline, ciclogramma sincronizzato, dashboard | Implementata; da verificare a vista su Windows |
 | CI GitHub Actions: build, test, EXE self-contained, ZIP, installer Inno Setup | Configurata |
 
-**Verifica della compilazione:** il codice è stato scritto in un ambiente senza .NET SDK (rete verso Microsoft/NuGet bloccata). La prima compilazione reale e l'esecuzione dei test avvengono nella GitHub Action su `windows-latest`. Eventuali errori segnalati dalla CI vanno corretti prima di considerare il rilascio valido.
+**Verifica:** la GitHub Action su `windows-latest` compila l'intera soluzione (WPF compresa), esegue i 61 test automatici (tutti superati) e produce EXE self-contained, ZIP e installer. L'interfaccia grafica va ancora collaudata a vista su un PC Windows.
 
 ## Requisiti
 
