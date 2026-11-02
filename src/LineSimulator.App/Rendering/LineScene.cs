@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using HelixToolkit.Wpf;
 using LineSimulator.Core;
 using LineSimulator.Engine;
 using LineSimulator.Engine.Runtime;
@@ -49,10 +51,95 @@ public sealed class LineScene
     private double _zTop;
     private double _lineWidth = 1.2;
 
+    private readonly ModelVisual3D _overlay = new();
+    private readonly ModelVisual3D _ghost = new();
+    private readonly ModelVisual3D _dims = new();
+    private bool _showDimensions;
+
     public LineScene()
     {
         Visual = new ModelVisual3D { Content = _group };
+        Visual.Children.Add(_overlay);
+        _overlay.Children.Add(_ghost);
+        _overlay.Children.Add(_dims);
     }
+
+    /// <summary>Quote delle distanze dall'origine (X = Y = Z = 0) per ogni equipaggiamento.</summary>
+    public bool ShowDimensions
+    {
+        get => _showDimensions;
+        set { _showDimensions = value; RebuildDimensions(); }
+    }
+
+    /// <summary>Anteprima trasparente durante il trascinamento dalla libreria, con punto di inserimento e coordinata.</summary>
+    public void ShowGhost(double xM, double yM, double lenM, double widM, double heightM)
+    {
+        var f = new MeshFactory();
+        f.AddBox(new Point3D(xM, yM, heightM / 2), Math.Max(0.05, lenM), Math.Max(0.05, widM), Math.Max(0.05, heightM));
+        var brush = new SolidColorBrush(Color.FromArgb(110, 0x1F, 0x6F, 0xB2));
+        var mat = new DiffuseMaterial(brush);
+        var body = new GeometryModel3D(f.ToMesh(), mat) { BackMaterial = mat };
+        var m = new MeshFactory();
+        m.AddBox(new Point3D(xM, yM, (_zTop + 1.2) / 2), 0.04, 0.04, _zTop + 1.2);       // punto di inserimento
+        m.AddBox(new Point3D(xM, yM, 0.01), 0.6, 0.04, 0.02);
+        m.AddBox(new Point3D(xM, yM, 0.01), 0.04, 0.6, 0.02);
+        var marker = MeshFactory.Model(m.ToMesh(), Color.FromRgb(0xC0, 0x39, 0x2B), out _);
+        _ghost.Children.Clear();
+        _ghost.Content = new Model3DGroup { Children = { body, marker } };
+        _ghost.Children.Add(Label($"X = {xM.ToString("0.000", CultureInfo.InvariantCulture)} m   Y = {yM.ToString("0.000", CultureInfo.InvariantCulture)} m",
+            new Point3D(xM, yM, _zTop + 1.4)));
+    }
+
+    public void HideGhost()
+    {
+        _ghost.Content = null;
+        _ghost.Children.Clear();
+    }
+
+    private static BillboardTextVisual3D Label(string text, Point3D pos) => new()
+    {
+        Text = text,
+        Position = pos,
+        FontSize = 11,
+        Foreground = Brushes.Black,
+        Background = new SolidColorBrush(Color.FromArgb(215, 255, 255, 255)),
+        Padding = new System.Windows.Thickness(3, 1, 3, 1)
+    };
+
+    private void RebuildDimensions()
+    {
+        _dims.Children.Clear();
+        if (!_showDimensions || _project == null) return;
+        var info = LayoutGeometry.Describe(_project)
+            .Where(i => i.Kind is not ("Fotocellula" or "Fermo intermedio"))
+            .OrderBy(i => i.CenterXm).ToList();
+        double w = _lineWidth, z = 0.03, laneY0 = -(w / 2 + 1.2);
+        int lanes = 4;
+        double yMax = laneY0 - 0.7 * (lanes - 1);
+        var lines = new LinesVisual3D { Color = Color.FromRgb(0x5A, 0x66, 0x72), Thickness = 1 };
+        var pts = new Point3DCollection();
+        void Seg(Point3D a, Point3D b) { pts.Add(a); pts.Add(b); }
+        // asse origine
+        Seg(new Point3D(0, yMax - 0.3, z), new Point3D(0, w / 2 + 0.3, z));
+        _dims.Children.Add(Label("origine X = 0", new Point3D(0, yMax - 0.5, z)));
+        for (int i = 0; i < info.Count; i++)
+        {
+            var it = info[i];
+            double ly = laneY0 - 0.7 * (i % lanes);
+            Seg(new Point3D(0, ly, z), new Point3D(it.CenterXm, ly, z));                         // quota dall'origine
+            Seg(new Point3D(it.CenterXm, ly, z), new Point3D(it.CenterXm, it.YM, z));            // richiamo al centro macchina
+            Seg(new Point3D(it.EntryXm, ly - 0.08, z), new Point3D(it.EntryXm, ly + 0.08, z));   // tacca ingresso
+            Seg(new Point3D(it.ExitXm, ly - 0.08, z), new Point3D(it.ExitXm, ly + 0.08, z));     // tacca uscita
+            string t = $"{it.Id}: C {Fmt(it.CenterXm)}  IN {Fmt(it.EntryXm)}  OUT {Fmt(it.ExitXm)} m";
+            if (Math.Abs(it.YM) > 1e-3) t += $"  Y {Fmt(it.YM)}";
+            if (Math.Abs(it.ZM) > 1e-3 && Math.Abs(it.ZM - _zTop) > 1e-3) t += $"  Z {Fmt(it.ZM)}";
+            _dims.Children.Add(Label(t, new Point3D(it.CenterXm, ly - 0.2, z)));
+        }
+        lines.Points = pts;
+        _dims.Children.Add(lines);
+    }
+
+    private static string Fmt(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
 
     public ModelVisual3D Visual { get; }
     public Rect3D Bounds { get; private set; }
@@ -115,6 +202,8 @@ public sealed class LineScene
         _group.Children.Add(_packagesGroup);
 
         Bounds = new Rect3D(x0, -5, 0, x1 - x0, 8, 3);
+        _overlay.Transform = tg;
+        RebuildDimensions();
     }
 
     private void Register(Model3D m, object owner, SolidColorBrush brush, Color normal)

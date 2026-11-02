@@ -51,17 +51,112 @@ public partial class MainWindow : Window
 
     /// <summary>Selezione diretta di un componente nel modello 3D.</summary>
     private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => PickAt(Viewport, _vm.Scene, e);
-    private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => PickAt(LayoutViewport, _vm.LayoutScene, e);
-
-    private void PickAt(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
+    private object? PickAt(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
         var vp = viewport.Viewport;
         var pt = e.GetPosition(vp);
         if (VisualTreeHelper.HitTest(vp, pt) is RayMeshGeometry3DHitTestResult hit && hit.ModelHit != null)
         {
             var obj = scene.Pick(hit.ModelHit);
-            if (obj != null) _vm.SelectModel(obj);
+            if (obj != null) { _vm.SelectModel(obj); return obj; }
         }
+        return null;
+    }
+
+    // ------------------------------------------------------------ Imposta layout: selezione e spostamento col mouse
+
+    private bool _moving;
+    private double _lastXm;
+
+    /// <summary>Punto del piano dei rulli sotto il cursore (coordinate di scena, metri).</summary>
+    private Point3D? PlanePoint(Point pt, double z = 0)
+        => HelixToolkit.Wpf.Viewport3DHelper.UnProject(LayoutViewport.Viewport, pt, new Point3D(0, 0, z), new Vector3D(0, 0, 1));
+
+    private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var obj = PickAt(LayoutViewport, _vm.LayoutScene, e);
+        if (obj == null || !MainViewModel.CanMove(obj)) return;
+        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        if (p == null) return;
+        _moving = true;
+        _lastXm = p.Value.X;
+        LayoutViewport.CaptureMouse();
+    }
+
+    private void LayoutViewport_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_moving || e.LeftButton != MouseButtonState.Pressed) return;
+        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        if (p == null) return;
+        double dx = (p.Value.X - _lastXm) * 1000.0;
+        if (Math.Abs(dx) < 1) return;
+        _lastXm = p.Value.X;
+        _vm.MoveSelectedBy(dx, p.Value.Y);
+    }
+
+    private void LayoutViewport_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_moving) return;
+        _moving = false;
+        LayoutViewport.ReleaseMouseCapture();
+        _vm.CommitMove();
+    }
+
+    // ------------------------------------------------------------ Imposta layout: libreria e drag & drop
+
+    private Point _dragStart;
+    private LibraryEntry? _dragEntry;
+
+    private void Library_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStart = e.GetPosition(null);
+        _dragEntry = (e.OriginalSource as FrameworkElement)?.DataContext as LibraryEntry;
+    }
+
+    private void Library_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _dragEntry == null) return;
+        var pos = e.GetPosition(null);
+        if (Math.Abs(pos.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(pos.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        var entry = _dragEntry;
+        _dragEntry = null;
+        DragDrop.DoDragDrop((DependencyObject)sender, new DataObject(typeof(LibraryEntry), entry), DragDropEffects.Copy);
+        _vm.LayoutScene.HideGhost();
+    }
+
+    private void LayoutViewport_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(LibraryEntry))) { e.Effects = DragDropEffects.None; return; }
+        var entry = (LibraryEntry)e.Data.GetData(typeof(LibraryEntry))!;
+        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        if (p == null) { e.Effects = DragDropEffects.None; _vm.LayoutScene.HideGhost(); e.Handled = true; return; }
+        e.Effects = DragDropEffects.Copy;
+        // la linea parte da X = 0: l'anteprima non esce dal piano di progettazione
+        double x = Math.Round(p.Value.X * 100) / 100, y = Math.Round(p.Value.Y * 100) / 100;
+        _vm.LayoutScene.ShowGhost(x, y, entry.LengthM, entry.WidthM, entry.HeightM);
+        e.Handled = true;
+    }
+
+    private void LayoutViewport_DragLeave(object sender, DragEventArgs e) => _vm.LayoutScene.HideGhost();
+
+    private void LayoutViewport_Drop(object sender, DragEventArgs e)
+    {
+        _vm.LayoutScene.HideGhost();
+        if (!e.Data.GetDataPresent(typeof(LibraryEntry))) return;
+        var entry = (LibraryEntry)e.Data.GetData(typeof(LibraryEntry))!;
+        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        if (p == null) return;
+        _vm.PlaceFromLibrary(entry, p.Value.X * 1000.0, p.Value.Y);
+        e.Handled = true;
+    }
+
+    private void ToggleLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        bool show = LibraryColumn.Width.Value < 1;
+        LibraryColumn.Width = new GridLength(show ? 290 : 0);
+        LibrarySplitterColumn.Width = new GridLength(show ? 5 : 0);
+        LibraryPanel.Visibility = LibrarySplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SetView(Vector3D direction, Vector3D up)

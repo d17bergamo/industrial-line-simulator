@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -119,6 +120,10 @@ public sealed class MainViewModel : ObservableObject
         });
         PackagePropertiesView = CollectionViewSource.GetDefaultView(PackageProperties);
         PackagePropertiesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PropertyItemViewModel.Category)));
+        LibraryView = CollectionViewSource.GetDefaultView(EquipmentLibrary.Entries);
+        LibraryView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LibraryEntry.Category)));
+        DuplicateSelectedCommand = new RelayCommand(DuplicateSelected, () => CanDuplicate(SelectedNode?.Model));
+        RotateSelectedCommand = new RelayCommand(RotateSelected, () => CanRotate(SelectedNode?.Model));
         NewPackageCommand = new RelayCommand(NewPackage);
         DuplicatePackageCommand = new RelayCommand(DuplicatePackage, () => SelectedPackageType != null);
         DeletePackageCommand = new RelayCommand(DeletePackage, () => SelectedPackageType != null && _project.PackageTypes.Count > 1);
@@ -190,6 +195,19 @@ public sealed class MainViewModel : ObservableObject
         }
     }
     public ObservableCollection<EquipmentStatusRow> EquipmentStatus { get; } = new();
+
+    // ------------------------------------------------------------ Imposta layout: libreria, quote, modifica
+
+    public ICollectionView LibraryView { get; private set; } = null!;
+    private bool _showDistances;
+    /// <summary>Mostra le quote degli equipaggiamenti rispetto all'origine (X = Y = Z = 0).</summary>
+    public bool ShowDistances
+    {
+        get => _showDistances;
+        set { if (Set(ref _showDistances, value)) LayoutScene.ShowDimensions = value; }
+    }
+    public ICommand DuplicateSelectedCommand { get; private set; } = null!;
+    public ICommand RotateSelectedCommand { get; private set; } = null!;
     public ObservableCollection<TreeNodeViewModel> Tree { get; } = new();
     public ObservableCollection<PropertyItemViewModel> Properties { get; } = new();
     public ICollectionView PropertiesView { get; }
@@ -525,7 +543,9 @@ public sealed class MainViewModel : ObservableObject
 
     private void OnPropertyEdited(PropertyItemViewModel item)
     {
-        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "InverterId" or "IsEnabled";
+        if (SelectedNode?.Model is RollerSection rs && (item.Name is "RollerCount" or "RollerPitchMm" or "EndOverhangMm"))
+            rs.RecalculateLength();
+        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
         ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
@@ -624,7 +644,7 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private static bool CanDelete(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
-        or IntermediateStopConfig or WeighingScaleConfig;
+        or IntermediateStopConfig or WeighingScaleConfig or BundleClampConfig or SideCompactorConfig or RejectorConfig;
 
     private void DeleteSelected()
     {
@@ -640,10 +660,200 @@ public sealed class MainViewModel : ObservableObject
             case LogicRule r: _project.Rules.Remove(r); break;
             case IntermediateStopConfig fs: _project.IntermediateStops.Remove(fs); break;
             case WeighingScaleConfig sc: _project.Scales.Remove(sc); break;
+            // dispositivi singoli del progetto: "eliminare" = rimuoverli dal layout (disabilitarli)
+            case BundleClampConfig k: k.IsEnabled = false; break;
+            case SideCompactorConfig cm: cm.IsEnabled = false; break;
+            case RejectorConfig rj: rj.IsEnabled = false; break;
         }
         _selectedNode = null;
         ProjectChanged(structural: true);
         SelectedNode = Tree.FirstOrDefault();
+    }
+
+    // ------------------------------------------------------------ Layout: inserimento da libreria, spostamento, rotazione, duplicazione
+
+    private static double Snap(double mm) => Math.Round(mm / 10.0) * 10.0;
+
+    /// <summary>Inserisce nel layout la macchina scelta nella libreria, nel punto indicato (X in mm lungo la linea, Y in m).</summary>
+    public void PlaceFromLibrary(LibraryEntry e, double xMm, double yM)
+    {
+        object? added = null;
+        double x = Snap(xMm);
+        switch (e.Key)
+        {
+            case "roller":
+            {
+                var last = _project.Sections.OrderBy(v => v.StartMm).LastOrDefault();
+                var sec = new RollerSection { Id = NextId("M", AllComponents()), RollerCount = 20, RollerPitchMm = 300, LengthMm = 6000 };
+                sec.Name = "Modulo " + sec.Id;
+                if (last != null)
+                {
+                    sec.WidthMm = last.WidthMm; sec.RollerPitchMm = last.RollerPitchMm; sec.RollerDiameterMm = last.RollerDiameterMm;
+                    sec.LowSpeed = last.LowSpeed; sec.HighSpeed = last.HighSpeed; sec.Acceleration = last.Acceleration; sec.Deceleration = last.Deceleration;
+                    sec.DefaultSpeed = last.DefaultSpeed; sec.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
+                }
+                sec.EndOverhangMm = 150;
+                sec.RecalculateLength();
+                sec.StartMm = Math.Max(0, Snap(x - sec.LengthMm / 2));
+                _project.Sections.Add(sec);
+                added = sec;
+                break;
+            }
+            case "knca":
+            {
+                if (_project.Strappers.Count >= LineProject.MaxStrappers) { Status = $"Massimo {LineProject.MaxStrappers} legatrici."; return; }
+                var st = new StrapperConfig { Id = NextId("L", AllComponents()), Name = $"Legatrice {_project.Strappers.Count + 1}", PositionMm = x, Side = yM >= 0 ? LateralSide.Left : LateralSide.Right };
+                _project.Strappers.Add(st);
+                added = st;
+                break;
+            }
+            case "knof":
+                _project.BundleClamp.IsEnabled = true;
+                _project.BundleClamp.PositionMm = x;
+                added = _project.BundleClamp;
+                break;
+            case "compactor":
+                _project.Compactor.IsEnabled = true;
+                _project.Compactor.PositionMm = x;
+                added = _project.Compactor;
+                break;
+            case "sma":
+                _project.Rejector.IsEnabled = true;
+                _project.Rejector.PositionMm = Math.Max(0, Snap(x - _project.Rejector.LengthMm / 2));
+                _project.Rejector.Side = yM >= 0 ? LateralSide.Right : LateralSide.Left;
+                added = _project.Rejector;
+                break;
+            case "scale":
+            {
+                var sc = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", LengthMm = 6000 };
+                sc.StartMm = Math.Max(0, Snap(x - sc.LengthMm / 2));
+                _project.Scales.Add(sc);
+                added = sc;
+                break;
+            }
+            case "stop":
+            {
+                var fs = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = x };
+                _project.IntermediateStops.Add(fs);
+                added = fs;
+                break;
+            }
+            case "photocell":
+            {
+                var pc = new PhotocellConfig { Id = NextId("FC", AllComponents()), Name = "Nuova fotocellula", PositionMm = x };
+                _project.Photocells.Add(pc);
+                added = pc;
+                break;
+            }
+        }
+        if (added == null) return;
+        AfterAdd(added);
+        Status = $"Inserito: {e.Name} a X = {x / 1000.0:0.000} m";
+    }
+
+    public static bool CanMove(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or BundleClampConfig or SideCompactorConfig
+        or RejectorConfig or IntermediateStopConfig or StopperConfig or TransferConfig or WeighingScaleConfig;
+
+    /// <summary>Sposta il componente selezionato lungo la linea (dx in mm); per i dispositivi laterali y (m) ne decide il lato.</summary>
+    public void MoveSelectedBy(double dxMm, double yM)
+    {
+        var m = SelectedNode?.Model;
+        if (!CanMove(m)) return;
+        switch (m)
+        {
+            case RollerSection s: s.StartMm += dxMm; break;
+            case PhotocellConfig pc: pc.PositionMm += dxMm; break;
+            case StrapperConfig st: st.PositionMm += dxMm; st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right; break;
+            case BundleClampConfig k: k.PositionMm += dxMm; break;
+            case SideCompactorConfig c: c.PositionMm += dxMm; break;
+            case RejectorConfig r: r.PositionMm += dxMm; break;
+            case IntermediateStopConfig fs: fs.PositionMm += dxMm; break;
+            case StopperConfig sp: sp.PositionMm += dxMm; break;
+            case TransferConfig t: t.PositionMm += dxMm; break;
+            case WeighingScaleConfig sc: sc.StartMm += dxMm; break;
+        }
+        LayoutScene.Build(_project);
+        LayoutScene.Highlight(m);
+        foreach (var item in Properties) item.Refresh();
+    }
+
+    /// <summary>Fine del trascinamento: posizione arrotondata a 10 mm e aggiornamento completo del progetto.</summary>
+    public void CommitMove()
+    {
+        var m = SelectedNode?.Model;
+        switch (m)
+        {
+            case RollerSection s: s.StartMm = Math.Max(0, Snap(s.StartMm)); break;
+            case PhotocellConfig pc: pc.PositionMm = Snap(pc.PositionMm); break;
+            case StrapperConfig st: st.PositionMm = Snap(st.PositionMm); break;
+            case BundleClampConfig k: k.PositionMm = Snap(k.PositionMm); break;
+            case SideCompactorConfig c: c.PositionMm = Snap(c.PositionMm); break;
+            case RejectorConfig r: r.PositionMm = Snap(r.PositionMm); break;
+            case IntermediateStopConfig fs: fs.PositionMm = Snap(fs.PositionMm); break;
+            case StopperConfig sp: sp.PositionMm = Snap(sp.PositionMm); break;
+            case TransferConfig t: t.PositionMm = Snap(t.PositionMm); break;
+            case WeighingScaleConfig sc: sc.StartMm = Snap(sc.StartMm); break;
+        }
+        ProjectChanged(structural: true);
+        BuildProperties();
+    }
+
+    /// <summary>Rotazione di 180° attorno alla verticale: porta il dispositivo sul lato opposto della linea.</summary>
+    private static bool CanRotate(object? m) => m is StrapperConfig or RejectorConfig or TransferConfig;
+
+    private void RotateSelected()
+    {
+        switch (SelectedNode?.Model)
+        {
+            case StrapperConfig st: st.Side = st.Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
+            case RejectorConfig r: r.Side = r.Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
+            case TransferConfig t: t.DestinationSide = t.DestinationSide == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
+            default: return;
+        }
+        ProjectChanged(structural: false);
+        BuildProperties();
+    }
+
+    private static bool CanDuplicate(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or IntermediateStopConfig or WeighingScaleConfig;
+
+    private static T CloneOf<T>(T src) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(src, ProjectSerializer.Options), ProjectSerializer.Options)!;
+
+    private void DuplicateSelected()
+    {
+        switch (SelectedNode?.Model)
+        {
+            case RollerSection s:
+            {
+                var c = CloneOf(s);
+                c.Id = NextId("M", AllComponents()); c.Name = "Modulo " + c.Id; c.StartMm = s.EndMm;
+                _project.Sections.Add(c); AfterAdd(c); break;
+            }
+            case PhotocellConfig pc:
+            {
+                var c = CloneOf(pc);
+                c.Id = NextId("FC", AllComponents()); c.Name = pc.Name + " (copia)"; c.PositionMm = pc.PositionMm + 500;
+                _project.Photocells.Add(c); AfterAdd(c); break;
+            }
+            case StrapperConfig st:
+            {
+                if (_project.Strappers.Count >= LineProject.MaxStrappers) { Status = $"Massimo {LineProject.MaxStrappers} legatrici."; return; }
+                var c = CloneOf(st);
+                c.Id = NextId("L", AllComponents()); c.Name = st.Name + " (copia)"; c.PositionMm = st.PositionMm + 4500;
+                _project.Strappers.Add(c); AfterAdd(c); break;
+            }
+            case IntermediateStopConfig fs:
+            {
+                var c = CloneOf(fs);
+                c.Id = NextId("FM", AllComponents()); c.Name = fs.Name + " (copia)"; c.PositionMm = fs.PositionMm + 1000;
+                _project.IntermediateStops.Add(c); AfterAdd(c); break;
+            }
+            case WeighingScaleConfig sc:
+            {
+                var c = CloneOf(sc);
+                c.Id = NextId("B", AllComponents()); c.Name = sc.Name + " (copia)"; c.StartMm = sc.EndMm + 100;
+                _project.Scales.Add(c); AfterAdd(c); break;
+            }
+        }
     }
 
     // ------------------------------------------------------------ Pacchi
