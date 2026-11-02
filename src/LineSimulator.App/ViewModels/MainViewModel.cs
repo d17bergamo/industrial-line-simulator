@@ -198,6 +198,22 @@ public sealed class MainViewModel : ObservableObject
             Status = $"Tipologia simulata: {value.Id} - {value.Name} ({value.LengthMm:0} mm, {value.WeightKg:0} kg)";
         }
     }
+    public Array BankingModes { get; } = Enum.GetValues(typeof(AccumulationMode));
+    public Array HeadingModes { get; } = Enum.GetValues(typeof(StopReference));
+
+    /// <summary>Banking (single/double) scelto per la simulazione, non per il pacco.</summary>
+    public AccumulationMode SimBanking
+    {
+        get => _project.Simulation.Banking;
+        set { if (_project.Simulation.Banking == value) return; _project.Simulation.Banking = value; Raise(nameof(SimBanking)); ProjectChanged(structural: false); Status = $"Banking: {value}"; }
+    }
+
+    /// <summary>Intestatura di testa o di coda scelta per la simulazione.</summary>
+    public StopReference SimHeading
+    {
+        get => _project.Simulation.Heading;
+        set { if (_project.Simulation.Heading == value) return; _project.Simulation.Heading = value; Raise(nameof(SimHeading)); ProjectChanged(structural: false); Status = $"Intestatura: {value}"; }
+    }
     public ObservableCollection<EquipmentStatusRow> EquipmentStatus { get; } = new();
 
     // ------------------------------------------------------------ Imposta layout: libreria, quote, modifica
@@ -976,7 +992,7 @@ public sealed class MainViewModel : ObservableObject
         var t = new PackageType
         {
             Id = NextId("T", AllComponents()), Name = src.Name + " (copia)", LengthMm = src.LengthMm, WeightKg = src.WeightKg,
-            Accumulation = src.Accumulation, Heading = src.Heading, GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
+            GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
             StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
             MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm
         };

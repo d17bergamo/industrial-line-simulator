@@ -38,11 +38,11 @@ public class SplitFilesTests
     }
 
     [Fact]
-    public void PackagesFile_RoundTripsBankingAndHeading()
+    public void PackagesFile_RoundTripsHeightAndStraps()
     {
         var types = new List<PackageType>
         {
-            new() { Id = "A", Name = "A", LengthMm = 8000, WeightKg = 2500, Accumulation = AccumulationMode.DoubleBanking, Heading = StopReference.Tail },
+            new() { Id = "A", Name = "A", LengthMm = 8000, WeightKg = 2500, GraphicHeightMm = 450 },
             new() { Id = "B", Name = "B", LengthMm = 12000, WeightKg = 3000 }
         };
         var path = Tmp("pacchi.json");
@@ -51,9 +51,7 @@ public class SplitFilesTests
             SplitFiles.SavePackages(types, path);
             var back = SplitFiles.LoadPackages(path);
             Assert.Equal(2, back.Count);
-            Assert.Equal(AccumulationMode.DoubleBanking, back[0].Accumulation);
-            Assert.Equal(StopReference.Tail, back[0].Heading);
-            Assert.Equal(AccumulationMode.SingleBanking, back[1].Accumulation);
+            Assert.Equal(450, back[0].GraphicHeightMm);
             Assert.Equal(8000, back[0].LengthMm);
         }
         finally { File.Delete(path); }

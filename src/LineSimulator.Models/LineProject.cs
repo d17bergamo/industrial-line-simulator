@@ -22,6 +22,14 @@ public sealed class SimulationSettings
 
     [UiProperty("Arresta la simulazione alla prima collisione", "", "Simulazione", Order = 12)]
     public bool StopOnCollision { get; set; }
+
+    /// <summary>Single banking: un pacco per sezione di accumulo. Double banking: due pacchi nella stessa sezione.</summary>
+    [UiProperty("Gestione sull'accumulo (banking)", "", "Lavorazione del pacco", Order = 20)]
+    public AccumulationMode Banking { get; set; } = AccumulationMode.SingleBanking;
+
+    /// <summary>Intestatura di testa (contro il fermo) o di coda (il pacco oltrepassa il fermo, che si solleva, e torna indietro).</summary>
+    [UiProperty("Intestatura", "", "Lavorazione del pacco", Order = 21)]
+    public StopReference Heading { get; set; } = StopReference.Head;
 }
 
 /// <summary>Disposizione grafica globale della linea nella scena 3D.</summary>

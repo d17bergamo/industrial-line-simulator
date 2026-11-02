@@ -339,6 +339,10 @@
                         <TextBlock Text="SIMULAZIONI" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="6,0,16,0"/>
                         <TextBlock Text="Tipologia di pacco:" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox Width="260" ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Banking:" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                        <ComboBox Width="130" ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Single banking: un pacco per sezione. Double banking: due pacchi."/>
+                        <TextBlock Text="Intestatura:" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                        <ComboBox Width="90" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Head = di testa, Tail = di coda"/>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.TonnesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.CycleTimeMeanS, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>

@@ -2,7 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace LineSimulator.Models;
 
-/// <summary>Modalità di gestione del pacco sull'accumulo.</summary>
+/// <summary>
+/// Modalità di gestione dei pacchi sull'accumulo. Non è una caratteristica del pacco ma della simulazione
+/// (<see cref="SimulationSettings.Banking"/>): lo stesso pacco si confronta in modalità diverse.
+/// </summary>
 public enum AccumulationMode
 {
     SingleBanking = 0,
@@ -10,8 +13,8 @@ public enum AccumulationMode
 }
 
 /// <summary>
-/// Tipologia di pacco. Obbligatori per i calcoli: lunghezza e peso.
-/// Larghezza e altezza sono solo grafiche.
+/// Tipologia di pacco: descrizione fisica (lunghezza, larghezza, altezza, peso) e posizione delle legature,
+/// impostata a mano. Come il pacco viene lavorato (banking, intestatura) si sceglie nelle simulazioni.
 /// </summary>
 public sealed class PackageType : ComponentBase
 {
@@ -21,16 +24,10 @@ public sealed class PackageType : ComponentBase
     [UiProperty("Peso pacco", "kg", "Dati", Order = 2)]
     public double WeightKg { get; set; } = 3000;
 
-    [UiProperty("Gestione sull'accumulo", "", "Accumulo e intestatura", Order = 3)]
-    public AccumulationMode Accumulation { get; set; } = AccumulationMode.SingleBanking;
-
-    [UiProperty("Intestatura", "", "Accumulo e intestatura", Order = 4)]
-    public StopReference Heading { get; set; } = StopReference.Head;
-
-    [UiProperty("Larghezza grafica", "mm", "Grafica", Order = 10)]
+    [UiProperty("Larghezza pacco", "mm", "Dati", Order = 3)]
     public double GraphicWidthMm { get; set; } = 600;
 
-    [UiProperty("Altezza grafica", "mm", "Grafica", Order = 11)]
+    [UiProperty("Altezza pacco", "mm", "Dati", Order = 4)]
     public double GraphicHeightMm { get; set; } = 400;
 
     /// <summary>Posizioni delle legature misurate dalla testa del pacco (mm).</summary>
