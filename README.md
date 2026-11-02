@@ -53,6 +53,16 @@ Installer: `ISCC.exe /DSourceDir=publish\IndustrialLineSimulator installer\LineS
 
 ## Uso rapido
 
+L'applicazione è una sola finestra con una **schermata iniziale** a tre riquadri; il pulsante *⌂ Home* (o il menu *Home*) riporta alla schermata iniziale. Le tre sezioni condividono lo stesso progetto e lo stesso motore di simulazione.
+
+- **IMPOSTA LAYOUT**: progettazione geometrica. A sinistra struttura e proprietà del componente selezionato, al centro il modello 3D, a destra la **libreria macchine** (comprimibile con *Libreria ⇄* e ridimensionabile). Si trascina una macchina dalla libreria nell'area 3D (anteprima trasparente, punto di inserimento e coordinate); clic su un componente lo seleziona e trascinandolo lo si sposta lungo la linea; *Ruota 180°* porta reggiatrici, rigettatrice e trasferitore sul lato opposto; *Duplica* ed *Elimina* operano sul selezionato. La casella **MOSTRA DISTANZE DALL'ORIGINE** mostra, in metri, centro, ingresso e uscita di ogni macchina rispetto a X = 0. Layout e tipologie si salvano in file indipendenti (*File → Salva layout / Salva tipologie pacchi*).
+- **CARATTERISTICHE PACCHI**: elenco delle tipologie (nome, lunghezza, peso, gestione sull'accumulo *Single/Double banking*, intestatura di testa o di coda, legature) con aggiunta, duplicazione ed eliminazione.
+- **SIMULAZIONI**: tendina della tipologia da simulare (una sola per simulazione), vista 3D con comandi *Play / Pausa / Stop / Reset*, velocità x1/x2/x5/x10/x20/x100, stato delle apparecchiature, tempi di ciclo e produttività; scheda *Ciclogramma e risultati*.
+
+Limiti attuali: *Single/Double banking* e l'intestatura della tipologia sono memorizzati ma non ancora usati dal motore (l'intestatura di testa/coda si imposta oggi sul fermo intermedio); stringifascio KNOF, compattatore e rigettatrice sono dispositivi singoli; il motore è lineare lungo l'asse X, quindi la rotazione è limitata a 180° (lato opposto) e il trascinamento è lungo la linea; le dimensioni dei modelli SUND BIRSTA sono segnaposto configurabili, non quote del costruttore.
+
+Funzioni generali:
+
 - **Albero della linea** (a sinistra): selezionare un componente per modificarne i parametri nel pannello **Proprietà**. Ogni modifica ricostruisce il modello 3D, rivalida il progetto, ricalcola le strategie di legatura e azzera la simulazione.
 - **Vista 3D**: clic sinistro seleziona il componente; destro ruota; rotella zoom; viste *Alto / Laterale / Isometrica*.
 - **Simulazione**: *Play* (velocità 1x/10x/50x/100x), *Pausa*, *Stop* (risultati parziali), *Reset*, *Passo* (un passo di integrazione), *Evento ▸* (fino al prossimo evento), *Fino al termine*.
