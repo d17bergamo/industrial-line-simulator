@@ -256,6 +256,36 @@ public sealed partial class SimulationEngine : ILogicContext
 
     public SimulationResults ComputeResults() => ResultsCalculator.Compute(this);
 
+    public const double MinLineSpeedMps = 0.5;
+    public const double MaxLineSpeedMps = 1.5;
+
+    /// <summary>Velocità di trasporto impostata dal pop-up in simulazione (m/s); null = velocità dei singoli inverter.</summary>
+    public double? LineSpeedMps { get; private set; }
+
+    /// <summary>
+    /// Imposta la velocità di linea (0,5 - 1,5 m/s) su tutte le vie a rulli, anche a simulazione in corso:
+    /// la configurazione degli inverter viene riletta ad ogni scansione. Restituisce il valore applicato.
+    /// </summary>
+    public double SetLineSpeed(double mps)
+    {
+        double v = Math.Clamp(double.IsFinite(mps) ? mps : MinLineSpeedMps, MinLineSpeedMps, MaxLineSpeedMps);
+        foreach (var z in _zones)
+        {
+            z.Config.HighSpeed = v;
+            if (z.Config.LowSpeed > v) z.Config.LowSpeed = v;
+        }
+        LineSpeedMps = v;
+        return v;
+    }
+
+    /// <summary>Produttività oraria teorica alla velocità corrente (pacchi/h), limitata dalla zona più lenta.</summary>
+    public double TheoreticalPackagesPerHour(double packageLengthM, double gapM = 0.0)
+    {
+        if (_zones.Count == 0 || packageLengthM <= 0) return 0;
+        double v = _zones.Min(z => z.Config.HighSpeed);
+        return 3600.0 * v / (packageLengthM + Math.Max(0, gapM));
+    }
+
     public SimFrame CaptureFrame() => new()
     {
         TimeS = Time,
