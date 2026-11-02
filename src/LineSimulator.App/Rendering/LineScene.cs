@@ -142,7 +142,7 @@ public sealed class LineScene
         if (_zoneBrushes.ContainsKey(s.Id))
         {
             // il colore della struttura indica lo stato della zona (vedi ApplyFrame)
-            _sectionFrameBrushes.Add((s.Id, fb, zc.Item2));
+            _sectionFrameBrushes.Add((s.EffectiveZoneId, fb, zc.Item2)); // stato della zona di comando (inverter)
         }
 
         // Rulli
@@ -425,7 +425,7 @@ public sealed class LineScene
         {
             int zi = _zoneOrder.IndexOf(inv);
             bool moving = f != null && zi >= 0 && zi < f.ZoneSpeeds.Length && f.ZoneSpeeds[zi] > 1e-4;
-            if (_highlighted is RollerSection rs && rs.Id == inv) continue;
+            if (_highlighted is RollerSection rs && rs.EffectiveZoneId == inv) continue;
             brush.Color = moving ? color : Blend(color, Color.FromRgb(0x55, 0x55, 0x55), 0.6);
         }
 

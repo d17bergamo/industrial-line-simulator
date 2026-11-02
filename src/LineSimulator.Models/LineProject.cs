@@ -2,6 +2,13 @@ namespace LineSimulator.Models;
 
 public sealed class SimulationSettings
 {
+    /// <summary>
+    /// Aggiunge in automatico i sensori di processo obbligatori se mancano: fotocellula di arresto davanti al
+    /// trasferitore sollevabile, encoder e fotocellula di riferimento prima della prima macchina di legatura.
+    /// </summary>
+    [UiProperty("Aggiungi in automatico i sensori di processo mancanti", "", "Simulazione", Order = 0)]
+    public bool AutoAddProcessSensors { get; set; } = true;
+
     [UiProperty("Passo di integrazione", "ms", "Simulazione", Order = 1)]
     public double TimeStepMs { get; set; } = 10;
 
@@ -68,6 +75,7 @@ public sealed class LineProject
     public BundleClampConfig BundleClamp { get; set; } = new();
     public SideCompactorConfig Compactor { get; set; } = new();
     public RejectorConfig Rejector { get; set; } = new();
+    public EncoderConfig StrappingEncoder { get; set; } = new();
     public List<IntermediateStopConfig> IntermediateStops { get; set; } = new();
     public List<WeighingScaleConfig> Scales { get; set; } = new();
     public List<PackageType> PackageTypes { get; set; } = new();

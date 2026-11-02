@@ -8,7 +8,7 @@ namespace LineSimulator.Tests;
 
 /// <summary>
 /// Scenari delle logiche di processo: fotocellula di ingresso, arresto automatico degli inverter,
-/// legatrice KNCA 7/800 con stringifascio KNOF e compattatore, rigettatrice SMA, fermi intermedi
+/// legatrice KNCA 7/800 e reggettatrice SMA con stringifascio KNOF e compattatore, rigettatrice generica, fermi intermedi
 /// con intestatura di testa/coda, trasferitore multi-pacco e bilici di pesatura.
 /// </summary>
 public class ProcessLogicTests
@@ -160,9 +160,9 @@ public class ProcessLogicTests
         Assert.Equal(0, e.ZoneOverfills);
         Assert.Equal(0, e.PositioningErrors);
         Assert.False(e.Deadlocked);
-        Assert.Equal(1, e.RejectedPackages);
+        Assert.Equal(0, e.RejectedPackages);
         var exited = e.Packages.Where(p => p.State == PackageState.Exited).ToList();
-        Assert.Equal(7, exited.Count);
+        Assert.Equal(8, exited.Count);
         Assert.All(exited, p => Assert.Equal(StrapStatus.Done, p.StrapStatus));
         // peso acquisito = peso configurato arrotondato alla risoluzione del bilico (2 kg)
         Assert.All(exited, p => Assert.Equal(Math.Round(p.WeightKg / 2, MidpointRounding.AwayFromZero) * 2, p.MeasuredWeightKg!.Value));
@@ -170,8 +170,8 @@ public class ProcessLogicTests
         Assert.Equal(new[] { "P6", "P12", "P4" }.OrderBy(x => x), exited.Select(p => p.Type.Id).Distinct().OrderBy(x => x));
         Assert.Equal(1480.0, e.Packages.Single(p => p.Sequence == 2).MeasuredWeightKg!.Value);
         var r = e.ComputeResults();
-        Assert.Equal(1, r.RejectedPackages);
-        Assert.Equal(7, r.WeighedPackages);
+        Assert.Equal(0, r.RejectedPackages);
+        Assert.Equal(8, r.WeighedPackages);
     }
 
     [Fact]
@@ -273,8 +273,8 @@ public class ProcessLogicTests
         double command = ev.First(x => x.Type == SimEventType.BundleClampPhase && x.Message.Contains("comando di chiusura")).TimeS;
         double firstStrap = ev.First(x => x.Type == SimEventType.StrapperPhase && x.Message.Contains("preparazione")).TimeS;
         double opened = ev.First(x => x.Type == SimEventType.BundleClampPhase && x.Message.Contains("conferma di apertura")).TimeS;
-        // chiusura 1.5 s + conferma 0.2 s
-        Assert.InRange(closed - command, 1.7 - 1e-6, 1.7 + 3 * e.Dt);
+        // chiusura 2 s (default da documento) + conferma 0.2 s
+        Assert.InRange(closed - command, 2.2 - 1e-6, 2.2 + 3 * e.Dt);
         Assert.True(firstStrap >= closed - 1e-9);
         Assert.True(opened > firstStrap);
         Assert.Equal(2, e.BundleClamp!.Cycles); // una chiusura per fermata (2 fermate per il pacco da 6 m)
@@ -295,7 +295,7 @@ public class ProcessLogicTests
         var alarm = ev.First(x => x.Type == SimEventType.DeviceAlarm && x.ComponentId == "KNOF");
         double firstStrap = ev.First(x => x.Type == SimEventType.StrapperPhase && x.Message.Contains("preparazione")).TimeS;
         Assert.InRange(alarm.TimeS - command, 10 - 1e-6, 10 + 3 * e.Dt);         // timeout conferma
-        Assert.True(firstStrap >= command + 10 + 20 + 1.7 - 3 * e.Dt);           // ripristino + nuova chiusura
+        Assert.True(firstStrap >= command + 10 + 20 + 2.2 - 3 * e.Dt);           // ripristino + nuova chiusura
         Assert.Equal(1, e.BundleClamp!.Faults);
         Assert.True(e.DeviceAlarms >= 1);
     }
@@ -344,7 +344,13 @@ public class ProcessLogicTests
     [Fact]
     public void Rejector_CompleteRejectSequence()
     {
-        var p = Full(x => x.Infeed.PackageCount = 5);
+        // Rigettatrice generica (scarto): non è la SMA, che è una reggettatrice
+        var p = Full(x =>
+        {
+            x.Infeed.PackageCount = 5;
+            x.Rejector.IsEnabled = true;
+            x.Rejector.RejectPackageNumbers = "5";
+        });
         bool zoneStoppedDuringEject = true;
         double? headInPosition = null;
         var e = RunChecked(p, en =>
@@ -372,6 +378,7 @@ public class ProcessLogicTests
         foreach (var m in msgs) if (k < steps.Length && m.Contains(steps[k])) k++;
         Assert.True(k == steps.Length, string.Join("\n", msgs));
         Assert.Equal(1, e.Rejector!.Cycles);
+        Assert.Equal("RJ", e.Rejector.Id);
         Assert.Equal(4, e.Packages.Count(x => x.State == PackageState.Exited));
     }
 
@@ -419,26 +426,150 @@ public class ProcessLogicTests
     }
 
     [Fact]
-    public void Inverters_StopAutomatically_WhenNoPackages_AndRestartForNextPackage()
+    public void Inverter_StopsAfterEmptyTravelEqualToItsLength_AndRestartsFromUpstreamPhotocell()
     {
         var p = SampleProjects.CreateStandardLine();
         p.Infeed.PackageCount = 2;
         p.Infeed.IntervalS = 200;
+        double? emptyAtStop = null;
+        var e = RunChecked(p, en =>
+        {
+            var m2 = en.Zone("M2")!;
+            if (emptyAtStop == null && m2.AutoStopped) emptyAtStop = m2.EmptyTravelM;
+        });
+        Assert.True(e.CompletedNormally, Diag(e));
+
+        // M2 (13 m) si spegne dopo una corsa a vuoto pari alla propria lunghezza
+        Assert.NotNull(emptyAtStop);
+        Assert.InRange(emptyAtStop!.Value, 13.0, 13.0 + 0.02);
+
+        // Ripartenza di M2 comandata dalla fotocellula a monte (FC1 nel modulo M1), all'arrivo del secondo pacco
+        var m2Start = e.Events.First(x => x.Type == SimEventType.AutoStart && x.ComponentId == "M2" && x.TimeS > 150);
+        Assert.Contains("FC1", m2Start.Message);
+        var fc1Arrival = e.Events.First(x => x.Type == SimEventType.PhotocellArrival && x.ComponentId == "FC1" && x.TimeS > 150);
+        Assert.InRange(m2Start.TimeS - fc1Arrival.TimeS, 0, 2 * e.Dt);
+
+        // M1 riparte quando la fotocellula di ingresso rileva il secondo pacco (non prima, per calcolo di tempi)
+        var m1Start = e.Events.First(x => x.Type == SimEventType.AutoStart && x.ComponentId == "M1" && x.TimeS > 150);
+        Assert.InRange(m1Start.TimeS, 200, 200 + 0.02 + 2 * e.Dt);
+
+        // Al termine i moduli a monte sono fermi per arresto automatico
+        Assert.True(e.Zone("M1")!.AutoStopped);
+        Assert.True(e.Zone("M2")!.AutoStopped);
+    }
+
+    [Fact]
+    public void CommandZone_GroupsModulesUnderOneInverter()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        p.Sections.Single(s => s.Id == "M1").CommandZoneId = "INV-A";
+        p.Sections.Single(s => s.Id == "M2").CommandZoneId = "INV-A";
+        var topo = new LineTopology(p);
+        Assert.Equal(3, topo.Zones.Count);
+        var z = topo.Zone("INV-A")!;
+        Assert.Same(z, topo.Zone("M1"));
+        Assert.Same(z, topo.Zone("M2"));
+        Assert.Equal(0, z.StartM, 9);
+        Assert.Equal(26, z.EndM, 9);
+        Assert.False(ProjectValidator.Validate(p).HasErrors, string.Join("\n", ProjectValidator.Validate(p).Errors));
         var e = RunChecked(p);
         Assert.True(e.CompletedNormally, Diag(e));
-        var inv1Stops = e.Events.Where(x => x.Type == SimEventType.AutoStop && x.ComponentId == "M1").ToList();
-        var inv1Starts = e.Events.Where(x => x.Type == SimEventType.AutoStart && x.ComponentId == "M1").ToList();
-        Assert.NotEmpty(inv1Stops);
-        Assert.NotEmpty(inv1Starts);
-        // Riavvio anticipato del tempo di accelerazione (0.6/0.5 = 1.2 s) rispetto all'ingresso del secondo pacco
-        var restart = inv1Starts.First(x => x.TimeS > 100);
-        Assert.InRange(restart.TimeS, 200 - 1.2 - 2 * e.Dt, 200 + 1e-9);
-        // Il primo arresto di INV1 avviene dopo l'uscita completa del primo pacco dalla sezione precedente/zona
-        var firstPkg = e.Packages.Single(k => k.Sequence == 1);
-        Assert.True(inv1Stops[0].TimeS > firstPkg.EntryTimeS);
-        // Al termine tutte le zone sono ferme per arresto automatico
-        Assert.All(e.Zones, z => Assert.Equal(InverterMode.Stop, z.Mode));
-        Assert.All(e.Zones, z => Assert.True(z.AutoStopped, z.Id + ": " + z.Reason));
+        Assert.Equal(0, e.Collisions);
+        // Un solo inverter per i due moduli: stessa velocità a ogni istante
+        Assert.Equal(3, e.Zones.Count);
+        Assert.Contains(e.Recorder.Tracks, t => t.Key == "INV:INV-A");
+    }
+
+    [Fact]
+    public void CommandZone_NonContiguousModulesAreRejected()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        p.Sections.Single(s => s.Id == "M1").CommandZoneId = "INV-A";
+        p.Sections.Single(s => s.Id == "M3").CommandZoneId = "INV-A";
+        Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "ZONE_SPLIT");
+    }
+
+    [Fact]
+    public void ProcessSensors_AreAddedAutomatically()
+    {
+        var p = Full();
+        var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
+        Assert.True(stop.IsAutoGenerated);
+        // 1,5 s × 0,6 m/s + 1 m = 1,9 m davanti al trasferitore (44,0 m)
+        Assert.Equal(44000 - 1900, stop.PositionMm, 6);
+        Assert.Equal("M3", stop.ControlledInverterId);
+        var refPc = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingReference);
+        Assert.True(p.StrappingEncoder.IsEnabled);
+        Assert.True(refPc.PositionMm < p.StrappingEncoder.PositionMm);
+        Assert.True(p.StrappingEncoder.PositionMm < p.Strappers.Min(s => s.PositionMm));
+        // Idempotente
+        Assert.Empty(ProjectNormalizer.EnsureProcessSensors(p));
+    }
+
+    [Fact]
+    public void TransferStopPhotocell_HoldsMaterialWhileTransferRaised()
+    {
+        var p = Full(x => { x.Infeed.TypeSequence = new List<string> { "P12" }; x.Infeed.PackageCount = 3; x.Infeed.IntervalS = 20; });
+        var fct = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
+        bool prev = false;
+        var e = RunChecked(p, en =>
+        {
+            var pc = en.Photocells.Single(x => x.Id == fct.Id);
+            bool raised = en.Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination;
+            bool now = pc.Output && raised;
+            // dalla scansione successiva il modulo che porta la fotocellula è fermo (interblocco)
+            if (now && prev) Assert.Equal(InverterMode.Stop, en.Zone("M3")!.Mode);
+            prev = now;
+        });
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(0, e.TransferInterferences);
+        Assert.Equal(0, e.Collisions);
+    }
+
+    [Fact]
+    public void Knca_LoadsWireAtReferencePhotocell_AndBetweenStrapsOfSamePattern()
+    {
+        // Linea a una legatrice: 3 legature sequenziali dello stesso pattern
+        var e = RunChecked(SampleProjects.CreateSingleStrapperLine().Also(p => p.Infeed.PackageCount = 2));
+        Assert.True(e.CompletedNormally, Diag(e));
+        var l1 = e.Strappers.Single();
+        // 2 pacchi × 3 legature: carica filo all'arrivo (2) + tra le legature dello stesso pattern (2 × 2)
+        Assert.Equal(6, l1.ArmingCycles);
+        Assert.Equal(6, l1.CompletedCycles);
+        var loads = e.Events.Where(x => x.Type == SimEventType.StrapperPhase && x.ComponentId == "L1" && x.Message.Contains("carica del filo")).ToList();
+        Assert.Contains(loads, x => x.Message.Contains("fotocellula"));
+        Assert.Contains(loads, x => x.Message.Contains("legatura successiva"));
+        // A pattern concluso non si riarma: a fine prova la KNCA non è armata
+        Assert.False(l1.IsArmed);
+    }
+
+    [Fact]
+    public void Sma_IsAlwaysArmed_WithStrapAndRearmTimes()
+    {
+        var p = Full(x =>
+        {
+            x.Infeed.PackageCount = 2;
+            foreach (var s in x.Strappers) s.MachineType = StrapperMachineType.SMA;
+            foreach (var t in x.PackageTypes) t.BindingType = BindingType.SteelStrap;
+        });
+        Assert.All(p.Strappers, s => { Assert.Equal(10.0, s.StrappingTimeS); Assert.Equal(5.0, s.ArmingTimeS); Assert.Equal("Sund Birsta SMA", s.Model); });
+        var e = RunChecked(p);
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
+        // Riarmo automatico dopo ogni ciclo: a fine prova tutte le SMA sono armate
+        Assert.All(e.Strappers, s => Assert.True(s.IsArmed, s.Id));
+        Assert.Contains(e.Events, x => x.Type == SimEventType.StrapperPhase && x.Message.Contains("riarmo automatico"));
+        // Ciclo di reggettatura di 10 s
+        var l1 = e.Recorder.Tracks.Single(t => t.Key == "STR:L1").Segments.Where(s => s.State == CycleState.Working).ToList();
+        Assert.NotEmpty(l1);
+        Assert.All(l1, s => Assert.InRange(s.DurationS, 10 - 2 * e.Dt, 10 + 2 * e.Dt));
+    }
+
+    [Fact]
+    public void BindingType_RequiresMatchingMachine()
+    {
+        var p = Full(x => x.PackageTypes[0].BindingType = BindingType.SteelStrap);
+        Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_TYPE");
     }
 
     [Fact]
@@ -470,7 +601,7 @@ public class ProcessLogicTests
         var e = new SimulationEngine(Full(x => x.Infeed.PackageCount = 2));
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, Diag(e));
-        foreach (var key in new[] { "KNOF", "CMP", "SMA", "STOP:FM1", "SCALE:B1", "SCALE:B2", "STR:L1" })
+        foreach (var key in new[] { "KNOF", "CMP", "STOP:FM1", "SCALE:B1", "SCALE:B2", "STR:L1" })
             Assert.Contains(e.Recorder.Tracks, t => t.Key == key);
         // Per ogni fotogramma lo stato del bilico registrato nel ciclogramma coincide con quello del fotogramma 3D
         var track = e.Recorder.Tracks.Single(t => t.Key == "SCALE:B2");

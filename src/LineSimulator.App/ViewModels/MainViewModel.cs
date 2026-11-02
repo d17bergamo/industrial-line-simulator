@@ -21,7 +21,7 @@ namespace LineSimulator.App.ViewModels;
 
 public sealed record ExampleItem(string Name, Func<LineProject> Factory);
 
-public sealed class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ProjectRepository _repo = new();
     private readonly DispatcherTimer _timer;

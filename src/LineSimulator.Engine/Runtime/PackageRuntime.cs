@@ -78,6 +78,8 @@ public sealed class PackageRuntime
     public double? IdentifiedTimeS { get; internal set; }
     public double? MeasuredLengthM { get; internal set; }
     internal double EntryTrackStartHeadM;
+    /// <summary>Riferito all'encoder di legatura (testa rilevata dalla fotocellula di riferimento).</summary>
+    public bool EncoderReferenced { get; internal set; }
 
     // Rigetto
     public bool RejectRequested { get; internal set; }

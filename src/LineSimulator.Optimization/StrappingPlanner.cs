@@ -31,13 +31,19 @@ public static class StrappingPlanner
         // Il tempo di fermata diventa: pre + max_i(prep_i + leg_i + max(rit_i, post)), equivalente a cicli "efficaci"
         // per legatrice: (prep_i + pre) + leg_i + max(rit_i, post). L'ottimizzatore esatto resta invariato.
         var (pre, post) = StopOverhead(project);
+        // Un solo tipo di legatura per pacco: filo → KNCA, reggia d'acciaio → SMA
+        var machine = type.BindingType == BindingType.SteelStrap ? StrapperMachineType.SMA : StrapperMachineType.KNCA;
         var specs = project.Strappers
             .Select((s, i) => (s, i))
-            .Where(x => x.s.IsEnabled)
+            .Where(x => x.s.IsEnabled && x.s.MachineType == machine)
             .Select(x => new StrapperSpec(x.s.Id, x.s.Name, x.i, Units.MmToM(x.s.PositionMm),
                 x.s.PreparationTimeS + pre, x.s.StrappingTimeS, Math.Max(x.s.ReturnTimeS, post), x.s.AllowCombinedWork))
             .ToList();
-        if (specs.Count == 0) { error = "nessuna legatrice abilitata"; return null; }
+        if (specs.Count == 0)
+        {
+            error = machine == StrapperMachineType.SMA ? "nessuna reggettatrice SMA abilitata per un pacco con reggia" : "nessuna legatrice KNCA abilitata per un pacco legato a filo";
+            return null;
+        }
         double L = Units.MmToM(type.LengthMm);
         double headMin = zone.StartM + L, headMax = zone.EndM;
         // Il pacco deve trovarsi sotto stringifascio e compattatore a ogni fermata: H − L ≤ X ≤ H

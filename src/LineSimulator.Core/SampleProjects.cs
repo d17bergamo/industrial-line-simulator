@@ -9,7 +9,7 @@ public static class SampleProjects
     {
         ("Linea standard - 3 legatrici", CreateStandardLine),
         ("Linea con 1 legatrice", CreateSingleStrapperLine),
-        ("Linea completa - SMA, KNOF, compattatore, fermi, bilici", CreateFullProcessLine)
+        ("Linea completa - KNCA, KNOF, compattatore, fermi, bilici", CreateFullProcessLine)
     };
 
     /// <summary>
@@ -18,7 +18,16 @@ public static class SampleProjects
     /// → M4 uscita con stopper a 55 m e trasferitore sotto il pacco in battuta.
     /// Pacco 12 m / 3000 kg con legature a 1500, 6000, 10500 mm dalla testa.
     /// </summary>
-    public static LineProject CreateStandardLine()
+    public static LineProject CreateStandardLine() => Complete(BuildStandardLine());
+
+    /// <summary>Completa l'esempio con i sensori di processo obbligatori (aggiunti in automatico).</summary>
+    private static LineProject Complete(LineProject p)
+    {
+        ProjectNormalizer.EnsureProcessSensors(p);
+        return p;
+    }
+
+    private static LineProject BuildStandardLine()
     {
         var p = new LineProject { Name = "Linea standard - 3 legatrici", Description = "Linea di esempio con accumulo, stazione di legatura a 3 legatrici, stopper e trasferitore." };
 
@@ -74,7 +83,7 @@ public static class SampleProjects
     /// <summary>Variante con una sola legatrice e zona di legatura più lunga (22 m).</summary>
     public static LineProject CreateSingleStrapperLine()
     {
-        var p = CreateStandardLine();
+        var p = BuildStandardLine();
         p.ProjectId = Guid.NewGuid().ToString("N");
         p.Name = "Linea con 1 legatrice";
         p.Description = "Una sola legatrice: legature eseguite in sequenza con riposizionamento del pacco.";
@@ -94,33 +103,33 @@ public static class SampleProjects
         p.Strappers.Add(Str("L1", "Legatrice 1", 37000));
         p.Stopper.PositionMm = 61000;
         p.Transfer.PositionMm = 49000;
-        return p;
+        return Complete(p);
     }
 
     /// <summary>
     /// Linea completa con tutte le logiche di processo:
-    /// M1 ingresso (0-13 m, fotocellula di ingresso FC0) → M2 rigettatrice SMA (13-27 m)
+    /// M1 ingresso (0-13 m, fotocellula di ingresso FC0) → M2 trasporto (13-27 m)
     /// → M3 legatura con stringifascio KNOF, compattatore laterale e 3 legatrici KNCA 7/800 (27-43 m)
     /// → M4 accumulo/trasferitore 12,5 m con fermo intermedio (intestatura di testa) e stopper finale
     /// → trasferitore a 2 pacchi → 2 bilici di pesatura.
-    /// Pacchi misti 6 m / 6 m / 12 m / 4 m; il pacco n. 5 viene rigettato.
+    /// Pacchi misti 6 m / 6 m / 12 m / 4 m.
     /// </summary>
     public static LineProject CreateFullProcessLine()
     {
         var p = new LineProject
         {
-            Name = "Linea completa - SMA, KNOF, compattatore, fermi, bilici",
-            Description = "Fotocellula di ingresso, arresto automatico inverter, rigettatrice SMA, stringifascio KNOF, compattatore, legatrici KNCA 7/800, accumulo 12 m con fermo intermedio, trasferitore a 2 pacchi e bilici."
+            Name = "Linea completa - KNCA, KNOF, compattatore, fermi, bilici",
+            Description = "Fotocellula di ingresso, arresto automatico inverter, stringifascio KNOF, compattatore, legatrici KNCA 7/800, accumulo 12 m con fermo intermedio, trasferitore a 2 pacchi e bilici."
         };
 
         p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
-        p.Sections.Add(Mod("M2", "Modulo 2 - Rigettatrice SMA", 13000, 14000));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Trasporto", 13000, 14000));
         p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 27000, 16000));
         p.Sections.Add(Mod("M4", "Modulo 4 - Accumulo trasferitore", 43000, 14000));
 
         p.Photocells.Add(Entry());
         p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo SMA", 25500, "M2", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 25500, "M2", PhotocellAction.Accumulation));
         p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 41500, "M3", PhotocellAction.Accumulation));
         p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 54500, "M4", PhotocellAction.SlowDown));
         p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 56300, "", PhotocellAction.None));
@@ -132,16 +141,17 @@ public static class SampleProjects
         {
             IsEnabled = true, InverterId = "M3", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic
         };
-        p.BundleClamp = new BundleClampConfig { IsEnabled = true, PositionMm = 30800, CloseTimeS = 1.5, HoldTimeS = 0.5, OpenTimeS = 1.5 };
+        // Tempi di default da documento: KNOF chiusura/apertura 2 s, compattatore 3 s
+        p.BundleClamp = new BundleClampConfig { IsEnabled = true, PositionMm = 30800, HoldTimeS = 0.5 };
         p.Compactor = new SideCompactorConfig
         {
-            IsEnabled = true, PositionMm = 32200, JawLengthMm = 1500, CloseTimeS = 2.0, HoldTimeS = 1.0, OpenTimeS = 1.5,
-            OpenPhase = CompactorOpenPhase.AfterStrapping
+            IsEnabled = true, PositionMm = 32200, JawLengthMm = 1500, HoldTimeS = 1.0, OpenPhase = CompactorOpenPhase.AfterStrapping
         };
+        // Rigettatrice generica (scarto): presente ma disabilitata; la SMA è una reggettatrice
         p.Rejector = new RejectorConfig
         {
-            IsEnabled = true, PositionMm = 14500, LengthMm = 12000, Side = LateralSide.Left, StrokeMm = 1800,
-            EjectTimeS = 3, ReturnTimeS = 3, RestartDelayS = 1, RejectPackageNumbers = "5"
+            IsEnabled = false, PositionMm = 14500, LengthMm = 12000, Side = LateralSide.Left, StrokeMm = 1800,
+            EjectTimeS = 3, ReturnTimeS = 3, RestartDelayS = 1
         };
 
         p.Stopper = new StopperConfig
@@ -173,7 +183,7 @@ public static class SampleProjects
             WeightOverrides = "2=1480; 6=1525"
         };
         p.Simulation = new SimulationSettings();
-        return p;
+        return Complete(p);
     }
 
     private static PhotocellConfig Entry() => new()
@@ -195,8 +205,9 @@ public static class SampleProjects
         Id = id, Name = name, PositionMm = pos, ControlledInverterId = inv, Action = action, ResponseTimeMs = 20
     };
 
+    /// <summary>Legatrice KNCA 7/800 con i tempi di default (carica filo 3 s, ciclo di legatura 11,5 s).</summary>
     private static StrapperConfig Str(string id, string name, double pos) => new()
     {
-        Id = id, Name = name, PositionMm = pos, FootprintLengthMm = 1200, PreparationTimeS = 2, StrappingTimeS = 8, ReturnTimeS = 2
+        Id = id, Name = name, PositionMm = pos, FootprintLengthMm = 1200
     };
 }

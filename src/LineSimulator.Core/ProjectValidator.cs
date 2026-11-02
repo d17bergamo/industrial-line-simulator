@@ -119,7 +119,16 @@ public static class ProjectValidator
     private static void ValidateZones(LineProject p, LineTopology topo, ValidationReport r)
     {
         foreach (var z in topo.Zones.Where(z => !z.IsContiguous))
-            r.Error("ZONE_SPLIT", "Le sezioni di un inverter devono essere contigue (zona unica).", z.Id);
+            r.Error("ZONE_SPLIT", "I moduli di una zona di comando (stesso inverter) devono essere contigui.", z.Id);
+        foreach (var z in topo.Zones.Where(z => z.Sections.Count > 1))
+        {
+            var a = z.Sections[0];
+            foreach (var b in z.Sections.Skip(1))
+                if (b.HighSpeed != a.HighSpeed || b.LowSpeed != a.LowSpeed || b.Acceleration != a.Acceleration || b.Deceleration != a.Deceleration)
+                    r.Warn("ZONE_DRIVE", $"Il modulo {b.Id} ha parametri di azionamento diversi da {a.Id}: la zona {z.Id} usa quelli di {a.Id} (un solo inverter).", b.Id);
+            if (p.Sections.Any(s => s.Id == z.Id && !z.Sections.Contains(s)))
+                r.Error("ZONE_ID", $"L'ID di zona {z.Id} coincide con quello di un modulo di un'altra zona.", z.Id);
+        }
         for (int i = 1; i < topo.Zones.Count; i++)
             if (topo.Zones[i].StartM < topo.Zones[i - 1].EndM - 1e-6)
                 r.Error("ZONE_INTERLEAVE", $"Le zone {topo.Zones[i - 1].Id} e {topo.Zones[i].Id} si intrecciano.", topo.Zones[i].Id);
@@ -224,8 +233,8 @@ public static class ProjectValidator
         if (topo.StopperZone != null)
         {
             var inv = topo.StopperZone.Inverter;
-            bool slowed = p.Photocells.Any(pc => pc.ControlledInverterId == inv.Id && pc.Action == PhotocellAction.SlowDown)
-                       || p.Rules.Any(rule => rule.IsEnabled && rule.TargetInverterId == inv.Id && rule.Action == RuleAction.SetLowSpeed)
+            bool slowed = p.Photocells.Any(pc => topo.ResolveZoneId(pc.ControlledInverterId) == inv.Id && pc.Action == PhotocellAction.SlowDown)
+                       || p.Rules.Any(rule => rule.IsEnabled && topo.ResolveZoneId(rule.TargetInverterId) == inv.Id && rule.Action == RuleAction.SetLowSpeed)
                        || inv.DefaultSpeed == SpeedLevel.Low;
             double approach = slowed ? inv.LowSpeed : inv.HighSpeed;
             if (approach > stp.MaxImpactSpeed + 1e-9)
@@ -262,7 +271,7 @@ public static class ProjectValidator
     {
         foreach (var rule in p.Rules.Where(x => x.IsEnabled))
         {
-            if (rule.Action != RuleAction.SetSignal && !p.Sections.Any(i => i.Id == rule.TargetInverterId))
+            if (rule.Action != RuleAction.SetSignal && !ZoneOrModuleExists(p, rule.TargetInverterId))
                 r.Error("RULE_TARGET", $"Modulo destinazione '{rule.TargetInverterId}' non trovato.", rule.Id);
             if (rule.Action == RuleAction.SetSignal && string.IsNullOrWhiteSpace(rule.SignalName))
                 r.Error("RULE_SIGNAL", "Nome segnale mancante.", rule.Id);
@@ -281,11 +290,11 @@ public static class ProjectValidator
             case NotCondition n: foreach (var m in CheckCondition(p, n.Child)) yield return m; break;
             case PhotocellCondition pc when !p.Photocells.Any(x => x.Id == pc.PhotocellId):
                 yield return $"Fotocellula '{pc.PhotocellId}' non trovata."; break;
-            case InverterRunningCondition ir when !p.Sections.Any(x => x.Id == ir.InverterId):
+            case InverterRunningCondition ir when !ZoneOrModuleExists(p, ir.InverterId):
                 yield return $"Modulo '{ir.InverterId}' non trovato."; break;
-            case ZoneOccupiedCondition zo when !p.Sections.Any(x => x.Id == zo.InverterId):
+            case ZoneOccupiedCondition zo when !ZoneOrModuleExists(p, zo.InverterId):
                 yield return $"Modulo '{zo.InverterId}' non trovato."; break;
-            case GapAheadLessThanCondition g when !p.Sections.Any(x => x.Id == g.InverterId):
+            case GapAheadLessThanCondition g when !ZoneOrModuleExists(p, g.InverterId):
                 yield return $"Modulo '{g.InverterId}' non trovato."; break;
             case StrapperBusyCondition sb when !p.Strappers.Any(x => x.Id == sb.StrapperId):
                 yield return $"Legatrice '{sb.StrapperId}' non trovata."; break;
@@ -304,9 +313,12 @@ public static class ProjectValidator
         if (s.DeadlockTimeoutS <= 0) r.Error("SIM_DEADLOCK", "Timeout deadlock deve essere > 0.");
     }
 
+    private static bool ZoneOrModuleExists(LineProject p, string id) =>
+        !string.IsNullOrEmpty(id) && p.Sections.Any(s => s.Id == id || s.EffectiveZoneId == id);
+
     private static HashSet<string> DeviceIds(LineProject p)
     {
-        var ids = new HashSet<string>(p.Strappers.Select(x => x.Id)) { p.Stopper.Id, p.Transfer.Id };
+        var ids = new HashSet<string>(p.Strappers.Select(x => x.Id)) { p.Stopper.Id, p.Transfer.Id, "STATION" };
         if (p.BundleClamp.IsEnabled) ids.Add(p.BundleClamp.Id);
         if (p.Compactor.IsEnabled) ids.Add(p.Compactor.Id);
         if (p.Rejector.IsEnabled) ids.Add(p.Rejector.Id);
@@ -466,5 +478,62 @@ public static class ProjectValidator
 
         try { ProcessText.ParseWeights(p.Infeed.WeightOverrides); }
         catch (FormatException ex) { r.Error("INF_WEIGHT", ex.Message); }
+
+        ValidateDrivesAndSensors(p, topo, r);
+    }
+
+    /// <summary>Arresto automatico/ripartenza per fotocellula, sensori di processo, tipo di legatura e macchine.</summary>
+    private static void ValidateDrivesAndSensors(LineProject p, LineTopology topo, ValidationReport r)
+    {
+        var pcs = p.Photocells.Where(x => x.IsEnabled).ToList();
+        foreach (var z in topo.Zones)
+        {
+            if (!z.Inverter.AutoStopWhenEmpty) continue;
+            var own = pcs.Where(x => Units.MmToM(x.PositionMm) >= z.StartM - 1e-9 && Units.MmToM(x.PositionMm) <= z.EndM + 1e-9).ToList();
+            if (own.Count == 0)
+                r.Warn("ZONE_NO_PC", $"Zona {z.Id} senza fotocellule: l'arresto automatico (corsa a vuoto pari alla lunghezza) non può rilevare i pacchi.", z.Id);
+            var restart = pcs.Where(x => Units.MmToM(x.PositionMm) < z.StartM - 1e-9).OrderByDescending(x => x.PositionMm).FirstOrDefault();
+            var up = topo.Upstream(z);
+            if (restart != null && up != null)
+            {
+                double dist = z.StartM - Units.MmToM(restart.PositionMm);
+                double tAcc = z.Inverter.Acceleration > 0 ? z.Inverter.HighSpeed / z.Inverter.Acceleration : 0;
+                double need = up.Inverter.HighSpeed * (tAcc + Units.MsToS(restart.ResponseTimeMs));
+                if (dist < need - 1e-9)
+                    r.Warn("ZONE_RESTART", $"Fotocellula di ripartenza {restart.Id} a {F(dist * 1000)} mm dall'inizio della zona {z.Id}: servono {F(need * 1000)} mm perché la zona sia a velocità all'arrivo del pacco.", z.Id);
+            }
+        }
+        if (!p.Photocells.Any(x => x.Purpose == PhotocellPurpose.TransferStop))
+            r.Warn("PC_TRF_STOP", $"Manca la fotocellula di arresto davanti al trasferitore (distanza consigliata {F(ProjectNormalizer.TransferStopDistanceMm(p))} mm).", p.Transfer.Id);
+        foreach (var t in p.Photocells.Where(x => x.Purpose == PhotocellPurpose.TransferStop))
+        {
+            double d = p.Transfer.PositionMm - t.PositionMm;
+            if (d < ProjectNormalizer.TransferStopDistanceMm(p) - 1)
+                r.Warn("PC_TRF_DIST", $"Fotocellula di arresto a {F(d)} mm dal trasferitore: la regola richiede almeno {F(ProjectNormalizer.TransferStopDistanceMm(p))} mm (1,5 s × velocità massima + margine).", t.Id);
+            if (topo.Zone(t.ControlledInverterId) == null)
+                r.Error("PC_TRF_ZONE", $"Fotocellula di arresto davanti al trasferitore senza zona comandata valida ('{t.ControlledInverterId}').", t.Id);
+        }
+        var first = ProjectNormalizer.FirstStrappingMachine(p);
+        if (first != null)
+        {
+            var refPc = p.Photocells.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingReference);
+            if (refPc == null || !p.StrappingEncoder.IsEnabled)
+                r.Warn("ENC_MISSING", "Manca l'encoder incrementale con la fotocellula di riferimento prima della prima macchina di legatura.");
+            else
+            {
+                if (refPc.PositionMm >= p.StrappingEncoder.PositionMm)
+                    r.Warn("ENC_ORDER", "La fotocellula di riferimento deve trovarsi prima (a monte) dell'encoder.", refPc.Id);
+                if (p.StrappingEncoder.PositionMm >= first.PositionMm)
+                    r.Warn("ENC_POS", $"L'encoder deve trovarsi a monte della prima macchina di legatura {first.Id}.", p.StrappingEncoder.Id);
+            }
+            foreach (var s in p.Strappers)
+                if (s.ArmingTimeS < 0) r.Error("STR_ARM", "Tempo di carica filo / riarmo negativo.", s.Id);
+            foreach (var t in p.PackageTypes.Where(t => t.StrapPositionsMm.Count > 0))
+            {
+                var need = t.BindingType == BindingType.SteelStrap ? StrapperMachineType.SMA : StrapperMachineType.KNCA;
+                if (!p.Strappers.Any(s => s.IsEnabled && s.MachineType == need))
+                    r.Error("STR_TYPE", $"Il pacco {t.Id} richiede {(need == StrapperMachineType.SMA ? "reggettature (SMA)" : "legature a filo (KNCA)")}, ma nella stazione non c'è una macchina di quel tipo abilitata.", t.Id);
+            }
+        }
     }
 }

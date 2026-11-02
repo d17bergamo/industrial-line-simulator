@@ -27,6 +27,8 @@ public sealed class PhotocellRuntime
     private double? _pendingSince;
 
     public bool IsEntry => Config.IsEntryPhotocell;
+    /// <summary>Zona di comando a cui si riferisce l'azione della fotocellula (ID di zona o di modulo risolto).</summary>
+    public string ControlledZoneId { get; internal set; } = string.Empty;
     /// <summary>Fronte di salita dell'uscita nella scansione corrente (arrivo testa pacco).</summary>
     public bool RoseThisScan { get; private set; }
     /// <summary>Fronte di discesa dell'uscita nella scansione corrente (uscita completa / passaggio coda).</summary>
@@ -70,6 +72,13 @@ public sealed class PhotocellRuntime
     public int Activations { get; internal set; }
 }
 
+public enum StrapperArmState
+{
+    Unarmed,
+    Arming,
+    Armed
+}
+
 public enum StrapperState
 {
     Idle,
@@ -86,7 +95,11 @@ public sealed class StrapperRuntime
         Config = config;
         Index = index;
         PositionM = config.PositionMm / 1000.0;
+        // La reggettatrice SMA è sempre armata; la KNCA carica il filo all'arrivo del pacco.
+        ArmState = config.MachineType == StrapperMachineType.SMA || config.ArmingTimeS <= 0 ? StrapperArmState.Armed : StrapperArmState.Unarmed;
     }
+
+    public bool IsSma => Config.MachineType == StrapperMachineType.SMA;
 
     public StrapperConfig Config { get; }
     public int Index { get; }
@@ -103,6 +116,33 @@ public sealed class StrapperRuntime
     public double BusyTimeS { get; internal set; }
     public int CompletedCycles { get; private set; }
     public int CyclesStarted { get; private set; }
+
+    /// <summary>Carica del filo (KNCA) / riarmo (SMA): la macchina può legare solo se armata.</summary>
+    public StrapperArmState ArmState { get; private set; }
+    public double ArmElapsedS { get; private set; }
+    public bool IsArmed => ArmState == StrapperArmState.Armed;
+    public int ArmingCycles { get; private set; }
+
+    /// <summary>Avvia la carica del filo / il riarmo (se non già armata o in carica).</summary>
+    internal bool BeginArming()
+    {
+        if (ArmState != StrapperArmState.Unarmed) return false;
+        ArmingCycles++;
+        if (Config.ArmingTimeS <= 0) { ArmState = StrapperArmState.Armed; return true; }
+        ArmState = StrapperArmState.Arming;
+        ArmElapsedS = 0;
+        return true;
+    }
+
+    /// <summary>Avanza la carica del filo; true quando la macchina diventa armata.</summary>
+    internal bool AdvanceArming(double dt)
+    {
+        if (ArmState != StrapperArmState.Arming) return false;
+        ArmElapsedS += dt;
+        if (ArmElapsedS < Config.ArmingTimeS - 1e-9) return false;
+        ArmState = StrapperArmState.Armed;
+        return true;
+    }
 
     /// <summary>Stato funzionale KNCA 7/800 calcolato dal motore a ogni scansione.</summary>
     public StrapperProcessState ProcessState { get; internal set; } = StrapperProcessState.Available;
@@ -124,6 +164,7 @@ public sealed class StrapperRuntime
         State = StrapperState.Preparing;
         PhaseElapsedS = 0;
         CyclesStarted++;
+        ArmState = StrapperArmState.Unarmed; // il filo/la reggia caricati vengono consumati dal ciclo
         if (Config.SimulatedFaultAtCycle > 0 && CyclesStarted == Config.SimulatedFaultAtCycle)
         {
             Faulted = true;
