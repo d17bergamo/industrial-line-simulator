@@ -712,7 +712,7 @@ public sealed class MainViewModel : ObservableObject
             Id = NextId("T", AllComponents()), Name = src.Name + " (copia)", LengthMm = src.LengthMm, WeightKg = src.WeightKg,
             Accumulation = src.Accumulation, Heading = src.Heading, GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
             StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
-            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm, StopId = src.StopId
+            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm
         };
         _project.PackageTypes.Add(t);
         ProjectChanged(structural: true);
