@@ -14,13 +14,20 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
 
+    /// <summary>Vista 3D della sezione aperta (layout o simulazioni).</summary>
+    private HelixToolkit.Wpf.HelixViewport3D ActiveViewport => _vm.CurrentSection == AppSection.Layout ? LayoutViewport : Viewport;
+    private Rendering.LineScene ActiveScene => _vm.CurrentSection == AppSection.Layout ? _vm.LayoutScene : _vm.Scene;
+
     public MainWindow()
     {
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
         Viewport.Children.Add(_vm.Scene.Visual);
+        LayoutViewport.Children.Add(_vm.LayoutScene.Visual);
         _vm.SceneRebuilt += () => Dispatcher.BeginInvoke(new Action(() => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1))));
+        _vm.SectionOpened += _ => Dispatcher.BeginInvoke(new Action(() => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1))),
+            System.Windows.Threading.DispatcherPriority.Loaded);
         LegendList.ItemsSource = CyclogramControl.Legend.Select(x => new { x.Label, x.Brush }).ToList();
 
         InputBindings.Add(new KeyBinding(_vm.PlayCommand, Key.F5, ModifierKeys.None));
@@ -43,37 +50,42 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Selezione diretta di un componente nel modello 3D.</summary>
-    private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => PickAt(Viewport, _vm.Scene, e);
+    private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => PickAt(LayoutViewport, _vm.LayoutScene, e);
+
+    private void PickAt(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
-        var vp = Viewport.Viewport;
+        var vp = viewport.Viewport;
         var pt = e.GetPosition(vp);
         if (VisualTreeHelper.HitTest(vp, pt) is RayMeshGeometry3DHitTestResult hit && hit.ModelHit != null)
         {
-            var obj = _vm.Scene.Pick(hit.ModelHit);
+            var obj = scene.Pick(hit.ModelHit);
             if (obj != null) _vm.SelectModel(obj);
         }
     }
 
     private void SetView(Vector3D direction, Vector3D up)
     {
-        var b = _vm.Scene.Bounds;
+        var b = ActiveScene.Bounds;
         if (b.IsEmpty) return;
         var center = new Point3D(b.X + b.SizeX / 2, b.Y + b.SizeY / 2, b.Z + b.SizeZ / 2);
         double dist = Math.Max(Math.Max(b.SizeX, b.SizeY), 10) * 1.1;
         direction.Normalize();
         var look = direction * dist;
-        var cam = Viewport.Camera;
+        var viewport = ActiveViewport;
+        var cam = viewport.Camera;
         if (cam == null) return;
         cam.Position = center - look;
         cam.LookDirection = look;
         cam.UpDirection = up;
-        Viewport.ZoomExtents(300);
+        viewport.ZoomExtents(300);
     }
 
     private void ViewTop_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0, 0, -1), new Vector3D(0, 1, 0));
-    private void ViewSide_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0, 1, 0), new Vector3D(0, 0, 1));
+    private void ViewSide_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(1, 0, 0), new Vector3D(0, 0, 1));
+    private void ViewFront_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0, 1, 0), new Vector3D(0, 0, 1));
     private void ViewIso_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
-    private void ViewFit_Click(object sender, RoutedEventArgs e) => Viewport.ZoomExtents(300);
+    private void ViewFit_Click(object sender, RoutedEventArgs e) => ActiveViewport.ZoomExtents(300);
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Play_Click(object sender, RoutedEventArgs e) => Cyclogram.FollowCursor = true;

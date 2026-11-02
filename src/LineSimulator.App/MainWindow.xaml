@@ -12,11 +12,54 @@
         <mvvm:NullToCollapsedConverter x:Key="NullVis"/>
         <mvvm:RatioToWidthConverter x:Key="RatioWidth"/>
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
+                                    <DataTemplate x:Key="PropEditor" DataType="{x:Type vm:PropertyItemViewModel}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="0.55*"/>
+                                            <ColumnDefinition Width="0.45*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="{Binding Name}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding TextValue, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsReadOnly}"
+                                                 Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Text}" KeyDown="PropertyBox_KeyDown"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding BoolValue}" IsEnabled="{Binding IsEditable}" VerticalAlignment="Center"
+                                                  Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Bool}"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding Options}" SelectedItem="{Binding ChoiceValue}" IsEnabled="{Binding IsEditable}"
+                                                  Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Choice}"/>
+                                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Error}" Foreground="#C0392B" TextWrapping="Wrap"
+                                                   Visibility="{Binding Error, Converter={StaticResource NullVis}}"/>
+                                    </Grid>
+                                </DataTemplate>
+        <Style x:Key="HomeTile" TargetType="Button">
+            <Setter Property="Width" Value="330"/>
+            <Setter Property="Height" Value="250"/>
+            <Setter Property="Margin" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Tile" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="2" CornerRadius="10" Padding="18">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="Tile" Property="Background" Value="#F0F6FC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <DockPanel>
         <!-- Menu -->
         <Menu DockPanel.Dock="Top" Background="White">
+            <MenuItem Header="_Home" Command="{Binding GoHomeCommand}"/>
             <MenuItem Header="_File">
                 <MenuItem Header="_Nuovo progetto" Command="{Binding NewCommand}"/>
                 <MenuItem Header="_Apri..." Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"/>
@@ -56,10 +99,49 @@
                 <MenuItem Header="Esegui fino al termine" Command="{Binding RunToEndCommand}"/>
             </MenuItem>
         </Menu>
-
+        <!-- Barra di stato -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource HeaderBg}">
+            <DockPanel Margin="8,3">
+                <TextBlock DockPanel.Dock="Right" Foreground="#BDC3C7" Text="Strumento di progettazione - non è un sistema di sicurezza certificato"/>
+                <TextBlock Foreground="White" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </Border>
+        <Grid>
+            <Grid Background="{StaticResource PanelBg}" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="Industrial Line Simulator" FontSize="34" FontWeight="SemiBold" Foreground="#26323D" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding Project.Name}" FontSize="15" Foreground="#5A6672" HorizontalAlignment="Center" Margin="0,4,0,24"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Style="{StaticResource HomeTile}" Command="{Binding GoSectionCommand}" CommandParameter="Layout">
+                        <StackPanel>
+                            <Path Data="M4,52 L92,52 L92,64 L4,64 Z M18,52 L18,64 M34,52 L34,64 M50,52 L50,64 M66,52 L66,64 M80,52 L80,64 M28,10 L68,10 L68,44 L28,44 Z" Stroke="{StaticResource Accent}" StrokeThickness="3" StrokeLineJoin="Round" Width="96" Height="72" Stretch="Uniform" HorizontalAlignment="Center"/>
+                            <TextBlock Text="IMPOSTA LAYOUT" FontSize="22" FontWeight="SemiBold" Foreground="#26323D" HorizontalAlignment="Center" Margin="0,16,0,6"/>
+                            <TextBlock Text="Progettazione geometrica della linea industriale." TextWrapping="Wrap" TextAlignment="Center" Foreground="#5A6672" FontSize="14" MaxWidth="260"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource HomeTile}" Command="{Binding GoSectionCommand}" CommandParameter="Packages">
+                        <StackPanel>
+                            <Path Data="M8,20 L48,4 L88,20 L88,52 L48,68 L8,52 Z M8,20 L48,36 L88,20 M48,36 L48,68" Stroke="{StaticResource Accent}" StrokeThickness="3" StrokeLineJoin="Round" Width="96" Height="72" Stretch="Uniform" HorizontalAlignment="Center"/>
+                            <TextBlock Text="CARATTERISTICHE PACCHI" FontSize="22" FontWeight="SemiBold" Foreground="#26323D" HorizontalAlignment="Center" Margin="0,16,0,6"/>
+                            <TextBlock Text="Definizione delle tipologie di pacchi da utilizzare nelle simulazioni." TextWrapping="Wrap" TextAlignment="Center" Foreground="#5A6672" FontSize="14" MaxWidth="260"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource HomeTile}" Command="{Binding GoSectionCommand}" CommandParameter="Simulations">
+                        <StackPanel>
+                            <Path Data="M48,4 A32,32 0 1 0 48.01,4 Z M38,22 L68,36 L38,50 Z" Stroke="{StaticResource Accent}" StrokeThickness="3" StrokeLineJoin="Round" Width="96" Height="72" Stretch="Uniform" HorizontalAlignment="Center"/>
+                            <TextBlock Text="SIMULAZIONI" FontSize="22" FontWeight="SemiBold" Foreground="#26323D" HorizontalAlignment="Center" Margin="0,16,0,6"/>
+                            <TextBlock Text="Visualizzazione 3D ed esecuzione delle simulazioni." TextWrapping="Wrap" TextAlignment="Center" Foreground="#5A6672" FontSize="14" MaxWidth="260"/>
+                        </StackPanel>
+                    </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+            <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Layout}">
         <!-- Barra strumenti -->
         <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
             <WrapPanel Margin="4,2">
+                <Button Style="{StaticResource ToolButton}" Content="⌂ Home" Command="{Binding GoHomeCommand}" FontWeight="SemiBold" ToolTip="Torna alla schermata iniziale"/>
+                <TextBlock Text="IMPOSTA LAYOUT" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="6,0,12,0"/>
                 <TextBlock Text="Aggiungi:" VerticalAlignment="Center" Margin="4,0" Foreground="#5A6672"/>
                 <Button Style="{StaticResource ToolButton}" Content="Modulo rulli" Command="{Binding AddSectionCommand}" ToolTip="Aggiungi un modulo di via a rulli (con il proprio inverter) in coda alla linea"/>
                 <Button Style="{StaticResource ToolButton}" Content="Fotocellula" Command="{Binding AddPhotocellCommand}"/>
@@ -71,24 +153,12 @@
                 <Button Style="{StaticResource ToolButton}" Content="Elimina" Command="{Binding DeleteCommand}" Foreground="#C0392B"/>
             </WrapPanel>
         </Border>
-
-        <!-- Barra di stato -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource HeaderBg}">
-            <DockPanel Margin="8,3">
-                <TextBlock DockPanel.Dock="Right" Foreground="#BDC3C7" Text="Strumento di progettazione - non è un sistema di sicurezza certificato"/>
-                <TextBlock Foreground="White" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
-            </DockPanel>
-        </Border>
-
-        <TabControl x:Name="Pages" BorderThickness="0" Padding="0">
-        <TabItem Header="Simulazione 3D">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="360" MinWidth="250"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="360" MinWidth="250"/>
+                        <ColumnDefinition Width="5"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
             <!-- Pannello laterale: albero + proprietà -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
@@ -97,26 +167,6 @@
                     <RowDefinition Height="3*"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0">
-                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="3">
-<WrapPanel>
-                <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
-                <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="■ Stop" Command="{Binding StopCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="⟲ Reset" Command="{Binding ResetCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="Passo" Command="{Binding StepCommand}" ToolTip="Avanza di un passo di integrazione"/>
-                <Button Style="{StaticResource ToolButton}" Content="Evento ▸" Command="{Binding NextEventCommand}" ToolTip="Avanza fino al prossimo evento"/>
-                <Button Style="{StaticResource ToolButton}" Content="Fino al termine ▸▸" Command="{Binding RunToEndCommand}"/>
-                <TextBlock Text="Velocità:" VerticalAlignment="Center" Margin="10,0,4,0"/>
-                <ComboBox Width="70" ItemsSource="{Binding Speeds}" SelectedItem="{Binding SpeedFactor}" VerticalAlignment="Center">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0}x}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                
-</WrapPanel>
-                </Border>
                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Struttura della linea"/>
                     <TreeView x:Name="LineTree" ItemsSource="{Binding Tree}" SelectedItemChanged="LineTree_SelectedItemChanged" BorderThickness="0">
                         <TreeView.ItemContainerStyle>
@@ -173,8 +223,117 @@
                     </ScrollViewer>
                 </DockPanel>
             </Grid>
-
-            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+                    <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                        <Grid>
+                            <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True"
+                                               PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" Background="White">
+                                <h:DefaultLights/>
+                            </h:HelixViewport3D>
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,70,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="3">
+                            <WrapPanel>
+                                <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
+                                <Button Style="{StaticResource ToolButton}" Content="Frontale" Click="ViewFront_Click"/>
+                                <Button Style="{StaticResource ToolButton}" Content="Laterale" Click="ViewSide_Click"/>
+                                <Button Style="{StaticResource ToolButton}" Content="Isometrica" Click="ViewIso_Click"/>
+                                <Button Style="{StaticResource ToolButton}" Content="Adatta" Click="ViewFit_Click"/>
+                            </WrapPanel>
+                        </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </DockPanel>
+            <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                    <WrapPanel Margin="4,2">
+                        <Button Style="{StaticResource ToolButton}" Content="⌂ Home" Command="{Binding GoHomeCommand}" FontWeight="SemiBold" ToolTip="Torna alla schermata iniziale"/>
+                        <TextBlock Text="CARATTERISTICHE PACCHI" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="6,0,12,0"/>
+                        <Button Style="{StaticResource ToolButton}" Content="Nuova tipologia" Command="{Binding NewPackageCommand}"/>
+                        <Button Style="{StaticResource ToolButton}" Content="Duplica" Command="{Binding DuplicatePackageCommand}"/>
+                        <Button Style="{StaticResource ToolButton}" Content="Elimina" Command="{Binding DeletePackageCommand}" Foreground="#C0392B"/>
+                        <TextBlock Text="Le tipologie sono indipendenti dal layout della linea." Foreground="#5A6672" VerticalAlignment="Center" Margin="12,0"/>
+                    </WrapPanel>
+                </Border>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" MinWidth="200"/>
+                        <ColumnDefinition Width="5"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="0" Background="White">
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Tipologie di pacco"/>
+                        <ListBox ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SelectedPackageType, Mode=TwoWay}" BorderThickness="0" FontSize="14"/>
+                    </DockPanel>
+                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+                    <DockPanel Grid.Column="2" Background="White">
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Caratteristiche della tipologia selezionata"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" Margin="8,0,8,8" MaxWidth="640" HorizontalAlignment="Left">
+                                <ItemsControl.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,10,0,2"/>
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ItemsControl.GroupStyle>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Grid>
+            </DockPanel>
+            <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Simulations}">
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                    <WrapPanel Margin="4,2" VerticalAlignment="Center">
+                        <Button Style="{StaticResource ToolButton}" Content="⌂ Home" Command="{Binding GoHomeCommand}" FontWeight="SemiBold" ToolTip="Torna alla schermata iniziale"/>
+                        <TextBlock Text="SIMULAZIONI" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="6,0,16,0"/>
+                        <TextBlock Text="Tipologia di pacco:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox Width="260" ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.TonnesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.CycleTimeMeanS, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
+                    </WrapPanel>
+                </Border>
+                <TabControl BorderThickness="0" Padding="0">
+                    <TabItem Header="Simulazione 3D">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280" MinWidth="200"/>
+                                <ColumnDefinition Width="5"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="0" Background="White">
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Stato delle apparecchiature"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding EquipmentStatus}" Margin="6,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding State}" FontWeight="SemiBold" Margin="8,0,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#26323D"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Alarm}" Value="True">
+                                                                <Setter Property="Foreground" Value="#C0392B"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
@@ -228,9 +387,9 @@
                     </DockPanel>
                 </Border>
             </Grid>
-        </Grid>
-        </TabItem>
-        <TabItem Header="Ciclogramma">
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="Ciclogramma e risultati">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="3*"/>
@@ -239,6 +398,26 @@
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
             <DockPanel Grid.Row="0">
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="3">
+<WrapPanel>
+                <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
+                <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="■ Stop" Command="{Binding StopCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="⟲ Reset" Command="{Binding ResetCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Content="Passo" Command="{Binding StepCommand}" ToolTip="Avanza di un passo di integrazione"/>
+                <Button Style="{StaticResource ToolButton}" Content="Evento ▸" Command="{Binding NextEventCommand}" ToolTip="Avanza fino al prossimo evento"/>
+                <Button Style="{StaticResource ToolButton}" Content="Fino al termine ▸▸" Command="{Binding RunToEndCommand}"/>
+                <TextBlock Text="Velocità:" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <ComboBox Width="70" ItemsSource="{Binding Speeds}" SelectedItem="{Binding SpeedFactor}" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0}x}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                
+</WrapPanel>
+                </Border>
                             <DockPanel DockPanel.Dock="Top" Margin="4,2">
                                 <Button DockPanel.Dock="Right" Content="Mostra tutto" Click="CycloFit_Click" Padding="6,1" Margin="2"/>
                                 <Button DockPanel.Dock="Right" Content="Segui cursore" Click="CycloFollow_Click" Padding="6,1" Margin="2"/>
@@ -435,7 +614,9 @@
                     </TabItem>
             </TabControl>
         </Grid>
-        </TabItem>
-        </TabControl>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </Grid>
     </DockPanel>
 </Window>

@@ -2,6 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace LineSimulator.Models;
 
+/// <summary>Modalità di gestione del pacco sull'accumulo.</summary>
+public enum AccumulationMode
+{
+    SingleBanking = 0,
+    DoubleBanking = 1
+}
+
 /// <summary>
 /// Tipologia di pacco. Obbligatori per i calcoli: lunghezza e peso.
 /// Larghezza e altezza sono solo grafiche.
@@ -13,6 +20,12 @@ public sealed class PackageType : ComponentBase
 
     [UiProperty("Peso pacco", "kg", "Dati", Order = 2)]
     public double WeightKg { get; set; } = 3000;
+
+    [UiProperty("Gestione sull'accumulo", "", "Accumulo e intestatura", Order = 3)]
+    public AccumulationMode Accumulation { get; set; } = AccumulationMode.SingleBanking;
+
+    [UiProperty("Intestatura", "", "Accumulo e intestatura", Order = 4)]
+    public StopReference Heading { get; set; } = StopReference.Head;
 
     [UiProperty("Larghezza grafica", "mm", "Grafica", Order = 10)]
     public double GraphicWidthMm { get; set; } = 600;

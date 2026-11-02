@@ -12,6 +12,7 @@ using LineSimulator.App.Mvvm;
 using LineSimulator.App.Rendering;
 using LineSimulator.Core;
 using LineSimulator.Engine;
+using LineSimulator.Engine.Runtime;
 using LineSimulator.Infrastructure;
 using LineSimulator.Models;
 using LineSimulator.Optimization;
@@ -20,6 +21,26 @@ using Microsoft.Win32;
 namespace LineSimulator.App.ViewModels;
 
 public sealed record ExampleItem(string Name, Func<LineProject> Factory);
+
+/// <summary>Sezioni principali dell'applicazione (un'unica finestra).</summary>
+public enum AppSection
+{
+    Home,
+    Layout,
+    Packages,
+    Simulations
+}
+
+/// <summary>Riga dello stato delle apparecchiature durante la simulazione.</summary>
+public sealed class EquipmentStatusRow : ObservableObject
+{
+    private string _state = string.Empty;
+    private bool _alarm;
+    public EquipmentStatusRow(string name) => Name = name;
+    public string Name { get; }
+    public string State { get => _state; set => Set(ref _state, value); }
+    public bool Alarm { get => _alarm; set => Set(ref _alarm, value); }
+}
 
 public sealed class MainViewModel : ObservableObject
 {
@@ -87,6 +108,20 @@ public sealed class MainViewModel : ObservableObject
         StepCommand = new RelayCommand(StepOnce, () => !IsPlaying);
         NextEventCommand = new RelayCommand(NextEvent, () => !IsPlaying);
         RunToEndCommand = new RelayCommand(RunToEnd, () => !IsPlaying);
+        GoHomeCommand = new RelayCommand(() => CurrentSection = AppSection.Home);
+        GoSectionCommand = new RelayCommand(p =>
+        {
+            if (p is AppSection sec || Enum.TryParse(p?.ToString(), out sec))
+            {
+                CurrentSection = sec;
+                SectionOpened?.Invoke(sec);
+            }
+        });
+        PackagePropertiesView = CollectionViewSource.GetDefaultView(PackageProperties);
+        PackagePropertiesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PropertyItemViewModel.Category)));
+        NewPackageCommand = new RelayCommand(NewPackage);
+        DuplicatePackageCommand = new RelayCommand(DuplicatePackage, () => SelectedPackageType != null);
+        DeletePackageCommand = new RelayCommand(DeletePackage, () => SelectedPackageType != null && _project.PackageTypes.Count > 1);
         SetSpeedCommand = new RelayCommand(p => { if (double.TryParse(p?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var s)) SpeedFactor = s; });
 
         LoadProject(_project, null);
@@ -95,6 +130,66 @@ public sealed class MainViewModel : ObservableObject
     // ------------------------------------------------------------ Proprietà bindabili
 
     public LineScene Scene { get; } = new();
+    /// <summary>Scena 3D della sezione Imposta layout (stesso progetto, senza pacchi in movimento).</summary>
+    public LineScene LayoutScene { get; } = new();
+
+    // ------------------------------------------------------------ Navigazione tra le sezioni
+
+    private AppSection _section = AppSection.Home;
+    public AppSection CurrentSection
+    {
+        get => _section;
+        set
+        {
+            if (!Set(ref _section, value)) return;
+            if (value != AppSection.Simulations) Pause();
+            Raise(nameof(SectionTitle));
+        }
+    }
+    public string SectionTitle => _section switch
+    {
+        AppSection.Layout => "IMPOSTA LAYOUT",
+        AppSection.Packages => "CARATTERISTICHE PACCHI",
+        AppSection.Simulations => "SIMULAZIONI",
+        _ => "Industrial Line Simulator"
+    };
+    public ICommand GoHomeCommand { get; private set; } = null!;
+    public ICommand GoSectionCommand { get; private set; } = null!;
+    /// <summary>La vista deve ri-inquadrare la scena della sezione appena aperta.</summary>
+    public event Action<AppSection>? SectionOpened;
+
+    // ------------------------------------------------------------ Caratteristiche pacchi
+
+    public ObservableCollection<PackageType> PackageTypes { get; } = new();
+    public ObservableCollection<PropertyItemViewModel> PackageProperties { get; } = new();
+    public ICollectionView PackagePropertiesView { get; private set; } = null!;
+    private PackageType? _selectedPackageType;
+    public PackageType? SelectedPackageType
+    {
+        get => _selectedPackageType;
+        set { if (Set(ref _selectedPackageType, value)) BuildPackageProperties(); }
+    }
+    public ICommand NewPackageCommand { get; private set; } = null!;
+    public ICommand DuplicatePackageCommand { get; private set; } = null!;
+    public ICommand DeletePackageCommand { get; private set; } = null!;
+
+    // ------------------------------------------------------------ Simulazioni: pacco simulato e stato apparecchiature
+
+    private PackageType? _simPackageType;
+    private bool _syncingSimType;
+    /// <summary>Tipologia di pacco simulata: una sola alla volta, la configurazione si carica automaticamente.</summary>
+    public PackageType? SimPackageType
+    {
+        get => _simPackageType;
+        set
+        {
+            if (_syncingSimType || value == null || !Set(ref _simPackageType, value)) return;
+            _project.Infeed.TypeSequence = new List<string> { value.Id };
+            ProjectChanged(structural: false);
+            Status = $"Tipologia simulata: {value.Id} - {value.Name} ({value.LengthMm:0} mm, {value.WeightKg:0} kg)";
+        }
+    }
+    public ObservableCollection<EquipmentStatusRow> EquipmentStatus { get; } = new();
     public ObservableCollection<TreeNodeViewModel> Tree { get; } = new();
     public ObservableCollection<PropertyItemViewModel> Properties { get; } = new();
     public ICollectionView PropertiesView { get; }
@@ -120,6 +215,7 @@ public sealed class MainViewModel : ObservableObject
             if (!Set(ref _selectedNode, value)) return;
             BuildProperties();
             Scene.Highlight(value?.Model);
+            LayoutScene.Highlight(value?.Model);
         }
     }
 
@@ -208,6 +304,9 @@ public sealed class MainViewModel : ObservableObject
         _engine = null;
         Results = null;
         Scene.Build(_project);
+        LayoutScene.Build(_project);
+        NormalizeSimulatedType();
+        RefreshPackages();
         BuildTree();
         SelectedNode = Tree.FirstOrDefault();
         ProjectChanged(structural: false, markModified: false);
@@ -285,11 +384,15 @@ public sealed class MainViewModel : ObservableObject
         var selected = SelectedNode?.Model;
         Scene.Build(_project);
         Scene.Highlight(selected);
+        LayoutScene.Build(_project);
+        LayoutScene.Highlight(selected);
+        if (structural) RefreshPackages();
         if (structural) BuildTree(selected);
         else UpdateTreeHeaders();
         ResetSimulation();
         RefreshValidation();
         RefreshStrategies();
+        UpdateEquipmentStatus(_engine == null ? null : _engine.CaptureFrame());
         Raise(nameof(Title));
     }
 
@@ -543,6 +646,145 @@ public sealed class MainViewModel : ObservableObject
         SelectedNode = Tree.FirstOrDefault();
     }
 
+    // ------------------------------------------------------------ Pacchi
+
+    private void RefreshPackages()
+    {
+        var keep = _selectedPackageType != null && _project.PackageTypes.Contains(_selectedPackageType) ? _selectedPackageType : _project.PackageTypes.FirstOrDefault();
+        PackageTypes.Clear();
+        foreach (var t in _project.PackageTypes) PackageTypes.Add(t);
+        _selectedPackageType = null;
+        SelectedPackageType = keep;
+        NormalizeSimulatedType();
+    }
+
+    /// <summary>Una sola tipologia per simulazione: se la sequenza ne contiene più di una, resta la prima.</summary>
+    private void NormalizeSimulatedType()
+    {
+        var types = _project.PackageTypes;
+        var first = _project.Infeed.TypeSequence.Select(id => types.FirstOrDefault(t => t.Id == id)).FirstOrDefault(t => t != null) ?? types.FirstOrDefault();
+        if (first != null && (_project.Infeed.TypeSequence.Count != 1 || _project.Infeed.TypeSequence[0] != first.Id))
+            _project.Infeed.TypeSequence = new List<string> { first.Id };
+        _syncingSimType = true;
+        _simPackageType = first;
+        _syncingSimType = false;
+        Raise(nameof(SimPackageType));
+    }
+
+    private void BuildPackageProperties()
+    {
+        PackageProperties.Clear();
+        if (_selectedPackageType == null) return;
+        foreach (var item in PropertyItemViewModel.For(_selectedPackageType, OnPackageEdited, IdOptions))
+            PackageProperties.Add(item);
+    }
+
+    private void OnPackageEdited(PropertyItemViewModel item)
+    {
+        var sel = _selectedPackageType;
+        bool renamed = item.Name is "Id" or "Name";
+        ProjectChanged(structural: false);
+        if (renamed)
+        {
+            // aggiorna l'elenco (l'identificativo compare nell'etichetta)
+            int i = PackageTypes.IndexOf(sel!);
+            if (i >= 0) { PackageTypes.RemoveAt(i); PackageTypes.Insert(i, sel!); _selectedPackageType = null; SelectedPackageType = sel; }
+            if (_simPackageType == sel && item.Name == "Id") NormalizeSimulatedType();
+        }
+        foreach (var other in PackageProperties) if (other != item) other.Refresh();
+    }
+
+    private void NewPackage()
+    {
+        var t = new PackageType { Id = NextId("T", AllComponents()), Name = "Nuova tipologia" };
+        t.Name = "Tipologia " + t.Id;
+        _project.PackageTypes.Add(t);
+        ProjectChanged(structural: true);
+        SelectedPackageType = t;
+    }
+
+    private void DuplicatePackage()
+    {
+        var src = _selectedPackageType;
+        if (src == null) return;
+        var t = new PackageType
+        {
+            Id = NextId("T", AllComponents()), Name = src.Name + " (copia)", LengthMm = src.LengthMm, WeightKg = src.WeightKg,
+            Accumulation = src.Accumulation, Heading = src.Heading, GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
+            StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
+            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm, StopId = src.StopId
+        };
+        _project.PackageTypes.Add(t);
+        ProjectChanged(structural: true);
+        SelectedPackageType = t;
+    }
+
+    private void DeletePackage()
+    {
+        var t = _selectedPackageType;
+        if (t == null || _project.PackageTypes.Count <= 1) return;
+        if (MessageBox.Show($"Eliminare la tipologia {t}?", "Conferma", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        _project.PackageTypes.Remove(t);
+        _project.Infeed.TypeSequence.RemoveAll(id => id == t.Id);
+        ProjectChanged(structural: true);
+    }
+
+    // ------------------------------------------------------------ Stato apparecchiature
+
+    private void UpdateEquipmentStatus(SimFrame? f)
+    {
+        var rows = new List<(string Name, string State, bool Alarm)>();
+        for (int i = 0; i < _project.Strappers.Count; i++)
+        {
+            var st = _project.Strappers[i];
+            var state = f != null && i < f.StrapperStates.Length ? f.StrapperStates[i] : StrapperState.Idle;
+            bool fault = f != null && i < f.StrapperProcessStates.Length && f.StrapperProcessStates[i] == StrapperProcessState.Fault;
+            rows.Add(($"{st.Id} Legatrice", fault ? "GUASTO" : state switch
+            {
+                StrapperState.Preparing => "Preparazione",
+                StrapperState.Strapping => "Legatura",
+                StrapperState.Returning => "Ritorno",
+                _ => "Ferma"
+            }, fault));
+        }
+        if (_project.BundleClamp.IsEnabled) rows.Add(("Stringifascio KNOF", ClampText(f?.BundleClampState ?? ClampState.Open), f?.BundleClampState == ClampState.Fault));
+        if (_project.Compactor.IsEnabled) rows.Add(("Compattatore laterale", ClampText(f?.CompactorState ?? ClampState.Open), f?.CompactorState == ClampState.Fault));
+        if (_project.Rejector.IsEnabled) rows.Add(("Rigettatrice SMA", (f?.RejectorState ?? RejectorState.Idle) == RejectorState.Idle ? "Ferma" : f!.RejectorState.ToString(), f?.RejectorState == RejectorState.Fault));
+        rows.Add(("Stopper", (f?.StopperState ?? StopperState.Free) switch { StopperState.Aligning => "Intestatura", StopperState.Aligned => "Pacco intestato", _ => "Libero" }, false));
+        rows.Add(("Trasferitore", (f?.TransferState ?? TransferState.Home) switch
+        {
+            TransferState.Home => "A riposo",
+            TransferState.Lifting => "Sollevamento",
+            TransferState.Translating => "Traslazione",
+            TransferState.Lowering => "Discesa",
+            TransferState.Depositing => "Deposito",
+            TransferState.Returning => "Ritorno",
+            var other => other.ToString()
+        }, false));
+        for (int i = 0; i < _project.Scales.Count; i++)
+        {
+            var sc = _project.Scales[i];
+            var ss = f != null && i < f.ScaleStates.Length ? f.ScaleStates[i] : ScaleState.Idle;
+            rows.Add(($"{sc.Id} Bilico", ss == ScaleState.Idle ? "Libero" : ss.ToString(), ss == ScaleState.Fault));
+        }
+        bool same = rows.Count == EquipmentStatus.Count && rows.Select((r, i) => EquipmentStatus[i].Name == r.Name).All(x => x);
+        if (!same)
+        {
+            EquipmentStatus.Clear();
+            foreach (var r in rows) EquipmentStatus.Add(new EquipmentStatusRow(r.Name));
+        }
+        for (int i = 0; i < rows.Count; i++) { EquipmentStatus[i].State = rows[i].State; EquipmentStatus[i].Alarm = rows[i].Alarm; }
+    }
+
+    private static string ClampText(ClampState s) => s switch
+    {
+        ClampState.Open => "Aperto",
+        ClampState.Closing => "In chiusura",
+        ClampState.Closed => "Chiuso",
+        ClampState.Opening => "In apertura",
+        _ => "GUASTO"
+    };
+
     // ------------------------------------------------------------ Simulazione
 
     private bool EnsureEngine()
@@ -663,7 +905,9 @@ public sealed class MainViewModel : ObservableObject
         _suppressDisplayUpdate = true;
         DisplayTime = _engine.Time;
         _suppressDisplayUpdate = false;
-        Scene.ApplyFrame(_engine.CaptureFrame());
+        var frame = _engine.CaptureFrame();
+        Scene.ApplyFrame(frame);
+        UpdateEquipmentStatus(frame);
         CyclogramVersion++;
         for (; _eventIndex < _engine.Events.Count; _eventIndex++)
         {
@@ -684,9 +928,10 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Mostra lo stato registrato all'istante t (sincronizzazione ciclogramma ↔ 3D).</summary>
     private void ShowFrameAt(double t)
     {
-        if (_engine == null) { Scene.ApplyFrame(null); return; }
+        if (_engine == null) { Scene.ApplyFrame(null); UpdateEquipmentStatus(null); return; }
         var f = t >= _engine.Time - 1e-6 ? _engine.CaptureFrame() : _engine.Recorder.FrameAt(t);
         Scene.ApplyFrame(f);
+        UpdateEquipmentStatus(f);
     }
 
     private void ComputeResults()
