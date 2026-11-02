@@ -36,6 +36,8 @@
                 <Separator/>
                 <MenuItem Header="Esporta risultati _CSV..." Command="{Binding ExportCsvCommand}"/>
                 <MenuItem Header="Esporta risultati _Excel..." Command="{Binding ExportExcelCommand}"/>
+                <MenuItem Header="Esporta _logica di controllo (JSON/CSV)..." Command="{Binding ExportControlLogicCommand}"/>
+                <MenuItem Header="Esporta specifica _funzionale (Word)..." Command="{Binding ExportFunctionalSpecCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Esci" Click="Exit_Click"/>
             </MenuItem>
@@ -54,6 +56,9 @@
                 <MenuItem Header="Passo singolo" Command="{Binding StepCommand}" InputGestureText="F10"/>
                 <MenuItem Header="Evento successivo" Command="{Binding NextEventCommand}" InputGestureText="F11"/>
                 <MenuItem Header="Esegui fino al termine" Command="{Binding RunToEndCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Ottimizzazione">
+                <MenuItem Header="Ottimizza zone di comando (minimo numero di inverter)..." Command="{Binding OptimizeCommandZonesCommand}"/>
             </MenuItem>
         </Menu>
 
