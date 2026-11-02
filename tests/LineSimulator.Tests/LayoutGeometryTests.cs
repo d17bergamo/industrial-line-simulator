@@ -63,4 +63,27 @@ public class LayoutGeometryTests
         Assert.Equal(p.Strappers[0].PositionMm / 1000.0, str.CenterXm, 6);
         Assert.True(str.EntryXm < str.CenterXm && str.CenterXm < str.ExitXm);
     }
+
+    [Fact]
+    public void EntryReference_IsTheEntryPhotocellPosition()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        ProjectNormalizer.EnsureEntryPhotocell(p);
+        var pc = p.Photocells.First(f => f.IsEntryPhotocell);
+        Assert.Equal(pc.PositionMm / 1000.0, LayoutGeometry.EntryReferenceM(p), 6);
+    }
+
+    [Fact]
+    public void Gaps_AreMeasuredBetweenExitAndNextEntry()
+    {
+        var p = SampleProjects.CreateFullProcessLine();
+        var gaps = LayoutGeometry.Gaps(p);
+        Assert.NotEmpty(gaps);
+        var info = LayoutGeometry.Describe(p).ToDictionary(i => i.Id);
+        foreach (var g in gaps)
+        {
+            Assert.Equal(info[g.ToId].EntryXm - info[g.FromId].ExitXm, g.ClearM, 6);
+            Assert.Equal(info[g.ToId].CenterXm - info[g.FromId].CenterXm, g.CenterM, 6);
+        }
+    }
 }

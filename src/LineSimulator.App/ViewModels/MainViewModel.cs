@@ -91,6 +91,10 @@ public sealed class MainViewModel : ObservableObject
         DuplicateCommand = new RelayCommand(Duplicate);
         LoadExampleCommand = new RelayCommand(p => { if (p is ExampleItem ex && ConfirmDiscard()) LoadProject(ex.Factory(), null); });
         ExportCsvCommand = new RelayCommand(ExportCsv, () => _engine != null);
+        AddTransferSectionCommand = new RelayCommand(AddTransferSection);
+        RemoveTransferSectionCommand = new RelayCommand(RemoveTransferSection);
+        RefreshStepCommand = new RelayCommand(RefreshStep);
+        ExportStepPdfCommand = new RelayCommand(ExportStepPdf, () => _engine != null);
         ExportExcelCommand = new RelayCommand(ExportExcel, () => _engine != null);
 
         AddSectionCommand = new RelayCommand(AddSection);
@@ -281,6 +285,77 @@ public sealed class MainViewModel : ObservableObject
     public double MaxTime => _engine?.Time ?? 0;
     public bool IsPlaying { get => _isPlaying; private set => Set(ref _isPlaying, value); }
     public double SpeedFactor { get => _speedFactor; set => Set(ref _speedFactor, value); }
+
+    // ------------------------------------------------------------ Pop-up velocità di linea e produttività oraria
+
+    private double? _lineSpeedOverride;
+    private double? _liveMeasuredPph;
+    private int _lastExitedForPph = -1;
+
+    public double MinLineSpeed => SimulationEngine.MinLineSpeedMps;
+    public double MaxLineSpeed => SimulationEngine.MaxLineSpeedMps;
+
+    /// <summary>Velocità di trasporto della linea (0,5 - 1,5 m/s); cambiata a simulazione in corso vale subito.</summary>
+    public double LineSpeedMps
+    {
+        get => _lineSpeedOverride ?? Math.Clamp(_project.Sections.Count > 0 ? _project.Sections.Min(x => x.HighSpeed) : 1.0, MinLineSpeed, MaxLineSpeed);
+        set
+        {
+            double v = Math.Round(Math.Clamp(double.IsFinite(value) ? value : MinLineSpeed, MinLineSpeed, MaxLineSpeed), 2);
+            if (_lineSpeedOverride == v) return;
+            _lineSpeedOverride = v;
+            _engine?.SetLineSpeed(v);
+            _liveMeasuredPph = null; _lastExitedForPph = -1;
+            Raise(nameof(LineSpeedMps)); RaiseProductivity();
+            Status = $"Velocità di linea: {v:0.00} m/s";
+        }
+    }
+
+    private PackageType? ReferencePackage => _simPackageType ?? _project.PackageTypes.FirstOrDefault();
+
+    /// <summary>Produttività teorica alla velocità impostata: 3600 x v / L pacco.</summary>
+    public double TheoreticalPph
+        => ReferencePackage is { LengthMm: > 0 } t ? TheoreticalProductivity.PackagesPerHour(LineSpeedMps, t.LengthMm / 1000.0) : 0;
+
+    public string ProductivityText
+    {
+        get
+        {
+            var t = ReferencePackage;
+            string theo = $"Teorica a {LineSpeedMps:0.00} m/s: {TheoreticalPph:0.0} pacchi/h"
+                + (t != null ? $" ({TheoreticalPph * t.WeightKg / 1000.0:0.0} t/h)" : "");
+            return _liveMeasuredPph is double m ? theo + $"\nMisurata in simulazione: {m:0.0} pacchi/h" : theo + "\nMisurata: disponibile dopo i primi pacchi usciti";
+        }
+    }
+
+    // ------------------------------------------------------------ Ciclogramma a gradini (tempi arrotondati a 0,5 s solo qui)
+
+    private IReadOnlyList<StepRow>? _stepRows;
+    public IReadOnlyList<StepRow>? StepRows { get => _stepRows; private set => Set(ref _stepRows, value); }
+    public ICommand RefreshStepCommand { get; private set; } = null!;
+    public ICommand ExportStepPdfCommand { get; private set; } = null!;
+
+    private void RefreshStep()
+    {
+        StepRows = _engine == null ? null : StepCyclogram.Build(_engine.Recorder);
+        Status = StepRows == null ? "Nessuna simulazione: ciclogramma a gradini non disponibile." : $"Ciclogramma a gradini aggiornato ({StepRows.Count} utenze, {StepCyclogram.TotalS(StepRows):0.0} s).";
+    }
+
+    private void ExportStepPdf()
+    {
+        RefreshStep();
+        if (StepRows == null || StepRows.Count == 0) { Status = "Esegui prima una simulazione."; return; }
+        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = "ciclogramma-a-gradini.pdf" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            StepCyclogramPdf.Save(dlg.FileName, StepRows, _project.Name.Length > 0 ? _project.Name : "Linea di legatura");
+            Status = "Ciclogramma a gradini esportato: " + dlg.FileName;
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Esportazione PDF", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    private void RaiseProductivity() { Raise(nameof(TheoreticalPph)); Raise(nameof(ProductivityText)); }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public int CyclogramVersion { get => _cyclogramVersion; private set => Set(ref _cyclogramVersion, value); }
     public string StrategyText { get => _strategyText; private set => Set(ref _strategyText, value); }
@@ -549,8 +624,54 @@ public sealed class MainViewModel : ObservableObject
         SelectedNode = node;
     }
 
+    // ---- sezioni del trasferitore sollevabile (numero, nome, lunghezza)
+
+    public ObservableCollection<TransferSectionRow> TransferSections { get; } = new();
+    public bool TransferSectionsVisible => SelectedNode?.Model is TransferConfig;
+    public ICommand AddTransferSectionCommand { get; private set; } = null!;
+    public ICommand RemoveTransferSectionCommand { get; private set; } = null!;
+    private bool _loadingSections;
+
+    private void LoadTransferSections()
+    {
+        _loadingSections = true;
+        TransferSections.Clear();
+        if (SelectedNode?.Model is TransferConfig tc)
+            foreach (var sec in tc.EffectiveSections())
+            {
+                var row = new TransferSectionRow { Name = sec.Name, LengthMm = sec.LengthMm };
+                row.PropertyChanged += (_, _) => CommitTransferSections();
+                TransferSections.Add(row);
+            }
+        _loadingSections = false;
+        Raise(nameof(TransferSectionsVisible));
+    }
+
+    private void CommitTransferSections()
+    {
+        if (_loadingSections || SelectedNode?.Model is not TransferConfig tc) return;
+        tc.SetSections(TransferSections.Where(r => r.LengthMm > 0).Select(r => new TransferSection { Name = r.Name, LengthMm = r.LengthMm }));
+        ProjectChanged(structural: true);
+        foreach (var it in Properties) it.Refresh();
+    }
+
+    private void AddTransferSection()
+    {
+        if (SelectedNode?.Model is not TransferConfig) return;
+        var row = new TransferSectionRow { Name = "Sezione " + (TransferSections.Count + 1), LengthMm = 3000 };
+        row.PropertyChanged += (_, _) => CommitTransferSections();
+        TransferSections.Add(row);
+        CommitTransferSections();
+    }
+
+    private void RemoveTransferSection(object? row)
+    {
+        if (row is TransferSectionRow r && TransferSections.Count > 1) { TransferSections.Remove(r); CommitTransferSections(); }
+    }
+
     private void BuildProperties()
     {
+        LoadTransferSections();
         Properties.Clear();
         var model = SelectedNode?.Model;
         if (model == null) return;
@@ -724,9 +845,17 @@ public sealed class MainViewModel : ObservableObject
                 break;
             }
             case "knca":
+            case "sma":
             {
                 if (_project.Strappers.Count >= LineProject.MaxStrappers) { Status = $"Massimo {LineProject.MaxStrappers} legatrici."; return; }
                 var st = new StrapperConfig { Id = NextId("L", AllComponents()), Name = $"Legatrice {_project.Strappers.Count + 1}", PositionMm = x, Side = yM >= 0 ? LateralSide.Left : LateralSide.Right };
+                if (e.Key == "sma")
+                {
+                    // reggia d'acciaio: si abbassa per il tempo di legatura (10 s), si rialza, poi riarmo (5 s)
+                    st.Model = "Sund Birsta SMA";
+                    st.StrappingTimeS = 10;
+                    st.ReturnTimeS = 5;
+                }
                 _project.Strappers.Add(st);
                 added = st;
                 break;
@@ -741,7 +870,7 @@ public sealed class MainViewModel : ObservableObject
                 _project.Compactor.PositionMm = x;
                 added = _project.Compactor;
                 break;
-            case "sma":
+            case "rejector":
                 _project.Rejector.IsEnabled = true;
                 _project.Rejector.PositionMm = Math.Max(0, Snap(x - _project.Rejector.LengthMm / 2));
                 _project.Rejector.Side = yM >= 0 ? LateralSide.Right : LateralSide.Left;
@@ -953,8 +1082,21 @@ public sealed class MainViewModel : ObservableObject
         Raise(nameof(SimPackageType));
     }
 
+    private int _packagePreviewVersion;
+    /// <summary>Incrementato ad ogni modifica del pacco: ridisegna l'anteprima con le legature.</summary>
+    public int PackagePreviewVersion { get => _packagePreviewVersion; private set => Set(ref _packagePreviewVersion, value); }
+
+    /// <summary>Legature spostate, aggiunte o tolte col mouse nell'anteprima.</summary>
+    public void OnStrapsEditedInPreview()
+    {
+        ProjectChanged(structural: false);
+        BuildPackageProperties();
+        PackagePreviewVersion++;
+    }
+
     private void BuildPackageProperties()
     {
+        PackagePreviewVersion++;
         PackageProperties.Clear();
         if (_selectedPackageType == null) return;
         foreach (var item in PropertyItemViewModel.For(_selectedPackageType, OnPackageEdited, IdOptions))
@@ -974,6 +1116,7 @@ public sealed class MainViewModel : ObservableObject
             if (_simPackageType == sel && item.Name == "Id") NormalizeSimulatedType();
         }
         foreach (var other in PackageProperties) if (other != item) other.Refresh();
+        PackagePreviewVersion++;
     }
 
     private void NewPackage()
@@ -1080,6 +1223,8 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
         _engine = new SimulationEngine(ProjectSerializer.Clone(_project));
+        if (_lineSpeedOverride is double ov) _engine.SetLineSpeed(ov);
+        _liveMeasuredPph = null; _lastExitedForPph = -1;
         _eventIndex = 0;
         EventLog.Clear();
         Results = null;
@@ -1200,6 +1345,13 @@ public sealed class MainViewModel : ObservableObject
         int exited = _engine.Packages.Count(p => p.ExitTimeS != null);
         int rejected = _engine.RejectedPackages;
         int onLine = _engine.Packages.Count - exited - rejected;
+        if (final) StepRows = StepCyclogram.Build(_engine.Recorder);
+        if (exited != _lastExitedForPph)
+        {
+            _lastExitedForPph = exited;
+            _liveMeasuredPph = exited >= 2 ? _engine.ComputeResults().PackagesPerHour : null;
+            RaiseProductivity();
+        }
         if (IsPlaying || final)
             Status = $"t = {_engine.Time:0.0} s · pacchi in linea {onLine} · usciti {exited}/{_engine.PackagesToSimulate}"
                      + (rejected > 0 ? $" · rigettati {rejected}" : "") + $" · collisioni {_engine.Collisions}"
@@ -1254,4 +1406,13 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex) { MessageBox.Show("Esportazione non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
+}
+
+/// <summary>Riga modificabile dell'elenco sezioni del trasferitore.</summary>
+public sealed class TransferSectionRow : ObservableObject
+{
+    private string _name = "Sezione";
+    private double _lengthMm = 3000;
+    public string Name { get => _name; set => Set(ref _name, value); }
+    public double LengthMm { get => _lengthMm; set => Set(ref _lengthMm, value); }
 }

@@ -53,4 +53,26 @@ public static class LayoutGeometry
             list.Add(Make(f.Id, f.Name, "Fotocellula", f.PositionMm / 1000.0, 0.06, 0, zTop));
         return list;
     }
+
+    /// <summary>Quota (m) della fotocellula di ingresso, origine delle quote relative; 0 se non c'è.</summary>
+    public static double EntryReferenceM(LineProject p)
+    {
+        var pc = p.Photocells.FirstOrDefault(f => f.IsEntryPhotocell) ?? p.Photocells.OrderBy(f => f.PositionMm).FirstOrDefault();
+        return pc == null ? 0 : pc.PositionMm / 1000.0;
+    }
+
+    /// <summary>Distanza tra due macchine contigue sull'asse linea: dall'uscita della prima all'ingresso della seconda e tra i centri.</summary>
+    public sealed record MachineGap(string FromId, string ToId, double ClearM, double CenterM);
+
+    private static readonly HashSet<string> LineMachines = new() { "Reggiatrice", "Stringifascio KNOF", "Compattatore laterale", "Rigettatrice", "Stopper", "Trasferitore" };
+
+    /// <summary>Macchine sull'asse linea, ordinate lungo X, e distanze tra macchine adiacenti (reggiatrici su lati opposti comprese).</summary>
+    public static IReadOnlyList<MachineGap> Gaps(LineProject p)
+    {
+        var m = Describe(p).Where(i => LineMachines.Contains(i.Kind)).OrderBy(i => i.CenterXm).ToList();
+        var gaps = new List<MachineGap>();
+        for (int i = 1; i < m.Count; i++)
+            gaps.Add(new MachineGap(m[i - 1].Id, m[i].Id, m[i].EntryXm - m[i - 1].ExitXm, m[i].CenterXm - m[i - 1].CenterXm));
+        return gaps;
+    }
 }

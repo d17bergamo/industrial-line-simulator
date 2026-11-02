@@ -37,6 +37,7 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(_vm.OpenCommand, Key.O, ModifierKeys.Control));
         Loaded += (_, _) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
         Closing += OnClosing;
+        PackagePreview.StrapsEdited += _vm.OnStrapsEditedInPreview;
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
         var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
         if (p == null) return;
         _moving = true;
+        _vm.LayoutScene.Dragging = true;
         _lastXm = p.Value.X;
         LayoutViewport.CaptureMouse();
     }
@@ -98,6 +100,7 @@ public partial class MainWindow : Window
     {
         if (!_moving) return;
         _moving = false;
+        _vm.LayoutScene.Dragging = false;
         LayoutViewport.ReleaseMouseCapture();
         _vm.CommitMove();
     }
@@ -181,6 +184,17 @@ public partial class MainWindow : Window
     private void ViewFront_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0, 1, 0), new Vector3D(0, 0, 1));
     private void ViewIso_Click(object sender, RoutedEventArgs e) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
     private void ViewFit_Click(object sender, RoutedEventArgs e) => ActiveViewport.ZoomExtents(300);
+    private SpeedWindow? _speedWindow;
+    private void OpenSpeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (_speedWindow != null) { _speedWindow.Activate(); return; }
+        _speedWindow = new SpeedWindow(_vm) { Owner = this };
+        _speedWindow.Left = Left + Width - _speedWindow.Width - 40;
+        _speedWindow.Top = Top + 150;
+        _speedWindow.Closed += (_, _) => _speedWindow = null;
+        _speedWindow.Show();
+    }
+
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Play_Click(object sender, RoutedEventArgs e) => Cyclogram.FollowCursor = true;
