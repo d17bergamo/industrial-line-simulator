@@ -67,6 +67,11 @@
                 <MenuItem Header="Salva _con nome..." Command="{Binding SaveAsCommand}"/>
                 <MenuItem Header="_Duplica progetto" Command="{Binding DuplicateCommand}"/>
                 <Separator/>
+                <MenuItem Header="Salva _layout..." Command="{Binding SaveLayoutCommand}"/>
+                <MenuItem Header="Apri l_ayout..." Command="{Binding OpenLayoutCommand}"/>
+                <MenuItem Header="Salva tipologie _pacchi..." Command="{Binding SavePackagesCommand}"/>
+                <MenuItem Header="Apri tipologie pa_cchi..." Command="{Binding OpenPackagesCommand}"/>
+                <Separator/>
                 <MenuItem Header="_Esempi" ItemsSource="{Binding Examples}">
                     <MenuItem.ItemContainerStyle>
                         <Style TargetType="MenuItem">

@@ -122,6 +122,10 @@ public sealed class MainViewModel : ObservableObject
         PackagePropertiesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PropertyItemViewModel.Category)));
         LibraryView = CollectionViewSource.GetDefaultView(EquipmentLibrary.Entries);
         LibraryView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LibraryEntry.Category)));
+        SaveLayoutCommand = new RelayCommand(SaveLayout);
+        OpenLayoutCommand = new RelayCommand(OpenLayout);
+        SavePackagesCommand = new RelayCommand(SavePackages);
+        OpenPackagesCommand = new RelayCommand(OpenPackages);
         DuplicateSelectedCommand = new RelayCommand(DuplicateSelected, () => CanDuplicate(SelectedNode?.Model));
         RotateSelectedCommand = new RelayCommand(RotateSelected, () => CanRotate(SelectedNode?.Model));
         NewPackageCommand = new RelayCommand(NewPackage);
@@ -206,6 +210,10 @@ public sealed class MainViewModel : ObservableObject
         get => _showDistances;
         set { if (Set(ref _showDistances, value)) LayoutScene.ShowDimensions = value; }
     }
+    public ICommand SaveLayoutCommand { get; private set; } = null!;
+    public ICommand OpenLayoutCommand { get; private set; } = null!;
+    public ICommand SavePackagesCommand { get; private set; } = null!;
+    public ICommand OpenPackagesCommand { get; private set; } = null!;
     public ICommand DuplicateSelectedCommand { get; private set; } = null!;
     public ICommand RotateSelectedCommand { get; private set; } = null!;
     public ObservableCollection<TreeNodeViewModel> Tree { get; } = new();
@@ -854,6 +862,54 @@ public sealed class MainViewModel : ObservableObject
                 _project.Scales.Add(c); AfterAdd(c); break;
             }
         }
+    }
+
+    // ------------------------------------------------------------ Layout e tipologie: file indipendenti
+
+    private void SaveLayout()
+    {
+        var dlg = new SaveFileDialog { Filter = "Layout linea (*.layout.json)|*.layout.json|JSON (*.json)|*.json", FileName = SafeName(_project.Name) + ".layout.json" };
+        if (dlg.ShowDialog() != true) return;
+        try { SplitFiles.SaveLayout(_project, dlg.FileName); Status = "Layout salvato: " + dlg.FileName; }
+        catch (Exception ex) { MessageBox.Show("Salvataggio non riuscito:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    private void OpenLayout()
+    {
+        var dlg = new OpenFileDialog { Filter = "Layout linea (*.json)|*.json|Tutti i file|*.*" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var layout = SplitFiles.LoadLayout(dlg.FileName, _project);
+            LoadProject(layout, null);
+            _modified = true;
+            Raise(nameof(Title));
+            Status = "Layout caricato (tipologie di pacco mantenute): " + dlg.FileName;
+        }
+        catch (Exception ex) { MessageBox.Show("Impossibile aprire il layout:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    private void SavePackages()
+    {
+        var dlg = new SaveFileDialog { Filter = "Tipologie pacchi (*.pacchi.json)|*.pacchi.json|JSON (*.json)|*.json", FileName = "tipologie.pacchi.json" };
+        if (dlg.ShowDialog() != true) return;
+        try { SplitFiles.SavePackages(_project.PackageTypes, dlg.FileName); Status = "Tipologie salvate: " + dlg.FileName; }
+        catch (Exception ex) { MessageBox.Show("Salvataggio non riuscito:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    private void OpenPackages()
+    {
+        var dlg = new OpenFileDialog { Filter = "Tipologie pacchi (*.json)|*.json|Tutti i file|*.*" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var types = SplitFiles.LoadPackages(dlg.FileName);
+            _project.PackageTypes = types;
+            _project.Infeed.TypeSequence = new List<string> { types[0].Id };
+            ProjectChanged(structural: true);
+            Status = $"Caricate {types.Count} tipologie di pacco: " + dlg.FileName;
+        }
+        catch (Exception ex) { MessageBox.Show("Impossibile aprire le tipologie:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     // ------------------------------------------------------------ Pacchi
