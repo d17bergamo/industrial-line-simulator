@@ -92,10 +92,12 @@ public sealed class LineScene
         var floor = MeshFactory.Box(new Point3D((x0 + x1) / 2, -1.5, -0.01), x1 - x0, 9, 0.02, Color.FromRgb(0xE8, 0xEB, 0xEE), out _);
         _group.Children.Add(floor);
 
-        for (int i = 0; i < p.Inverters.Count; i++)
+        // Un colore per modulo di via a rulli (ogni modulo ha il proprio inverter)
+        var ordered = p.Sections.OrderBy(x => x.StartMm).ToList();
+        for (int i = 0; i < ordered.Count; i++)
         {
             var c = Palette[i % Palette.Length];
-            _zoneBrushes[p.Inverters[i].Id] = (new SolidColorBrush(c), c);
+            _zoneBrushes[ordered[i].Id] = (new SolidColorBrush(c), c);
         }
 
         foreach (var s in p.Sections) AddSection(s);
@@ -126,7 +128,7 @@ public sealed class LineScene
     {
         double start = s.StartMm / 1000.0, len = s.LengthMm / 1000.0, w = s.WidthMm / 1000.0;
         double r = Math.Max(0.02, s.RollerDiameterMm / 2000.0);
-        var zc = _zoneBrushes.TryGetValue(s.InverterId, out var zb) ? zb : (new SolidColorBrush(Colors.Gray), Colors.Gray);
+        var zc = _zoneBrushes.TryGetValue(s.Id, out var zb) ? zb : (new SolidColorBrush(Colors.Gray), Colors.Gray);
 
         // Struttura: longheroni e gambe
         var frame = new MeshFactory();
@@ -143,10 +145,10 @@ public sealed class LineScene
         var frameModel = MeshFactory.Model(frame.ToMesh(), zc.Item2, out var fb);
         _group.Children.Add(frameModel);
         Register(frameModel, s, fb, zc.Item2);
-        if (_zoneBrushes.ContainsKey(s.InverterId))
+        if (_zoneBrushes.ContainsKey(s.Id))
         {
             // il colore della struttura indica lo stato della zona (vedi ApplyFrame)
-            _sectionFrameBrushes.Add((s.InverterId, fb, zc.Item2));
+            _sectionFrameBrushes.Add((s.Id, fb, zc.Item2));
         }
 
         // Rulli
@@ -436,7 +438,7 @@ public sealed class LineScene
         {
             int zi = _zoneOrder.IndexOf(inv);
             bool moving = f != null && zi >= 0 && zi < f.ZoneSpeeds.Length && f.ZoneSpeeds[zi] > 1e-4;
-            if (_highlighted is RollerSection rs && rs.InverterId == inv) continue;
+            if (_highlighted is RollerSection rs && rs.Id == inv) continue;
             brush.Color = moving ? color : Blend(color, Color.FromRgb(0x55, 0x55, 0x55), 0.6);
         }
 

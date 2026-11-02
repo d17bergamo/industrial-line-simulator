@@ -81,7 +81,7 @@ public sealed class StrappingStationConfig
     [UiProperty("Stazione di legatura attiva", "", "Legatura", Order = 1)]
     public bool IsEnabled { get; set; } = true;
 
-    [UiProperty("Inverter zona di legatura", "", "Legatura", Order = 2)]
+    [UiProperty("Modulo zona di legatura", "", "Legatura", Order = 2)]
     public string InverterId { get; set; } = string.Empty;
 
     [UiProperty("Velocità di posizionamento", "m/s", "Legatura", Order = 3)]

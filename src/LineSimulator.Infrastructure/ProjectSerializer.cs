@@ -61,12 +61,106 @@ public static class ProjectSerializer
         {
             switch (v)
             {
-                // case 1: MigrateV1ToV2(node); break;
+                // v1 → v2: solo proprietà aggiunte (la fotocellula di ingresso viene aggiunta dopo la deserializzazione)
+                case 2: MigrateV2ToV3(node); break;
                 default: break;
             }
             v++;
         }
         node["schemaVersion"] = LineProject.CurrentSchemaVersion;
+    }
+
+    /// <summary>
+    /// v2 → v3: inverter e sezioni diventano "moduli di via a rulli" (un modulo = un inverter).
+    /// Le sezioni dello stesso inverter vengono fuse in un modulo con l'ID dell'inverter, così fotocellule,
+    /// stazione di legatura, regole e condizioni continuano a riferirsi allo stesso identificativo.
+    /// </summary>
+    private static void MigrateV2ToV3(JsonObject node)
+    {
+        var invs = (Get(node, "inverters") as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
+        var secs = (Get(node, "sections") as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
+        var invById = new Dictionary<string, JsonObject>();
+        foreach (var inv in invs)
+        {
+            string id = Str(Get(inv, "id"));
+            if (id.Length > 0) invById.TryAdd(id, inv);
+        }
+        var groups = new List<(string Key, JsonObject? Inv, List<JsonObject> Secs)>();
+        foreach (var sec in secs)
+        {
+            string invId = Str(Get(sec, "inverterId"));
+            invById.TryGetValue(invId, out var inv);
+            string key = inv != null ? "INV:" + invId : "SEC:" + Str(Get(sec, "id")) + ":" + groups.Count;
+            int gi = groups.FindIndex(g => g.Key == key);
+            if (gi < 0) groups.Add((key, inv, new List<JsonObject> { sec }));
+            else groups[gi].Secs.Add(sec);
+        }
+        var modules = new JsonArray();
+        foreach (var g in groups.OrderBy(g => g.Secs.Min(x => Num(Get(x, "startMm"), 0))))
+        {
+            var ordered = g.Secs.OrderBy(x => Num(Get(x, "startMm"), 0)).ToList();
+            var first = ordered[0];
+            double start = Num(Get(first, "startMm"), 0);
+            double end = ordered.Max(x => Num(Get(x, "startMm"), 0) + Num(Get(x, "lengthMm"), 6000));
+            var m = new JsonObject
+            {
+                ["id"] = g.Inv != null ? Str(Get(g.Inv, "id")) : Str(Get(first, "id")),
+                ["name"] = g.Inv != null && Str(Get(g.Inv, "name")).Length > 0 ? Str(Get(g.Inv, "name")) : Str(Get(first, "name")),
+                ["startMm"] = start,
+                ["lengthMm"] = end - start,
+                ["widthMm"] = ordered.Max(x => Num(Get(x, "widthMm"), 1200)),
+                ["rollerCount"] = ordered.Sum(x => (int)Math.Round(Num(Get(x, "rollerCount"), 21))),
+                ["rollerPitchMm"] = Num(Get(first, "rollerPitchMm"), 300),
+                ["rollerDiameterMm"] = Num(Get(first, "rollerDiameterMm"), 150),
+                ["isEnabled"] = ordered.All(x => Bool(Get(x, "isEnabled"), true)) && (g.Inv == null || Bool(Get(g.Inv, "isEnabled"), true))
+            };
+            var dir = Get(first, "direction");
+            if (dir != null) m["direction"] = dir.DeepClone();
+            var driveSource = g.Inv ?? first;
+            foreach (var key in new[] { "lowSpeed", "highSpeed", "acceleration", "deceleration", "defaultSpeed", "autoStopWhenEmpty" })
+            {
+                var v = Get(driveSource, key);
+                if (v != null) m[key] = v.DeepClone();
+            }
+            modules.Add(m);
+        }
+        RemoveKey(node, "sections");
+        RemoveKey(node, "inverters");
+        node["sections"] = modules;
+    }
+
+    private static JsonNode? Get(JsonObject o, string key)
+    {
+        foreach (var kv in o)
+            if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase)) return kv.Value;
+        return null;
+    }
+
+    private static void RemoveKey(JsonObject o, string key)
+    {
+        foreach (var k in o.Select(kv => kv.Key).Where(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)).ToList())
+            o.Remove(k);
+    }
+
+    private static string Str(JsonNode? n)
+    {
+        try { return n?.GetValue<string>() ?? string.Empty; } catch (InvalidOperationException) { return n?.ToString() ?? string.Empty; }
+    }
+
+    private static double Num(JsonNode? n, double def)
+    {
+        if (n == null) return def;
+        try { return n.GetValue<double>(); }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            return double.TryParse(n.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : def;
+        }
+    }
+
+    private static bool Bool(JsonNode? n, bool def)
+    {
+        if (n == null) return def;
+        try { return n.GetValue<bool>(); } catch (InvalidOperationException) { return def; }
     }
 
     /// <summary>Copia profonda (via JSON) con nuovo identificativo: "duplica progetto".</summary>

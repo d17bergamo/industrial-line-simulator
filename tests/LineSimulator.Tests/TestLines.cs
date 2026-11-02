@@ -8,14 +8,13 @@ namespace LineSimulator.Tests;
 internal static class TestLines
 {
     /// <summary>
-    /// Linea a una zona (INV1, 0-30 m), stopper a 29 m, trasferitore sotto il pacco in battuta,
+    /// Linea a un modulo (M1, 0-30 m), stopper a 29 m, trasferitore sotto il pacco in battuta,
     /// nessuna legatura. Velocità alta 0.6, bassa 0.15, acc 0.5, dec 0.6.
     /// </summary>
     public static LineProject SingleZone(int packages = 1)
     {
         var p = new LineProject { Name = "Test una zona" };
-        p.Inverters.Add(new InverterConfig { Id = "INV1", Name = "INV1", LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6 });
-        p.Sections.Add(new RollerSection { Id = "S1", Name = "S1", StartMm = 0, LengthMm = 30000, RollerCount = 100, RollerPitchMm = 300, RollerDiameterMm = 150, InverterId = "INV1" });
+        p.Sections.Add(Module("M1", 0, 30000, 100));
         p.Photocells.Add(new PhotocellConfig { Id = "FC0", Name = "Ingresso", PositionMm = 300, IsEntryPhotocell = true });
         p.StrappingStation = new StrappingStationConfig { IsEnabled = false };
         p.Stopper = new StopperConfig { Id = "STP", Name = "Stopper", PositionMm = 29000, AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, MaxImpactSpeed = 0.25 };
@@ -35,9 +34,8 @@ internal static class TestLines
     {
         var p = SingleZone(2);
         p.Sections.Clear();
-        p.Inverters.Add(new InverterConfig { Id = "INV2", Name = "INV2", LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6 });
-        p.Sections.Add(new RollerSection { Id = "S1", Name = "S1", StartMm = 0, LengthMm = 14000, RollerCount = 46, RollerPitchMm = 300, RollerDiameterMm = 150, InverterId = "INV1" });
-        p.Sections.Add(new RollerSection { Id = "S2", Name = "S2", StartMm = 14000, LengthMm = 14000, RollerCount = 46, RollerPitchMm = 300, RollerDiameterMm = 150, InverterId = "INV2" });
+        p.Sections.Add(Module("M1", 0, 14000, 46));
+        p.Sections.Add(Module("M2", 14000, 14000, 46));
         p.Stopper.PositionMm = 27000;
         p.Transfer.PositionMm = 15000;
         p.Transfer.LiftTimeS = 120; // il pacco resta a lungo allo stopper
@@ -45,6 +43,13 @@ internal static class TestLines
         p.Simulation.DeadlockTimeoutS = 300;
         return p;
     }
+
+    /// <summary>Modulo di via a rulli con inverter: alta 0.6, bassa 0.15, acc 0.5, dec 0.6.</summary>
+    public static RollerSection Module(string id, double start, double length, int rollers) => new()
+    {
+        Id = id, Name = id, StartMm = start, LengthMm = length, RollerCount = rollers, RollerPitchMm = 300, RollerDiameterMm = 150,
+        LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6
+    };
 
     public static SimEvent First(SimulationEngine e, SimEventType type) => e.Events.First(x => x.Type == type);
 }

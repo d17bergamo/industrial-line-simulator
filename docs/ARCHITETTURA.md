@@ -11,8 +11,8 @@ Models ◄── Core ◄── Optimization ◄── Engine ◄── Infrastr
 
 | Modulo | Responsabilità | Dipendenze esterne |
 |---|---|---|
-| **Models** | Classi di configurazione serializzabili (sezioni, inverter, fotocellule, legatrici, stopper, trasferitore, pacchi, regole), attributi per il pannello proprietà, linguaggio testuale delle condizioni | nessuna |
-| **Core** | Unità, cinematica (frenatura, profilo trapezoidale), formule teoriche, topologia (zone = inverter), validazione, progetti di esempio | nessuna |
+| **Models** | Classi di configurazione serializzabili (moduli di via a rulli con inverter, fotocellule, legatrici, stopper, trasferitore, pacchi, regole), attributi per il pannello proprietà, linguaggio testuale delle condizioni | nessuna |
+| **Core** | Unità, cinematica (frenatura, profilo trapezoidale), formule teoriche, topologia (zona = modulo di via a rulli), validazione, progetti di esempio | nessuna |
 | **Optimization** | Problema di legatura, ottimizzatore esatto (programmazione dinamica), strategia predefinita e manuale, confronto e motivazione | nessuna |
 | **Engine** | Motore a tempo discreto, runtime dei componenti, regole, registrazione ciclogramma/fotogrammi, risultati | nessuna |
 | **Infrastructure** | JSON (System.Text.Json) con versione dello schema e migrazioni, salvataggio atomico, autosave, export CSV/Excel | ClosedXML |
@@ -30,8 +30,8 @@ Il motore **non dipende dalla UI**: l'interfaccia legge solo `SimFrame` (stato i
 ## 2. Modello fisico
 
 - **Asse linea monodimensionale** `x` (m), verso positivo = flusso. Testa del pacco = estremità a valle; coda = testa − lunghezza.
-- **Zona = inverter**: tutte le sezioni comandate dallo stesso inverter (devono essere contigue).
-- **Inverter**: riferimento di velocità (fermo / bassa / alta / posizionamento / allineamento) seguito con accelerazione e decelerazione costanti (rampe lineari).
+- **Zona = modulo di via a rulli**: ogni modulo ha il proprio inverter (geometria e azionamento nello stesso componente). Schema v3: i progetti v1/v2 con inverter e sezioni separati vengono migrati fondendo le sezioni dello stesso inverter in un modulo con l'ID dell'inverter (i riferimenti restano validi).
+- **Inverter del modulo**: riferimento di velocità (fermo / bassa / alta / posizionamento / allineamento) seguito con accelerazione e decelerazione costanti (rampe lineari).
 - **Trascinamento del pacco**: velocità obiettivo = **minimo** delle velocità delle sezioni sotto il pacco (scelta conservativa: un rullo fermo frena il pacco). La variazione di velocità del pacco è limitata dalla *decelerazione massima d'attrito* (default 2,5 m/s²); oltre quel limite si registra uno **slittamento**.
 - **Integrazione**: passo fisso (default 10 ms), posizione con regola trapezia sulla velocità ⇒ esatta per moti ad accelerazione costante.
 - **Fotocellule**: stato grezzo dalla posizione reale dei pacchi; l'uscita commuta solo se lo stato grezzo resta stabile per il **tempo di risposta**.
@@ -98,11 +98,11 @@ JSON camelCase con `schemaVersion`; condizioni polimorfiche con discriminatore `
 ## 7. Limiti noti (v0.2)
 
 - Flusso solo in avanti (sezioni in direzione inversa segnalate come errore dal validatore).
-- La stazione di legatura usa **un** inverter e lavora **un pacco alla volta**; non è modellato il lavoro contemporaneo di legatrici diverse su pacchi diversi.
+- La stazione di legatura usa **un** modulo (un inverter) e lavora **un pacco alla volta**; non è modellato il lavoro contemporaneo di legatrici diverse su pacchi diversi.
 - La legatrice resta sul pacco fino a fine ritorno (il pacco riparte dopo il ritorno: scelta conservativa).
 - Stopper sempre sollevato (il transito a stopper abbassato non è modellato).
 - La geometria laterale (larghezza pacco, distanza di rilevamento) è grafica: il modello di rilevamento è monodimensionale lungo la linea.
-- L'avvio del trasferitore è comandato dalla logica integrata (pacco allineato + carro a casa); le regole agiscono sugli inverter.
+- L'avvio del trasferitore è comandato dalla logica integrata (pacco allineato + carro a casa); le regole agiscono sugli inverter dei moduli.
 - Interfaccia: l'editor delle condizioni è testuale; non c'è annullamento (undo).
 - Intestatura di coda: simulata come posizionamento a encoder con coda sul riferimento e pacco trattenuto; la spinta all'indietro contro un fermo posteriore non è modellata.
 - I fermi intermedi esistono solo nella zona dello stopper; altrove si usano fotocellule e regole.

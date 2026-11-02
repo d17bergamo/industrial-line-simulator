@@ -81,7 +81,7 @@ public class LineIntegrationTests
         bool seen = false;
         while (e.Step())
         {
-            var inv2 = e.Zone("INV2")!;
+            var inv2 = e.Zone("M2")!;
             if (inv2.Mode == InverterMode.Stop && inv2.BlockedByAccumulation && !inv2.IsMoving)
             {
                 // Il pacco fermo in INV2 deve essere davanti a FC2 (non oltre la fine zona)
@@ -89,7 +89,7 @@ public class LineIntegrationTests
                 if (pk != null)
                 {
                     Assert.True(pk.HeadM >= 24.5 - 1e-6 && pk.HeadM <= inv2.Info.EndM);
-                    Assert.False(e.Zone("INV3")!.AcceptsFor(pk));
+                    Assert.False(e.Zone("M3")!.AcceptsFor(pk));
                     seen = true;
                     break;
                 }
@@ -136,7 +136,7 @@ public class LineIntegrationTests
         Assert.Equal(180, r.TheoreticalPackagesPerHour, 6);
         Assert.True(r.PackagesPerHour < r.TheoreticalPackagesPerHour);
         Assert.False(string.IsNullOrEmpty(r.BottleneckName));
-        Assert.Contains(r.BottleneckId, new[] { "INV3", "STATION" });
+        Assert.Contains(r.BottleneckId, new[] { "M3", "STATION" });
         Assert.NotEmpty(r.StrategyReports);
     }
 

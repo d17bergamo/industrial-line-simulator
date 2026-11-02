@@ -23,7 +23,7 @@ public sealed class LogicRule : ComponentBase
     [UiProperty("Regola attiva", "", "Regola", Order = 1)]
     public bool IsEnabled { get; set; } = true;
 
-    [UiProperty("Inverter destinazione", "", "Regola", Order = 2)]
+    [UiProperty("Modulo destinazione", "", "Regola", Order = 2)]
     public string TargetInverterId { get; set; } = string.Empty;
 
     [UiProperty("Azione", "", "Regola", Order = 3)]
@@ -103,13 +103,13 @@ public sealed class InverterRunningCondition : LogicCondition
 {
     public string InverterId { get; set; } = string.Empty;
     public bool Running { get; set; } = true;
-    public override string Describe() => $"INV[{InverterId}] {(Running ? "in moto" : "fermo")}";
+    public override string Describe() => $"MOD[{InverterId}] {(Running ? "in moto" : "fermo")}";
 }
 
 public sealed class ZoneOccupiedCondition : LogicCondition
 {
     public string InverterId { get; set; } = string.Empty;
-    public override string Describe() => $"Zona[{InverterId}] occupata";
+    public override string Describe() => $"Modulo[{InverterId}] occupato";
 }
 
 public sealed class StrapperBusyCondition : LogicCondition
@@ -140,7 +140,7 @@ public sealed class GapAheadLessThanCondition : LogicCondition
     /// <summary>Considera i pacchi la cui testa è nella zona di questo inverter.</summary>
     public string InverterId { get; set; } = string.Empty;
     public double GapMm { get; set; } = 1000;
-    public override string Describe() => $"Distanza da pacco precedente in zona[{InverterId}] < {GapMm:0} mm";
+    public override string Describe() => $"Distanza da pacco precedente nel modulo[{InverterId}] < {GapMm:0} mm";
 }
 
 public sealed class SignalCondition : LogicCondition

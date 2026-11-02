@@ -14,30 +14,25 @@ public static class SampleProjects
 
     /// <summary>
     /// Linea di riferimento:
-    /// INV1 ingresso (0-13 m) → INV2 accumulo (13-26 m) → INV3 legatura, 2 sezioni (26-42 m)
-    /// → INV4 uscita con stopper a 55 m e trasferitore sotto il pacco in battuta.
+    /// M1 ingresso (0-13 m) → M2 accumulo (13-26 m) → M3 legatura (26-42 m)
+    /// → M4 uscita con stopper a 55 m e trasferitore sotto il pacco in battuta.
     /// Pacco 12 m / 3000 kg con legature a 1500, 6000, 10500 mm dalla testa.
     /// </summary>
     public static LineProject CreateStandardLine()
     {
         var p = new LineProject { Name = "Linea standard - 3 legatrici", Description = "Linea di esempio con accumulo, stazione di legatura a 3 legatrici, stopper e trasferitore." };
 
-        p.Inverters.Add(Inv("INV1", "Inverter 1 - Ingresso"));
-        p.Inverters.Add(Inv("INV2", "Inverter 2 - Accumulo"));
-        p.Inverters.Add(Inv("INV3", "Inverter 3 - Legatura"));
-        p.Inverters.Add(Inv("INV4", "Inverter 4 - Uscita/Stopper"));
 
-        p.Sections.Add(Sec("S1", "Via ingresso", 0, 13000, "INV1"));
-        p.Sections.Add(Sec("S2", "Via accumulo", 13000, 13000, "INV2"));
-        p.Sections.Add(Sec("S3", "Legatura A", 26000, 8000, "INV3"));
-        p.Sections.Add(Sec("S4", "Legatura B", 34000, 8000, "INV3"));
-        p.Sections.Add(Sec("S5", "Via uscita", 42000, 14000, "INV4"));
+        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Accumulo", 13000, 13000));
+        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 26000, 16000));
+        p.Sections.Add(Mod("M4", "Modulo 4 - Uscita/Stopper", 42000, 14000));
 
         p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "INV1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "INV2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 40500, "INV3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 53500, "INV4", PhotocellAction.SlowDown));
+        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "M2", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 40500, "M3", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 53500, "M4", PhotocellAction.SlowDown));
         p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 54800, "", PhotocellAction.None));
 
         p.Strappers.Add(Str("L1", "Legatrice 1", 30500));
@@ -47,7 +42,7 @@ public static class SampleProjects
         p.StrappingStation = new StrappingStationConfig
         {
             IsEnabled = true,
-            InverterId = "INV3",
+            InverterId = "M3",
             PositioningSpeed = 0.3,
             PositioningToleranceMm = 2,
             Strategy = StrappingStrategyMode.Automatic
@@ -84,17 +79,16 @@ public static class SampleProjects
         p.Name = "Linea con 1 legatrice";
         p.Description = "Una sola legatrice: legature eseguite in sequenza con riposizionamento del pacco.";
         p.Sections.Clear();
-        p.Sections.Add(Sec("S1", "Via ingresso", 0, 13000, "INV1"));
-        p.Sections.Add(Sec("S2", "Via accumulo", 13000, 13000, "INV2"));
-        p.Sections.Add(Sec("S3", "Legatura A", 26000, 11000, "INV3"));
-        p.Sections.Add(Sec("S4", "Legatura B", 37000, 11000, "INV3"));
-        p.Sections.Add(Sec("S5", "Via uscita", 48000, 14000, "INV4"));
+        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Accumulo", 13000, 13000));
+        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 26000, 22000));
+        p.Sections.Add(Mod("M4", "Modulo 4 - Uscita/Stopper", 48000, 14000));
         p.Photocells.Clear();
         p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "INV1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "INV2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 46500, "INV3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 59500, "INV4", PhotocellAction.SlowDown));
+        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "M2", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 46500, "M3", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 59500, "M4", PhotocellAction.SlowDown));
         p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 60800, "", PhotocellAction.None));
         p.Strappers.Clear();
         p.Strappers.Add(Str("L1", "Legatrice 1", 37000));
@@ -105,9 +99,9 @@ public static class SampleProjects
 
     /// <summary>
     /// Linea completa con tutte le logiche di processo:
-    /// INV1 ingresso (0-13 m, fotocellula di ingresso FC0) → INV2 rigettatrice SMA (13-27 m)
-    /// → INV3 legatura con stringifascio KNOF, compattatore laterale e 3 legatrici KNCA 7/800 (27-43 m)
-    /// → INV4 accumulo/trasferitore 12,5 m con fermo intermedio (intestatura di testa) e stopper finale
+    /// M1 ingresso (0-13 m, fotocellula di ingresso FC0) → M2 rigettatrice SMA (13-27 m)
+    /// → M3 legatura con stringifascio KNOF, compattatore laterale e 3 legatrici KNCA 7/800 (27-43 m)
+    /// → M4 accumulo/trasferitore 12,5 m con fermo intermedio (intestatura di testa) e stopper finale
     /// → trasferitore a 2 pacchi → 2 bilici di pesatura.
     /// Pacchi misti 6 m / 6 m / 12 m / 4 m; il pacco n. 5 viene rigettato.
     /// </summary>
@@ -118,22 +112,17 @@ public static class SampleProjects
             Name = "Linea completa - SMA, KNOF, compattatore, fermi, bilici",
             Description = "Fotocellula di ingresso, arresto automatico inverter, rigettatrice SMA, stringifascio KNOF, compattatore, legatrici KNCA 7/800, accumulo 12 m con fermo intermedio, trasferitore a 2 pacchi e bilici."
         };
-        p.Inverters.Add(Inv("INV1", "Inverter 1 - Ingresso"));
-        p.Inverters.Add(Inv("INV2", "Inverter 2 - Rigettatrice SMA"));
-        p.Inverters.Add(Inv("INV3", "Inverter 3 - Legatura"));
-        p.Inverters.Add(Inv("INV4", "Inverter 4 - Accumulo trasferitore"));
 
-        p.Sections.Add(Sec("S1", "Via ingresso", 0, 13000, "INV1"));
-        p.Sections.Add(Sec("S2", "Via rigettatrice", 13000, 14000, "INV2"));
-        p.Sections.Add(Sec("S3", "Legatura A", 27000, 8000, "INV3"));
-        p.Sections.Add(Sec("S4", "Legatura B", 35000, 8000, "INV3"));
-        p.Sections.Add(Sec("S5", "Accumulo trasferitore", 43000, 14000, "INV4"));
+        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Rigettatrice SMA", 13000, 14000));
+        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 27000, 16000));
+        p.Sections.Add(Mod("M4", "Modulo 4 - Accumulo trasferitore", 43000, 14000));
 
         p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "INV1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo SMA", 25500, "INV2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 41500, "INV3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 54500, "INV4", PhotocellAction.SlowDown));
+        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC2", "FC2 accumulo SMA", 25500, "M2", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 41500, "M3", PhotocellAction.Accumulation));
+        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 54500, "M4", PhotocellAction.SlowDown));
         p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 56300, "", PhotocellAction.None));
 
         p.Strappers.Add(Str("L1", "Legatrice KNCA 1", 31500));
@@ -141,7 +130,7 @@ public static class SampleProjects
         p.Strappers.Add(Str("L3", "Legatrice KNCA 3", 40500));
         p.StrappingStation = new StrappingStationConfig
         {
-            IsEnabled = true, InverterId = "INV3", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic
+            IsEnabled = true, InverterId = "M3", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic
         };
         p.BundleClamp = new BundleClampConfig { IsEnabled = true, PositionMm = 30800, CloseTimeS = 1.5, HoldTimeS = 0.5, OpenTimeS = 1.5 };
         p.Compactor = new SideCompactorConfig
@@ -193,16 +182,12 @@ public static class SampleProjects
         ResponseTimeMs = 20, IsEntryPhotocell = true, Action = PhotocellAction.None
     };
 
-    private static InverterConfig Inv(string id, string name) => new()
-    {
-        Id = id, Name = name, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
-    };
-
-    private static RollerSection Sec(string id, string name, double start, double length, string inv) => new()
+    /// <summary>Modulo di via a rulli con il proprio inverter (0,15/0,6 m/s, 0,5/0,6 m/s²).</summary>
+    private static RollerSection Mod(string id, string name, double start, double length) => new()
     {
         Id = id, Name = name, StartMm = start, LengthMm = length, WidthMm = 1200,
         RollerPitchMm = 300, RollerCount = (int)Math.Floor(length / 300.0) + 1 - (length % 300 == 0 ? 1 : 0),
-        RollerDiameterMm = 150, InverterId = inv
+        RollerDiameterMm = 150, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
     };
 
     private static PhotocellConfig Pc(string id, string name, double pos, string inv, PhotocellAction action) => new()

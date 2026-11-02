@@ -2,10 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace LineSimulator.Models;
 
-/// <summary>Sezione di via a rulli. Le grandezze cinematiche appartengono all'inverter associato.</summary>
+/// <summary>
+/// Modulo di via a rulli: ogni modulo ha il proprio inverter, quindi contiene sia la geometria
+/// sia i parametri di azionamento (velocità in m/s, rampe in m/s²). Un modulo = una zona di comando.
+/// </summary>
 public sealed class RollerSection : ComponentBase
 {
-    [UiProperty("Inizio sezione (posizione in linea)", "mm", "Geometria", Order = 1)]
+    [UiProperty("Inizio modulo (posizione in linea)", "mm", "Geometria", Order = 1)]
     public double StartMm { get; set; }
 
     [UiProperty("Lunghezza", "mm", "Geometria", Order = 2)]
@@ -23,21 +26,60 @@ public sealed class RollerSection : ComponentBase
     [UiProperty("Diametro rulli (grafico)", "mm", "Geometria", Order = 6)]
     public double RollerDiameterMm { get; set; } = 150;
 
+    [UiProperty("Velocità bassa", "m/s", "Inverter", Order = 20)]
+    public double LowSpeed { get; set; } = 0.15;
+
+    [UiProperty("Velocità alta", "m/s", "Inverter", Order = 21)]
+    public double HighSpeed { get; set; } = 0.6;
+
+    [UiProperty("Accelerazione", "m/s²", "Inverter", Order = 22)]
+    public double Acceleration { get; set; } = 0.5;
+
+    [UiProperty("Decelerazione", "m/s²", "Inverter", Order = 23)]
+    public double Deceleration { get; set; } = 0.6;
+
+    [UiProperty("Velocità di default in marcia", "", "Inverter", Order = 24)]
+    public SpeedLevel DefaultSpeed { get; set; } = SpeedLevel.High;
+
+    /// <summary>
+    /// Arresto automatico: quando nel modulo e nel modulo precedente non ci sono pacchi
+    /// (né pacchi in arrivo) l'inverter si ferma; riparte appena un pacco si avvicina.
+    /// </summary>
+    [UiProperty("Arresto automatico senza pacchi", "", "Inverter", Order = 25)]
+    public bool AutoStopWhenEmpty { get; set; } = true;
+
     [UiProperty("Direzione di movimentazione", "", "Funzionamento", Order = 10)]
     public TransportDirection Direction { get; set; } = TransportDirection.Forward;
 
-    [UiProperty("Inverter associato", "", "Funzionamento", Order = 11)]
-    public string InverterId { get; set; } = string.Empty;
-
-    [UiProperty("Sezione operativa", "", "Funzionamento", Order = 12)]
+    [UiProperty("Modulo operativo (inverter abilitato)", "", "Funzionamento", Order = 12)]
     public bool IsEnabled { get; set; } = true;
 
     [JsonIgnore]
     public double EndMm => StartMm + LengthMm;
+
+    [JsonIgnore]
+    [UiProperty("Tempo di accelerazione (0→alta)", "s", "Inverter", ReadOnly = true, Order = 30)]
+    public double AccelerationTimeS => Acceleration > 0 ? HighSpeed / Acceleration : double.PositiveInfinity;
+
+    [JsonIgnore]
+    [UiProperty("Tempo di frenatura (alta→0)", "s", "Inverter", ReadOnly = true, Order = 31)]
+    public double BrakingTimeS => Deceleration > 0 ? HighSpeed / Deceleration : double.PositiveInfinity;
+
+    [JsonIgnore]
+    [UiProperty("Spazio di frenatura da alta", "mm", "Inverter", ReadOnly = true, Order = 32)]
+    public double BrakingDistanceHighMm => Deceleration > 0 ? HighSpeed * HighSpeed / (2 * Deceleration) * 1000.0 : double.PositiveInfinity;
+
+    /// <summary>Parametri di azionamento del modulo nella forma usata dal motore e dall'ottimizzatore.</summary>
+    public InverterConfig ToDrive() => new()
+    {
+        Id = Id, Name = Name, LowSpeed = LowSpeed, HighSpeed = HighSpeed, Acceleration = Acceleration,
+        Deceleration = Deceleration, DefaultSpeed = DefaultSpeed, IsEnabled = IsEnabled, AutoStopWhenEmpty = AutoStopWhenEmpty
+    };
 }
 
 /// <summary>
-/// Inverter (azionamento) che comanda una o più sezioni a rulli.
+/// Parametri di azionamento (inverter) di un modulo di via a rulli. Non è più un componente separato del progetto:
+/// viene ricavato da <see cref="RollerSection.ToDrive"/>.
 /// Velocità in m/s, accelerazioni in m/s².
 /// </summary>
 public sealed class InverterConfig : ComponentBase
@@ -141,7 +183,7 @@ public sealed class PhotocellConfig : ComponentBase
     [UiProperty("Logica di rilevamento", "", "Logica", Order = 13)]
     public PhotocellDetectionMode DetectionMode { get; set; } = PhotocellDetectionMode.Presence;
 
-    [UiProperty("Inverter comandato", "", "Logica", Order = 10)]
+    [UiProperty("Modulo comandato", "", "Logica", Order = 10)]
     public string ControlledInverterId { get; set; } = string.Empty;
 
     [UiProperty("Condizione di attivazione", "", "Logica", Order = 11)]

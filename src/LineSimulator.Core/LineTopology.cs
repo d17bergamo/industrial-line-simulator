@@ -13,9 +13,10 @@ public enum ZoneKind
     Stopper = 2
 }
 
-/// <summary>Zona = insieme delle sezioni comandate dallo stesso inverter (unità di comando).</summary>
+/// <summary>Zona di comando = modulo di via a rulli con il suo inverter.</summary>
 public sealed class ZoneInfo
 {
+    /// <summary>Parametri di azionamento del modulo.</summary>
     public required InverterConfig Inverter { get; init; }
     public required IReadOnlyList<RollerSection> Sections { get; init; }
     public int Index { get; internal set; }
@@ -38,21 +39,17 @@ public sealed class LineTopology
     public LineTopology(LineProject project)
     {
         Project = project;
+        // Ogni modulo di via a rulli ha il proprio inverter: una zona = un modulo.
         var zones = new List<ZoneInfo>();
-        foreach (var inv in project.Inverters)
+        foreach (var sec in project.Sections)
         {
-            var secs = project.Sections.Where(s => s.InverterId == inv.Id).OrderBy(s => s.StartMm).ToList();
-            if (secs.Count == 0) continue;
-            bool contiguous = true;
-            for (int i = 1; i < secs.Count; i++)
-                if (Math.Abs(secs[i].StartMm - secs[i - 1].EndMm) > 0.5) contiguous = false;
             zones.Add(new ZoneInfo
             {
-                Inverter = inv,
-                Sections = secs,
-                StartM = Units.MmToM(secs.Min(s => s.StartMm)),
-                EndM = Units.MmToM(secs.Max(s => s.EndMm)),
-                IsContiguous = contiguous
+                Inverter = sec.ToDrive(),
+                Sections = new[] { sec },
+                StartM = Units.MmToM(sec.StartMm),
+                EndM = Units.MmToM(sec.EndMm),
+                IsContiguous = true
             });
         }
         zones.Sort((a, b) => a.StartM.CompareTo(b.StartM));
