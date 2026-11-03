@@ -375,7 +375,7 @@ public static class ProjectValidator
         var k = p.BundleClamp;
         if (k.IsEnabled)
         {
-            if (stationZone == null) r.Error("KNOF_STATION", "Lo stringifascio richiede una stazione di legatura attiva.", k.Id);
+            if (stationZone == null) r.Warn("KNOF_STATION", "Stringifascio inattivo: nessuna legatrice abilitata (stazione di legatura non attiva).", k.Id);
             else
             {
                 double x = Units.MmToM(k.PositionMm);
@@ -392,7 +392,7 @@ public static class ProjectValidator
         var c = p.Compactor;
         if (c.IsEnabled)
         {
-            if (stationZone == null) r.Error("CMP_STATION", "Il compattatore richiede una stazione di legatura attiva.", c.Id);
+            if (stationZone == null) r.Warn("CMP_STATION", "Compattatore inattivo: nessuna legatrice abilitata (stazione di legatura non attiva).", c.Id);
             else
             {
                 double x = Units.MmToM(c.PositionMm);

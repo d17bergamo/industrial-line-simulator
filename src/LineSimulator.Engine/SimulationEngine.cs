@@ -59,8 +59,10 @@ public sealed partial class SimulationEngine : ILogicContext
     public SimulationEngine(LineProject project)
     {
         Project = project;
-        // Sensori di processo obbligatori aggiunti in automatico se mancano (vedi ProjectNormalizer)
-        AutoAddedSensors = ProjectNormalizer.EnsureProcessSensors(project);
+        // Preparazione del ciclo: nomi progressivi, collegamenti, stazione che segue le legatrici, sensori automatici,
+        // legatura obbligatoria con legatrici abilitate (vedi SimulationPreparation)
+        Preparation = SimulationPreparation.Prepare(project);
+        AutoAddedSensors = Preparation.Changes;
         Validation = ProjectValidator.Validate(project);
         Topology = new LineTopology(project);
         Dt = Math.Clamp(project.Simulation.TimeStepMs, 0.1, 100) / 1000.0;
@@ -125,10 +127,14 @@ public sealed partial class SimulationEngine : ILogicContext
 
         InitRecorder();
 
-        if (Validation.HasErrors)
+        foreach (var c in Preparation.Changes)
+            Emit(SimEventType.ConfigurationError, EventSeverity.Info, "Preparazione del ciclo: " + c);
+        if (Validation.HasErrors || Preparation.HasErrors)
         {
             foreach (var e in Validation.Errors)
                 Emit(SimEventType.ConfigurationError, EventSeverity.Error, e.Message, e.ComponentId);
+            foreach (var e in Preparation.Errors)
+                Emit(SimEventType.ConfigurationError, EventSeverity.Error, e);
             Finish("Configurazione non valida: correggere gli errori prima di simulare.", false);
             return;
         }
@@ -175,8 +181,10 @@ public sealed partial class SimulationEngine : ILogicContext
     public IReadOnlyList<SimEvent> Events => _events;
     public SimulationRecorder Recorder { get; } = new();
     public IReadOnlyCollection<string> ActiveSignals => _signals;
-    /// <summary>Sensori di processo aggiunti automaticamente al progetto all'avvio (descrizioni).</summary>
+    /// <summary>Correzioni applicate al progetto all'avvio (descrizioni), compresi i sensori aggiunti automaticamente.</summary>
     public IReadOnlyList<string> AutoAddedSensors { get; }
+    /// <summary>Esito della preparazione del ciclo (correzioni ed errori).</summary>
+    public PreparationReport Preparation { get; }
 
     // Contatori anomalie
     public int Collisions { get; private set; }
@@ -467,17 +475,20 @@ public sealed partial class SimulationEngine : ILogicContext
         st.Package = p;
         st.StopIndex = 0;
         st.Plan = null;
-        if (p.StrapStatus != StrapStatus.Pending)
+        // Con le legatrici abilitate ogni pacco deve essere legato: un pacco non legabile resta fermo in stazione.
+        bool machines = _strappers.Any(s => s.Config.IsEnabled);
+        if (p.StrapStatus != StrapStatus.Pending && !(machines && p.StrapStatus == StrapStatus.NotRequired))
         {
             st.State = StationState.Releasing;
             return;
         }
-        if (!_plans.TryGetValue(p.Type.Id, out var cmp) || !cmp.Selected.IsFeasible)
+        if (p.StrapStatus == StrapStatus.NotRequired || !_plans.TryGetValue(p.Type.Id, out var cmp) || !cmp.Selected.IsFeasible)
         {
             p.StrapStatus = StrapStatus.Failed;
-            st.State = StationState.Releasing;
+            st.State = StationState.Blocked;
+            p.State = PackageState.Strapping;
             Emit(SimEventType.StrappingPlanError, EventSeverity.Error,
-                $"{p.Id} transita NON legato: piano di legatura non disponibile per {p.Type.Id}.", st.Zone.Id, p.Id);
+                $"{p.Id} fermo in stazione: con le legatrici abilitate deve essere legato, ma per {p.Type.Id} non c'è un piano di legatura ammissibile.", st.Zone.Id, p.Id);
             return;
         }
         st.Plan = cmp.Selected;
@@ -560,7 +571,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 z.PositionCommand = Station.VelocityCommand(dt);
             }
             else if (Station != null && z == Station.Zone && Station.State is StationState.Strapping or StationState.Compacting
-                         or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers)
+                         or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers or StationState.Blocked)
             {
                 mode = InverterMode.Stop;
                 reason = Station.State switch
@@ -569,6 +580,7 @@ public sealed partial class SimulationEngine : ILogicContext
                     StationState.Clamping => "Chiusura stringifascio in corso",
                     StationState.Unclamping => "Apertura stringifascio/compattatore",
                     StationState.WaitingStrappers => "Attesa carica filo / riarmo legatrici",
+                    StationState.Blocked => "Pacco non legabile: fermo (legatura obbligatoria)",
                     _ => "Legatura in corso"
                 };
             }

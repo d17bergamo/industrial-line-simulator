@@ -15,7 +15,9 @@ public enum StationState
     /// <summary>Fine legatura: mantenimento e apertura di stringifascio e compattatore.</summary>
     Unclamping,
     /// <summary>Pacco in posizione e dispositivi chiusi: attesa carica filo / riarmo delle macchine della fermata.</summary>
-    WaitingStrappers
+    WaitingStrappers,
+    /// <summary>Pacco non legabile con legatrici abilitate: resta fermo (la legatura è obbligatoria).</summary>
+    Blocked
 }
 
 /// <summary>

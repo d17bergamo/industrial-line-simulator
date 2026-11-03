@@ -1247,6 +1247,20 @@ public sealed partial class MainViewModel : ObservableObject
     private bool EnsureEngine()
     {
         if (_engine != null) return true;
+        // Preparazione del ciclo sul progetto dell'utente: nomi progressivi, collegamenti, stazione che segue le legatrici,
+        // sensori automatici; con le legatrici abilitate ogni pacco deve essere legato (vedi SimulationPreparation).
+        var prep = SimulationPreparation.Prepare(_project);
+        if (prep.Changed)
+        {
+            ProjectChanged(structural: true);
+            MessageBox.Show("Prima di simulare ho corretto il progetto per ottenere un ciclo funzionante:\n\n" + string.Join("\n", prep.Changes.Take(20).Select(c => "• " + c)),
+                "Preparazione del ciclo", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        if (prep.HasErrors)
+        {
+            MessageBox.Show(string.Join("\n\n", prep.Errors.Take(10).Select(e => "• " + e)), "Simulazione non avviabile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
         var report = ProjectValidator.Validate(_project);
         if (report.HasErrors)
         {
