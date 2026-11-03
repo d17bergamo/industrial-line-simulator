@@ -273,7 +273,8 @@ public static class SimulationPreparation
             if (!enabled || Math.Abs(pos - def) < Tol) continue;
             double x = pos / 1000.0;
             bool outside = zone == null || x < zone.StartM - 1e-9 || x > zone.EndM + 1e-9;
-            bool downstream = pos >= first.PositionMm;
+            // Lo stringifascio deve stare a monte della prima macchina; il compattatore può stare anche tra le macchine
+            bool downstream = id == p.BundleClamp.Id && pos >= first.PositionMm;
             if (!force && pos > 0 && !outside && !downstream) continue;
             set(def);
             changed = true;
