@@ -32,8 +32,11 @@ public sealed class RollerSection : ComponentBase
 
     private double _endOverhangMm = -1;
 
+    /// <summary>Distanza fissa tra l'asse del primo/ultimo rullo e l'estremità del modulo.</summary>
+    public const double StandardOverhangMm = 200;
+
     /// <summary>Sporgenza della struttura oltre l'asse del primo/ultimo rullo, per lato. Se non impostata deriva dalla lunghezza esistente.</summary>
-    [UiProperty("Sporgenza terminale (per lato)", "mm", "Geometria", Order = 7)]
+    [UiProperty("Sporgenza terminale (fissa a 200 mm per lato)", "mm", "Geometria", ReadOnly = true, Order = 7)]
     public double EndOverhangMm
     {
         get

@@ -106,7 +106,7 @@ public sealed partial class MainViewModel : ObservableObject
         AddRuleCommand = new RelayCommand(AddRule);
         AddStopCommand = new RelayCommand(AddStop);
         AddScaleCommand = new RelayCommand(AddScale);
-        DeleteCommand = new RelayCommand(DeleteSelected, () => CanDelete(SelectedNode?.Model));
+        DeleteCommand = new RelayCommand(DeleteSelected, () => SelectedModels().Any(CanDelete));
 
         PlayCommand = new RelayCommand(Play, () => !IsPlaying);
         PauseCommand = new RelayCommand(Pause, () => IsPlaying);
@@ -133,8 +133,8 @@ public sealed partial class MainViewModel : ObservableObject
         OpenLayoutCommand = new RelayCommand(OpenLayout);
         SavePackagesCommand = new RelayCommand(SavePackages);
         OpenPackagesCommand = new RelayCommand(OpenPackages);
-        DuplicateSelectedCommand = new RelayCommand(DuplicateSelected, () => CanDuplicate(SelectedNode?.Model));
-        RotateSelectedCommand = new RelayCommand(RotateSelected, () => CanRotate(SelectedNode?.Model));
+        DuplicateSelectedCommand = new RelayCommand(DuplicateSelected, () => SelectedModels().Any(CanDuplicate));
+        RotateSelectedCommand = new RelayCommand(RotateSelected, () => SelectedModels().Any(CanRotate));
         NewPackageCommand = new RelayCommand(NewPackage);
         DuplicatePackageCommand = new RelayCommand(DuplicatePackage, () => SelectedPackageType != null);
         DeletePackageCommand = new RelayCommand(DeletePackage, () => SelectedPackageType != null && _project.PackageTypes.Count > 1);
@@ -266,9 +266,35 @@ public sealed partial class MainViewModel : ObservableObject
         set
         {
             if (!Set(ref _selectedNode, value)) return;
+            ClearMultiSelection();
             BuildProperties();
             LayoutScene.Highlight(value?.Model);
         }
+    }
+
+    /// <summary>Componente principale più quelli aggiunti con Ctrl + clic nella struttura della linea.</summary>
+    public List<object> SelectedModels()
+    {
+        var list = new List<object>();
+        if (_selectedNode?.Model != null) list.Add(_selectedNode.Model);
+        foreach (var n in Tree.SelectMany(x => x.SelfAndDescendants()))
+            if (n.IsMultiSelected && n.Model != null && !list.Contains(n.Model)) list.Add(n.Model);
+        return list;
+    }
+
+    private void ClearMultiSelection()
+    {
+        foreach (var n in Tree.SelectMany(x => x.SelfAndDescendants())) n.IsMultiSelected = false;
+    }
+
+    /// <summary>Ctrl + clic su un nodo: lo aggiunge o toglie dalla selezione multipla.</summary>
+    public void ToggleMultiSelect(TreeNodeViewModel node)
+    {
+        if (node.Model == null || ReferenceEquals(node, _selectedNode)) return;
+        node.IsMultiSelected = !node.IsMultiSelected;
+        var n = SelectedModels().Count;
+        Status = n > 1 ? $"{n} componenti selezionati: Elimina, Duplica e Ruota valgono per tutti; una proprietà modificata si applica a quelli dello stesso tipo." : Status;
+        CommandManager.InvalidateRequerySuggested();
     }
 
     public double DisplayTime
@@ -423,6 +449,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
+        LineReflow.EnforceOverhang(_project);                    // 200 mm tra ultimo rullo e fine/inizio modulo
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
         _filePath = path;
         _modified = false;
@@ -697,8 +724,19 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void OnPropertyEdited(PropertyItemViewModel item)
     {
-        if (SelectedNode?.Model is RollerSection rs && (item.Name is "RollerCount" or "RollerPitchMm" or "EndOverhangMm"))
+        if (item.Name is not ("Id" or "Name") && SelectedNode?.Model is { } primary)
+        {
+            var others = SelectedModels().Where(o => !ReferenceEquals(o, primary) && o.GetType() == primary.GetType()).ToList();
+            var pi = primary.GetType().GetProperty(item.Name);
+            if (others.Count > 0 && pi != null) MultiEdit.Apply(others, pi, pi.GetValue(primary));
+        }
+        foreach (var rs in SelectedModels().OfType<RollerSection>().Where(_ => item.Name is "RollerCount" or "RollerPitchMm"))
+        {
+            double oldEnd = rs.EndMm;
+            rs.EndOverhangMm = RollerSection.StandardOverhangMm;
             rs.RecalculateLength();
+            LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle restano unite
+        }
         bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
         ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
@@ -738,6 +776,7 @@ public sealed partial class MainViewModel : ObservableObject
         double start = last?.EndMm ?? 0;
         var s = new RollerSection { Id = NextId("M", AllComponents()), StartMm = start, LengthMm = 6000, RollerCount = 20 };
         s.Name = "Modulo " + s.Id;
+        s.EndOverhangMm = RollerSection.StandardOverhangMm; s.RollerPitchMm = (6000 - 2 * RollerSection.StandardOverhangMm) / 19.0; s.RecalculateLength();
         if (last != null)
         {
             s.WidthMm = last.WidthMm; s.RollerPitchMm = last.RollerPitchMm; s.RollerDiameterMm = last.RollerDiameterMm;
@@ -814,25 +853,29 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void DeleteSelected()
     {
-        var m = SelectedNode?.Model;
-        if (!CanDelete(m)) return;
-        if (MessageBox.Show($"Eliminare {m}?", "Conferma", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        var models = SelectedModels().Where(CanDelete).ToList();
+        if (models.Count == 0) return;
+        string what = models.Count == 1 ? models[0].ToString() ?? "il componente" : $"{models.Count} componenti";
+        if (MessageBox.Show($"Eliminare {what}?", "Conferma", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        // le vie a rulli si tolgono da valle a monte: gli equipaggiamenti seguono e le vie restano unite
+        foreach (var m in models.OrderByDescending(x => x is RollerSection rs ? rs.StartMm : 0))
+        {
         switch (m)
         {
             case RollerSection s:
                 _project.Sections.Remove(s);
-                LineReflow.CloseGap(_project, s.StartMm, s.EndMm);      // gli equipaggiamenti seguono: le vie rimaste restano ricollegate
+                LineReflow.CloseGap(_project, s.StartMm, s.EndMm);
                 break;
             case PhotocellConfig pc: _project.Photocells.Remove(pc); break;
             case StrapperConfig st: _project.Strappers.Remove(st); break;
-            case PackageType t: _project.PackageTypes.Remove(t); break;
+            case PackageType tp: _project.PackageTypes.Remove(tp); break;
             case LogicRule r: _project.Rules.Remove(r); break;
             case IntermediateStopConfig fs: _project.IntermediateStops.Remove(fs); break;
             case WeighingScaleConfig sc: _project.Scales.Remove(sc); break;
-            // dispositivi singoli del progetto: "eliminare" = rimuoverli dal layout (disabilitarli)
             case BundleClampConfig k: k.IsEnabled = false; break;
             case SideCompactorConfig cm: cm.IsEnabled = false; break;
             case RejectorConfig rj: rj.IsEnabled = false; break;
+        }
         }
         _selectedNode = null;
         ProjectChanged(structural: true);
@@ -861,7 +904,7 @@ public sealed partial class MainViewModel : ObservableObject
                     sec.LowSpeed = last.LowSpeed; sec.HighSpeed = last.HighSpeed; sec.Acceleration = last.Acceleration; sec.Deceleration = last.Deceleration;
                     sec.DefaultSpeed = last.DefaultSpeed; sec.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
                 }
-                sec.EndOverhangMm = 150;
+                sec.EndOverhangMm = RollerSection.StandardOverhangMm;
                 sec.RecalculateLength();
                 // la nuova via si aggancia alla giunzione più vicina; gli equipaggiamenti a valle avanzano
                 var ordered = _project.Sections.OrderBy(v => v.StartMm).ToList();
@@ -903,6 +946,12 @@ public sealed partial class MainViewModel : ObservableObject
                 _project.Rejector.Side = yM >= 0 ? LateralSide.Right : LateralSide.Left;
                 added = _project.Rejector;
                 break;
+            case "chains":
+                _project.Transfer.Kind = TransferKind.Chains;
+                _project.Transfer.PositionMm = Math.Max(0, Snap(x - _project.Transfer.LengthMm / 2));
+                _project.Transfer.DestinationSide = yM >= 0 ? LateralSide.Left : LateralSide.Right;
+                added = _project.Transfer;
+                break;
             case "scale":
             {
                 var sc = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", LengthMm = 6000 };
@@ -941,7 +990,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!CanMove(m)) return;
         switch (m)
         {
-            case RollerSection s: s.StartMm += dxMm; break;
+            case RollerSection s: LineReflow.MoveSection(_project, s, dxMm); break;
             case PhotocellConfig pc: pc.PositionMm += dxMm; break;
             case StrapperConfig st: st.PositionMm += dxMm; st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right; break;
             case BundleClampConfig k: k.PositionMm += dxMm; break;
@@ -963,7 +1012,7 @@ public sealed partial class MainViewModel : ObservableObject
         var m = SelectedNode?.Model;
         switch (m)
         {
-            case RollerSection s: s.StartMm = Math.Max(0, Snap(s.StartMm)); break;
+            case RollerSection s: LineReflow.MoveSection(_project, s, Snap(s.StartMm) - s.StartMm); break;
             case PhotocellConfig pc: pc.PositionMm = Snap(pc.PositionMm); break;
             case StrapperConfig st: st.PositionMm = Snap(st.PositionMm); break;
             case BundleClampConfig k: k.PositionMm = Snap(k.PositionMm); break;
@@ -982,12 +1031,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RotateSelected()
     {
-        switch (SelectedNode?.Model)
+        foreach (var model in SelectedModels())
+        switch (model)
         {
             case StrapperConfig st: st.Side = st.Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
             case RejectorConfig r: r.Side = r.Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
             case TransferConfig t: t.DestinationSide = t.DestinationSide == LateralSide.Left ? LateralSide.Right : LateralSide.Left; break;
-            default: return;
         }
         ProjectChanged(structural: false);
         BuildProperties();
@@ -999,7 +1048,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void DuplicateSelected()
     {
-        switch (SelectedNode?.Model)
+        foreach (var model in SelectedModels().Where(CanDuplicate).ToList()) DuplicateModel(model);
+    }
+
+    private void DuplicateModel(object model)
+    {
+        switch (model)
         {
             case RollerSection s:
             {
@@ -1180,8 +1234,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void NewPackage()
     {
-        var t = new PackageType { Id = NextId("T", AllComponents()), Name = "Nuova tipologia" };
-        t.Name = "Tipologia " + t.Id;
+        // il nuovo pacco è sempre "generale" (valori standard) e si identifica alla prima fotocellula, il punto di zero
+        var t = new PackageType { Id = NextId("T", AllComponents()), Name = "Pacco generale" };
         _project.PackageTypes.Add(t);
         ProjectChanged(structural: true);
         SelectedPackageType = t;

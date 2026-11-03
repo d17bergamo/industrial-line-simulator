@@ -24,6 +24,9 @@ public sealed class TreeNodeViewModel : ObservableObject
     public ObservableCollection<TreeNodeViewModel> Children { get; } = new();
     public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
     public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
+    private bool _isMulti;
+    /// <summary>Selezione aggiuntiva (Ctrl + clic): si somma al componente principale selezionato.</summary>
+    public bool IsMultiSelected { get => _isMulti; set => Set(ref _isMulti, value); }
 
     public IEnumerable<TreeNodeViewModel> SelfAndDescendants()
     {

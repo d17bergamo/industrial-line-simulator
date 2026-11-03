@@ -185,8 +185,14 @@ public sealed class TransferSection
     public double LengthMm { get; set; } = 6000;
 }
 
+/// <summary>Tipo di trasferitore: a rulli/forche sollevabili oppure a catene.</summary>
+public enum TransferKind { Lifting, Chains }
+
 public sealed class TransferConfig : ComponentBase
 {
+    [UiProperty("Tipo di trasferitore", "", "Geometria", Order = 0)]
+    public TransferKind Kind { get; set; } = TransferKind.Lifting;
+
     [UiProperty("Inizio trasferitore (in linea)", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
 

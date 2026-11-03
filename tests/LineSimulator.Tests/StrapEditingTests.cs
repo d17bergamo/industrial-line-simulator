@@ -162,3 +162,69 @@ public class EquipmentCheckTests
         Assert.Single(p.Photocells, x => x.IsEntryPhotocell);
     }
 }
+
+public class SectionChainTests
+{
+    private static LineProject Chain()
+    {
+        var p = new LineProject();
+        for (int i = 0; i < 3; i++)
+        {
+            var s = new RollerSection { Id = "M" + (i + 1), Name = "M" + (i + 1), StartMm = i * 6000, LengthMm = 6000, RollerCount = 20 };
+            s.EndOverhangMm = RollerSection.StandardOverhangMm;
+            s.RollerPitchMm = 5600.0 / 19;
+            p.Sections.Add(s);
+        }
+        p.Transfer.PositionMm = 14000;
+        p.Scales.Add(new WeighingScaleConfig { Id = "B1", StartMm = 15000, LengthMm = 2000 });
+        return p;
+    }
+
+    [Fact]
+    public void MovingMiddleSection_KeepsNeighboursJoined_AndOverhang200()
+    {
+        var p = Chain();
+        double dx = LineReflow.MoveSection(p, p.Sections[1], 1000);
+        Assert.Equal(1000, dx);
+        Assert.Empty(LineReflow.Discontinuities(p));
+        Assert.Equal(7000, p.Sections[1].StartMm, 6);
+        Assert.Equal(7000, p.Sections[0].EndMm, 6);
+        Assert.Equal(18000, p.Sections[2].EndMm, 6);          // la fine linea resta ferma
+        Assert.All(p.Sections, s => Assert.Equal(200, s.EndOverhangMm, 6));
+        Assert.All(p.Sections, s => Assert.Equal(s.LengthMm, s.InteraxialLengthMm + 400, 6));
+    }
+
+    [Fact]
+    public void MovingLastSection_MovesTransferScalesAndStopperWithIt()
+    {
+        var p = Chain();
+        LineReflow.MoveSection(p, p.Sections[2], 500);
+        Assert.Empty(LineReflow.Discontinuities(p));
+        Assert.Equal(14500, p.Transfer.PositionMm, 6);
+        Assert.Equal(15500, p.Scales[0].StartMm, 6);
+        Assert.Equal(p.Sections[2].EndMm - 200 + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
+    }
+
+    [Fact]
+    public void MoveIsLimitedByNeighbourMinimumLength()
+    {
+        var p = Chain();
+        double dx = LineReflow.MoveSection(p, p.Sections[1], 100000);
+        Assert.True(dx < 6000);
+        Assert.Empty(LineReflow.Discontinuities(p));
+    }
+
+    [Fact]
+    public void EnforceOverhang_ChangesOnlyPitch()
+    {
+        var p = new LineProject();
+        var s = new RollerSection { Id = "M1", StartMm = 0, LengthMm = 6000, RollerCount = 20, RollerPitchMm = 300 };
+        s.EndOverhangMm = 150; s.RecalculateLength();
+        p.Sections.Add(s);
+        double start = s.StartMm, end = s.EndMm;
+        Assert.True(LineReflow.EnforceOverhang(p));
+        Assert.Equal(200, s.EndOverhangMm);
+        Assert.Equal(start, s.StartMm); Assert.Equal(end, s.EndMm, 6);
+        Assert.Equal(20, s.RollerCount);
+    }
+}

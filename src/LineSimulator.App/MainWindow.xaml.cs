@@ -111,6 +111,20 @@ public partial class MainWindow : Window
         if (!_vm.CanClose()) e.Cancel = true;
     }
 
+    /// <summary>Ctrl + clic su una voce della struttura: selezione multipla.</summary>
+    private void TreeItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        DependencyObject? d = e.OriginalSource as DependencyObject;
+        while (d != null && d is not TreeViewItem) d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+        if (!ReferenceEquals(d, sender)) return;                       // solo il nodo più interno
+        if (((TreeViewItem)sender).DataContext is TreeNodeViewModel node)
+        {
+            _vm.ToggleMultiSelect(node);
+            e.Handled = true;
+        }
+    }
+
     private void LineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is TreeNodeViewModel node) _vm.SelectedNode = node;
