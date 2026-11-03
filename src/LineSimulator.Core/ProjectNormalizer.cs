@@ -31,6 +31,28 @@ public static class ProjectNormalizer
         return true;
     }
 
+    /// <summary>Posizione (mm) dell'ultimo rullo dell'ultima via a rulli, oppure null se non ci sono vie a rulli.</summary>
+    public static double? LastRollerPositionMm(LineProject p)
+    {
+        if (p.Sections.Count == 0) return null;
+        var last = p.Sections.OrderBy(s => s.EndMm).Last();
+        return last.EndMm - last.EndOverhangMm;
+    }
+
+    /// <summary>
+    /// Il fermo finale sta sempre dopo l'ultimo rullo dell'ultima via a rulli: la posizione della battuta si calcola
+    /// dalla sola distanza rullo-fermo. Restituisce true se la posizione è cambiata.
+    /// </summary>
+    public static bool AlignStopperToLastRoller(LineProject p)
+    {
+        var last = LastRollerPositionMm(p);
+        if (last == null) return false;
+        double pos = last.Value + Math.Max(0, p.Stopper.DistanceFromLastRollerMm);
+        if (Math.Abs(pos - p.Stopper.PositionMm) < 1e-9) return false;
+        p.Stopper.PositionMm = pos;
+        return true;
+    }
+
     /// <summary>Distanza di default dei dispositivi KNOF / compattatore a monte della macchina di legatura.</summary>
     public const double DefaultClampOffsetMm = 450;
     /// <summary>Distanza della fotocellula di riferimento a monte dell'encoder di legatura.</summary>

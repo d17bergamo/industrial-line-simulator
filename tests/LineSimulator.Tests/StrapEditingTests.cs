@@ -59,3 +59,41 @@ public class StrapEditingTests
         Assert.False(StrapEditing.Remove(p, 5));
     }
 }
+
+public class StopperAlignmentTests
+{
+    [Fact]
+    public void Stopper_IsAfterTheLastRoller_AtTheSetDistance()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        var last = p.Sections.OrderBy(s => s.EndMm).Last();
+        double lastRoller = last.EndMm - last.EndOverhangMm;
+        p.Stopper.DistanceFromLastRollerMm = 40;
+        Assert.True(ProjectNormalizer.AlignStopperToLastRoller(p));
+        Assert.Equal(lastRoller + 40, p.Stopper.PositionMm, 6);
+        Assert.False(ProjectNormalizer.AlignStopperToLastRoller(p));   // idempotente
+    }
+
+    [Fact]
+    public void Stopper_FollowsTheLastRoller_WhenTheLastSectionMoves()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        double before = p.Stopper.PositionMm;
+        p.Sections.OrderBy(s => s.EndMm).Last().StartMm += 1000;
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        Assert.Equal(before + 1000, p.Stopper.PositionMm, 6);
+    }
+
+    [Fact]
+    public void Stopper_BeyondTheLastSection_StillBelongsToTheLastZone()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        var last = p.Sections.OrderBy(s => s.EndMm).Last();
+        p.Stopper.DistanceFromLastRollerMm = last.EndOverhangMm + 500;   // oltre la fine della via a rulli
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        var topo = new LineTopology(p);
+        Assert.NotNull(topo.StopperZone);
+        Assert.Equal(last.Id, topo.StopperZone!.Sections.Last().Id);
+    }
+}

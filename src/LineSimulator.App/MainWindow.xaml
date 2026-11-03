@@ -258,8 +258,8 @@
                     <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                         <Grid>
                             <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True"
-                                               PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" PreviewMouseMove="LayoutViewport_PreviewMouseMove"
-                                               PreviewMouseLeftButtonUp="LayoutViewport_PreviewMouseLeftButtonUp"
+                                               PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" PreviewMouseMove="MoveViewport_PreviewMouseMove"
+                                               PreviewMouseLeftButtonUp="MoveViewport_PreviewMouseLeftButtonUp"
                                                AllowDrop="True" DragEnter="LayoutViewport_DragOver" DragOver="LayoutViewport_DragOver"
                                                DragLeave="LayoutViewport_DragLeave" Drop="LayoutViewport_Drop" Background="White">
                                 <h:DefaultLights/>
@@ -399,6 +399,8 @@
                                 <ColumnDefinition Width="280" MinWidth="200"/>
                                 <ColumnDefinition Width="5"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="5"/>
+                                <ColumnDefinition Width="300" MinWidth="200"/>
                             </Grid.ColumnDefinitions>
                     <DockPanel Grid.Column="0" Background="White">
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Stato delle apparecchiature"/>
@@ -439,7 +441,8 @@
                 <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                     <Grid>
                         <h:HelixViewport3D x:Name="Viewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True"
-                                           PreviewMouseLeftButtonDown="Viewport_PreviewMouseLeftButtonDown"
+                                           PreviewMouseLeftButtonDown="Viewport_PreviewMouseLeftButtonDown" PreviewMouseMove="MoveViewport_PreviewMouseMove"
+                                           PreviewMouseLeftButtonUp="MoveViewport_PreviewMouseLeftButtonUp"
                                            Background="White">
                             <h:DefaultLights/>
                         </h:HelixViewport3D>
@@ -485,6 +488,25 @@
                     </DockPanel>
                 </Border>
             </Grid>
+                            <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+                            <DockPanel Grid.Column="4" Background="White">
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Macchina selezionata"/>
+                                <TextBlock DockPanel.Dock="Top" Foreground="#5A6672" TextWrapping="Wrap" Margin="8,0,8,6"
+                                           Text="Clic sulla macchina nel 3D per modificarla; trascinala per spostarla lungo la linea. Ogni modifica riporta la simulazione a zero."/>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding PropertiesView}" ItemTemplate="{StaticResource PropEditor}" Margin="6,0,6,8">
+                                        <ItemsControl.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,8,0,2"/>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ItemsControl.GroupStyle>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </DockPanel>
                         </Grid>
                     </TabItem>
                     <TabItem Header="Ciclogramma a gradini">
