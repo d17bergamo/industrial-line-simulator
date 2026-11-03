@@ -1080,14 +1080,6 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Incrementato ad ogni modifica del pacco: ridisegna l'anteprima con le legature.</summary>
     public int PackagePreviewVersion { get => _packagePreviewVersion; private set => Set(ref _packagePreviewVersion, value); }
 
-    /// <summary>Legature spostate, aggiunte o tolte col mouse nell'anteprima.</summary>
-    public void OnStrapsEditedInPreview()
-    {
-        ProjectChanged(structural: false);
-        BuildPackageProperties();
-        PackagePreviewVersion++;
-    }
-
     private void BuildPackageProperties()
     {
         PackagePreviewVersion++;

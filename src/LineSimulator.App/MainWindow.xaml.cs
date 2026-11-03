@@ -60,7 +60,6 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(_vm.OpenCommand, Key.O, ModifierKeys.Control));
         Loaded += (_, _) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
         Closing += OnClosing;
-        PackagePreview.StrapsEdited += _vm.OnStrapsEditedInPreview;
         PackageViewport.Children.Add(_packageScene.Visual);
         _vm.PropertyChanged += (_, e) =>
         {
