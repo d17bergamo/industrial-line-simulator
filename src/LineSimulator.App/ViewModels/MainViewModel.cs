@@ -91,6 +91,8 @@ public sealed partial class MainViewModel : ObservableObject
         DuplicateCommand = new RelayCommand(Duplicate);
         LoadExampleCommand = new RelayCommand(p => { if (p is ExampleItem ex && ConfirmDiscard()) LoadProject(ex.Factory(), null); });
         ExportCsvCommand = new RelayCommand(ExportCsv, () => _engine != null);
+        AddStrapCommand = new RelayCommand(AddStrap, () => _selectedPackageType != null);
+        RemoveStrapCommand = new RelayCommand(RemoveStrap, () => _selectedPackageType != null && _selectedPackageType.StrapPositionsMm.Count > 0);
         AddTransferSectionCommand = new RelayCommand(AddTransferSection);
         RemoveTransferSectionCommand = new RelayCommand(RemoveTransferSection);
         RefreshStepCommand = new RelayCommand(RefreshStep);
@@ -1080,6 +1082,46 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Incrementato ad ogni modifica del pacco: ridisegna l'anteprima con le legature.</summary>
     public int PackagePreviewVersion { get => _packagePreviewVersion; private set => Set(ref _packagePreviewVersion, value); }
 
+    private int _selectedStrapIndex = -1;
+    /// <summary>Legatura selezionata nell'anteprima in pianta (indice dalla testa), -1 se nessuna.</summary>
+    public int SelectedStrapIndex { get => _selectedStrapIndex; set => Set(ref _selectedStrapIndex, value); }
+    public ICommand AddStrapCommand { get; private set; } = null!;
+    public ICommand RemoveStrapCommand { get; private set; } = null!;
+
+    /// <summary>Legature spostate col mouse nell'anteprima: aggiorna progetto e campi.</summary>
+    public void OnStrapsEditedInPreview()
+    {
+        ProjectChanged(structural: false);
+        BuildPackageProperties();
+    }
+
+    private void AddStrap()
+    {
+        var p = _selectedPackageType;
+        if (p == null) return;
+        if (!StrapEditing.TryAdd(p, out var at))
+        {
+            Status = "Non c'è posto per un'altra legatura: servono le distanze minime tra legature e dalle estremità.";
+            return;
+        }
+        SelectedStrapIndex = p.StrapPositionsMm.IndexOf(at);
+        ProjectChanged(structural: false);
+        BuildPackageProperties();
+        Status = $"Legatura aggiunta a {at:0} mm dalla testa ({p.StrapPositionsMm.Count} legature).";
+    }
+
+    private void RemoveStrap()
+    {
+        var p = _selectedPackageType;
+        if (p == null || p.StrapPositionsMm.Count == 0) return;
+        int idx = SelectedStrapIndex >= 0 && SelectedStrapIndex < p.StrapPositionsMm.Count ? SelectedStrapIndex : p.StrapPositionsMm.Count - 1;
+        StrapEditing.Remove(p, idx);
+        SelectedStrapIndex = -1;
+        ProjectChanged(structural: false);
+        BuildPackageProperties();
+        Status = $"Legatura tolta ({p.StrapPositionsMm.Count} legature).";
+    }
+
     private void BuildPackageProperties()
     {
         PackagePreviewVersion++;
@@ -1092,6 +1134,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void OnPackageEdited(PropertyItemViewModel item)
     {
         var sel = _selectedPackageType;
+        if (sel != null && item.Name == nameof(PackageType.StrapPositionsMm)) { StrapEditing.SnapAll(sel); item.Refresh(); }
         bool renamed = item.Name is "Id" or "Name";
         ProjectChanged(structural: false);
         if (renamed)
