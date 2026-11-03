@@ -1,7 +1,7 @@
 <Window x:Class="LineSimulator.App.SpeedWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Velocità di linea e produttività" Width="400" SizeToContent="Height" ResizeMode="NoResize"
+        Icon="Assets/app.ico" Title="Velocità di linea e produttività" Width="400" SizeToContent="Height" ResizeMode="NoResize"
         ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual" Background="White">
     <StackPanel Margin="14">
         <TextBlock Text="Velocità di trasporto" FontWeight="SemiBold" FontSize="14"/>

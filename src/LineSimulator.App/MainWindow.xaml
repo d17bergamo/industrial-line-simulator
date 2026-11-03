@@ -5,7 +5,7 @@
         xmlns:vm="clr-namespace:LineSimulator.App.ViewModels"
         xmlns:mvvm="clr-namespace:LineSimulator.App.Mvvm"
         xmlns:ctl="clr-namespace:LineSimulator.App.Controls"
-        Title="{Binding Title}" Height="900" Width="1500" WindowState="Maximized"
+        Icon="Assets/app.ico" Title="{Binding Title}" Height="900" Width="1500" WindowState="Maximized"
         FontFamily="Segoe UI" FontSize="12" Background="{StaticResource PanelBg}">
     <Window.Resources>
         <mvvm:EqualsToVisibilityConverter x:Key="EqVis"/>
