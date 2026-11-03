@@ -344,11 +344,12 @@
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
                             <Grid>
-                                <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="White">
+                                <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="White"
+                                                   RotateGesture="LeftClick" PanGesture="RightClick">
                                     <h:DefaultLights/>
                                 </h:HelixViewport3D>
                                 <TextBlock Margin="8" VerticalAlignment="Top" HorizontalAlignment="Left" Foreground="#5A6672" Background="#CCFFFFFF" Padding="4"
-                                           Text="Vista 3D del pacco · legature in verde (rosse se fuori dalle distanze minime) · testa a destra"/>
+                                           Text="Tieni premuto il tasto sinistro e muovi il mouse per ruotare · rotella: zoom · tasto destro: sposta · legature in verde (rosse se fuori dalle distanze minime) · testa a destra"/>
                             </Grid>
                         </Border>
                         <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
@@ -362,10 +363,6 @@
                                 </StackPanel>
                             </Border>
                             <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Caratteristiche del pacco selezionato"/>
-                            <Border DockPanel.Dock="Top" BorderBrush="#D0D4D9" BorderThickness="0,0,0,1" Margin="8,0,8,4" MaxHeight="160">
-                                <ctl:PackagePreviewControl x:Name="PackagePreview" Package="{Binding SelectedPackageType}" Version="{Binding PackagePreviewVersion}"
-                                    ToolTip="Legature: trascina per spostare, doppio clic per aggiungere, clic destro per togliere (posizioni dalla testa)"/>
-                            </Border>
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" Margin="8,0,8,8" MaxWidth="640" HorizontalAlignment="Left">
                                     <ItemsControl.GroupStyle>
