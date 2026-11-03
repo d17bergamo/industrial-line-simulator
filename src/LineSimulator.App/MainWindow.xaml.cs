@@ -7,35 +7,12 @@ using System.Windows.Media.Media3D;
 using LineSimulator.App.Controls;
 using LineSimulator.App.Mvvm;
 using LineSimulator.App.ViewModels;
-using LineSimulator.Models;
 
 namespace LineSimulator.App;
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
-    private readonly Rendering.PackageScene _packageScene = new();
-    private PackageType? _lastPackage3D;
-
-    /// <summary>Ridisegna il pacco 3D; l'inquadratura si adatta solo quando cambia il pacco selezionato.</summary>
-    private void RefreshPackage3D()
-    {
-        var sel = _vm.SelectedPackageType;
-        _packageScene.Build(sel);
-        if (sel == null || ReferenceEquals(sel, _lastPackage3D)) return;
-        _lastPackage3D = sel;
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            var cam = PackageViewport.Camera;
-            var b = _packageScene.Bounds;
-            if (cam == null || b.IsEmpty) return;
-            var c = new Point3D(b.X + b.SizeX / 2, b.Y + b.SizeY / 2, b.Z + b.SizeZ / 2);
-            double d = Math.Max(b.SizeX, 3) * 0.9;
-            var look = new Vector3D(0.35, 1, -0.55); look.Normalize();
-            cam.Position = c - look * d; cam.LookDirection = look * d; cam.UpDirection = new Vector3D(0, 0, 1);
-            PackageViewport.ZoomExtents(200);
-        }), System.Windows.Threading.DispatcherPriority.Loaded);
-    }
 
     /// <summary>Vista 3D della sezione aperta (layout o simulazioni).</summary>
     private HelixToolkit.Wpf.HelixViewport3D ActiveViewport => _vm.CurrentSection == AppSection.Layout ? LayoutViewport : Viewport;
@@ -60,12 +37,7 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(_vm.OpenCommand, Key.O, ModifierKeys.Control));
         Loaded += (_, _) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
         Closing += OnClosing;
-        PackageViewport.Children.Add(_packageScene.Visual);
-        _vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(MainViewModel.PackagePreviewVersion) or nameof(MainViewModel.SelectedPackageType)) RefreshPackage3D();
-        };
-        RefreshPackage3D();
+        PackagePreview.StrapsEdited += _vm.OnStrapsEditedInPreview;
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
