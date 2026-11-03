@@ -15,15 +15,14 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm;
 
     /// <summary>Vista 3D della sezione aperta (layout o simulazioni).</summary>
-    private HelixToolkit.Wpf.HelixViewport3D ActiveViewport => _vm.CurrentSection == AppSection.Layout ? LayoutViewport : Viewport;
-    private Rendering.LineScene ActiveScene => _vm.CurrentSection == AppSection.Layout ? _vm.LayoutScene : _vm.Scene;
+    private HelixToolkit.Wpf.HelixViewport3D ActiveViewport => LayoutViewport;
+    private Rendering.LineScene ActiveScene => _vm.LayoutScene;
 
     public MainWindow()
     {
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
-        Viewport.Children.Add(_vm.Scene.Visual);
         LayoutViewport.Children.Add(_vm.LayoutScene.Visual);
         _vm.SceneRebuilt += () => Dispatcher.BeginInvoke(new Action(() => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1))));
         _vm.SectionOpened += _ => Dispatcher.BeginInvoke(new Action(() => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1))),
@@ -37,7 +36,74 @@ public partial class MainWindow : Window
         InputBindings.Add(new KeyBinding(_vm.OpenCommand, Key.O, ModifierKeys.Control));
         Loaded += (_, _) => SetView(new Vector3D(0.5, 1, -0.8), new Vector3D(0, 0, 1));
         Closing += OnClosing;
-        PackagePreview.StrapsEdited += _vm.OnStrapsEditedInPreview;
+        PackageViewport.Children.Add(_packageScene.Visual);
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(MainViewModel.PackagePreviewVersion) or nameof(MainViewModel.SelectedPackageType) or nameof(MainViewModel.SelectedStrapIndex)) RefreshPackage3D();
+        };
+        RefreshPackage3D();
+    }
+
+    // ------------------------------------------------------------ Pacco in 3D con legature spostabili
+
+    private readonly Rendering.PackageScene _packageScene = new();
+    private LineSimulator.Models.PackageType? _lastPackage3D;
+    private int _strapDrag = -1;
+
+    private void RefreshPackage3D()
+    {
+        var sel = _vm.SelectedPackageType;
+        _packageScene.SelectedIndex = _vm.SelectedStrapIndex;
+        _packageScene.Build(sel);
+        if (sel == null || ReferenceEquals(sel, _lastPackage3D)) return;
+        _lastPackage3D = sel;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            PackageViewport.Camera.Position = new Point3D(-0.3, -3.0, 2.2);
+            PackageViewport.Camera.LookDirection = new Vector3D(0.3, 3.0, -2.2);
+            PackageViewport.Camera.UpDirection = new Vector3D(0, 0, 1);
+            PackageViewport.ZoomExtents(200);
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void PackageViewport_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var pk = _vm.SelectedPackageType; if (pk == null) return;
+        pk.StrapPositionsMm = pk.StrapPositionsMm.OrderBy(v => v).ToList();
+        int idx = -1;
+        if (VisualTreeHelper.HitTest(PackageViewport.Viewport, e.GetPosition(PackageViewport.Viewport)) is RayMeshGeometry3DHitTestResult hit)
+            idx = _packageScene.PickStrap(hit.ModelHit);
+        _vm.SelectedStrapIndex = idx;
+        _strapDrag = idx;
+        if (idx >= 0) { PackageViewport.CaptureMouse(); e.Handled = true; }
+    }
+
+    private void PackageViewport_MouseMove(object sender, MouseEventArgs e)
+    {
+        var pk = _vm.SelectedPackageType;
+        if (pk == null || _strapDrag < 0 || e.LeftButton != MouseButtonState.Pressed) return;
+        var p = PlanePoint(PackageViewport, e.GetPosition(PackageViewport.Viewport), _packageScene.HeightM);
+        if (p == null) return;
+        double s = LineSimulator.Core.StrapEditing.Snap((pk.LengthMm / 2.0) - p.Value.X * 1000.0);
+        pk.StrapPositionsMm[_strapDrag] = Math.Clamp(s, LineSimulator.Core.StrapEditing.StepMm,
+            Math.Max(LineSimulator.Core.StrapEditing.StepMm, pk.LengthMm - LineSimulator.Core.StrapEditing.StepMm));
+        _packageScene.SelectedIndex = _strapDrag;
+        _packageScene.Build(pk);
+    }
+
+    private void PackageViewport_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_strapDrag < 0) return;
+        _strapDrag = -1;
+        PackageViewport.ReleaseMouseCapture();
+        var pk = _vm.SelectedPackageType;
+        if (pk != null)
+        {
+            double? sel = _vm.SelectedStrapIndex >= 0 && _vm.SelectedStrapIndex < pk.StrapPositionsMm.Count ? pk.StrapPositionsMm[_vm.SelectedStrapIndex] : null;
+            LineSimulator.Core.StrapEditing.SnapAll(pk);
+            _vm.SelectedStrapIndex = sel is double v ? pk.StrapPositionsMm.IndexOf(v) : -1;
+        }
+        _vm.OnStrapsEditedInPreview();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -50,8 +116,6 @@ public partial class MainWindow : Window
         if (e.NewValue is TreeNodeViewModel node) _vm.SelectedNode = node;
     }
 
-    /// <summary>Selezione diretta di un componente nel modello 3D; trascinandolo si sposta (come in Imposta layout).</summary>
-    private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginMove(Viewport, _vm.Scene, e);
     private object? PickAt(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
         var vp = viewport.Viewport;

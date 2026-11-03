@@ -191,7 +191,7 @@ public sealed class LineScene
         _packages.Clear();
         _packageMeshes.Clear();
         _zoneOrder.Clear();
-        _sectionFrameBrushes.Clear();
+        _sectionFrameBrushes.Clear(); _sectionRollerBrushes.Clear();
         _stopVisuals.Clear();
         _scaleVisuals.Clear();
         _knofBrush = _knofBrushR = _compactorBrush = _smaBrush = null;
@@ -285,9 +285,11 @@ public sealed class LineScene
         var rm = MeshFactory.Model(rollers.ToMesh(), rollColor, out var rb);
         _group.Children.Add(rm);
         Register(rm, s, rb, rollColor);
+        _sectionRollerBrushes.Add((s.EffectiveZoneId, s, rb, rollColor));
     }
 
     private readonly List<(string Inv, SolidColorBrush Brush, Color Color)> _sectionFrameBrushes = new();
+    private readonly List<(string Inv, RollerSection Section, SolidColorBrush Brush, Color Color)> _sectionRollerBrushes = new();
 
     private void AddPhotocell(PhotocellConfig pc)
     {
@@ -676,6 +678,15 @@ public sealed class LineScene
             brush.Color = moving ? color : Blend(color, Color.FromRgb(0x55, 0x55, 0x55), 0.6);
         }
 
+        // Rulli della via azionata: verdi
+        foreach (var (inv, sec, rb, rc) in _sectionRollerBrushes)
+        {
+            int zi = _zoneOrder.IndexOf(inv);
+            bool moving = f != null && zi >= 0 && zi < f.ZoneSpeeds.Length && f.ZoneSpeeds[zi] > 1e-4;
+            if (ReferenceEquals(_highlighted, sec)) continue;
+            rb.Color = moving ? MachWorking : rc;
+        }
+
         // Trasferitore
         if (f != null)
         {
@@ -684,9 +695,9 @@ public sealed class LineScene
         }
         else { _transferT.OffsetY = 0; _transferT.OffsetZ = 0; }
         if (_stopperBrush != null && !IsHighlighted(p.Stopper))
-            _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? Color.FromRgb(0xFF, 0x6F, 0x00) : Color.FromRgb(0xC0, 0x39, 0x2B);
+            _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? MachWorking : Color.FromRgb(0xC0, 0x39, 0x2B);
         if (_transferBrush != null && !IsHighlighted(p.Transfer))
-            _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? Color.FromRgb(0xF3, 0x9C, 0x12) : Color.FromRgb(0xF1, 0xC4, 0x0F);
+            _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? MachWorking : Color.FromRgb(0xF1, 0xC4, 0x0F);
 
         // Legatrici KNCA in guasto: rosso
         for (int i = 0; i < p.Strappers.Count; i++)
@@ -738,9 +749,9 @@ public sealed class LineScene
             if (IsHighlighted(cfg)) continue;
             brush.Color = state switch
             {
-                StopState.Aligning => Color.FromRgb(0xF3, 0x9C, 0x12),
-                StopState.Aligned => Color.FromRgb(0xF7, 0xDC, 0x6F),
-                StopState.Positioning or StopState.Assigned => Color.FromRgb(0xE7, 0x4C, 0x3C),
+                StopState.Aligning => MachWorking,
+                StopState.Aligned => MachWorking,
+                StopState.Positioning or StopState.Assigned => MachWorking,
                 _ => Color.FromRgb(0x7F, 0x8C, 0x8D)
             };
         }
