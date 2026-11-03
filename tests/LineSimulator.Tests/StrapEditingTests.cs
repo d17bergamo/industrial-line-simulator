@@ -97,3 +97,68 @@ public class StopperAlignmentTests
         Assert.Equal(last.Id, topo.StopperZone!.Sections.Last().Id);
     }
 }
+
+public class LineReflowTests
+{
+    private static LineProject TwoSections()
+    {
+        var p = new LineProject();
+        p.Sections.Add(new RollerSection { Id = "M1", Name = "M1", StartMm = 0, LengthMm = 6000 });
+        p.Sections.Add(new RollerSection { Id = "M2", Name = "M2", StartMm = 6000, LengthMm = 6000 });
+        p.Sections.Add(new RollerSection { Id = "M3", Name = "M3", StartMm = 12000, LengthMm = 6000 });
+        p.Photocells.Add(new PhotocellConfig { Id = "A", PositionMm = 7000 });
+        p.Photocells.Add(new PhotocellConfig { Id = "B", PositionMm = 15000 });
+        return p;
+    }
+
+    [Fact]
+    public void RemovingMiddleSection_ShiftsDownstreamEquipmentBack()
+    {
+        var p = TwoSections();
+        var m2 = p.Sections[1];
+        p.Sections.Remove(m2);
+        LineReflow.CloseGap(p, m2.StartMm, m2.EndMm);
+        Assert.Equal(6000, p.Sections[1].StartMm);
+        Assert.Empty(LineReflow.Discontinuities(p));
+        Assert.Equal(6000, p.Photocells[0].PositionMm);     // era sopra la via tolta
+        Assert.Equal(9000, p.Photocells[1].PositionMm);
+    }
+
+    [Fact]
+    public void InsertingSection_PushesDownstreamEquipmentForward()
+    {
+        var p = TwoSections();
+        LineReflow.OpenGap(p, 6000, 3000);
+        Assert.Equal(9000, p.Sections[1].StartMm);
+        Assert.Equal(10000, p.Photocells[0].PositionMm);
+        Assert.Equal(18000, p.Photocells[1].PositionMm);
+    }
+}
+
+public class EquipmentCheckTests
+{
+    [Fact]
+    public void FirstPhotocell_IsAddedPositionedAndRenamed()
+    {
+        var p = new LineProject();
+        p.Sections.Add(new RollerSection { Id = "M1", StartMm = 0, LengthMm = 6000 });
+        p.PackageTypes.Add(new PackageType { Id = "P", LengthMm = 12000 });
+        p.Photocells.Add(new PhotocellConfig { Id = "X", Name = "Nuova fotocellula", PositionMm = 2000, IsEntryPhotocell = true });
+        p.Photocells.Add(new PhotocellConfig { Id = "Y", Name = "Y", PositionMm = 1000 });
+        var res = EquipmentCheck.Run(p);
+        var entry = p.Photocells.Single(x => x.IsEntryPhotocell);
+        Assert.Equal(EquipmentCheck.EntryName, entry.Name);
+        Assert.True(entry.PositionMm < p.Photocells.Single(x => x.Id == "Y").PositionMm);
+        Assert.Contains(res, i => i.Code == "ENTRY_NAME" && i.Fixed);
+        Assert.All(EquipmentCheck.Run(p), i => Assert.False(i.IsProblem && i.Fixed));   // secondo passaggio: niente più da correggere
+    }
+
+    [Fact]
+    public void MissingEntry_IsCreated()
+    {
+        var p = new LineProject();
+        p.Sections.Add(new RollerSection { Id = "M1", StartMm = 0, LengthMm = 6000 });
+        EquipmentCheck.Run(p);
+        Assert.Single(p.Photocells, x => x.IsEntryPhotocell);
+    }
+}

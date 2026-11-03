@@ -115,6 +115,7 @@ public sealed partial class MainViewModel : ObservableObject
         StepCommand = new RelayCommand(StepOnce, () => !IsPlaying);
         NextEventCommand = new RelayCommand(NextEvent, () => !IsPlaying);
         RunToEndCommand = new RelayCommand(RunToEnd, () => !IsPlaying);
+        CheckEquipmentCommand = new RelayCommand(CheckEquipment);
         GoHomeCommand = new RelayCommand(() => CurrentSection = AppSection.Home);
         GoSectionCommand = new RelayCommand(p =>
         {
@@ -144,9 +145,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Proprietà bindabili
 
-    public LineScene Scene { get; } = new();
-    /// <summary>Scena 3D della sezione Imposta layout (stesso progetto, senza pacchi in movimento).</summary>
+    /// <summary>Unica scena 3D: layout e simulazione sono nella stessa schermata.</summary>
     public LineScene LayoutScene { get; } = new();
+    public LineScene Scene => LayoutScene;
 
     // ------------------------------------------------------------ Navigazione tra le sezioni
 
@@ -157,13 +158,13 @@ public sealed partial class MainViewModel : ObservableObject
         set
         {
             if (!Set(ref _section, value)) return;
-            if (value != AppSection.Simulations) Pause();
+            if (value != AppSection.Layout) Pause();
             Raise(nameof(SectionTitle));
         }
     }
     public string SectionTitle => _section switch
     {
-        AppSection.Layout => "IMPOSTA LAYOUT",
+        AppSection.Layout => "LAYOUT E SIMULAZIONE",
         AppSection.Packages => "CARATTERISTICHE PACCHI",
         AppSection.Simulations => "SIMULAZIONI",
         _ => "Industrial Line Simulator"
@@ -262,7 +263,6 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (!Set(ref _selectedNode, value)) return;
             BuildProperties();
-            Scene.Highlight(value?.Model);
             LayoutScene.Highlight(value?.Model);
         }
     }
@@ -394,6 +394,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ICommand StepCommand { get; }
     public ICommand NextEventCommand { get; }
     public ICommand RunToEndCommand { get; }
+    public ICommand CheckEquipmentCommand { get; private set; } = null!;
     public ICommand SetSpeedCommand { get; }
 
     /// <summary>La vista deve ri-inquadrare la scena (nuovo progetto).</summary>
@@ -423,7 +424,6 @@ public sealed partial class MainViewModel : ObservableObject
         _modified = false;
         _engine = null;
         Results = null;
-        Scene.Build(_project);
         LayoutScene.Build(_project);
         NormalizeSimulatedType();
         RefreshPackages();
@@ -503,8 +503,6 @@ public sealed partial class MainViewModel : ObservableObject
         if (markModified) _modified = true;
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
         var selected = SelectedNode?.Model;
-        Scene.Build(_project);
-        Scene.Highlight(selected);
         LayoutScene.Build(_project);
         LayoutScene.Highlight(selected);
         if (structural) RefreshPackages();
@@ -701,6 +699,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Aggiunta / eliminazione componenti
 
+    /// <summary>Controllo automatico degli equipaggiamenti con regole; applica le correzioni sicure (es. rinomina la prima fotocellula).</summary>
+    private void CheckEquipment()
+    {
+        if (IsPlaying) Pause();
+        var items = EquipmentCheck.Run(_project);
+        int fixedCount = items.Count(i => i.Fixed);
+        if (fixedCount > 0) ProjectChanged(structural: true);
+        Status = fixedCount > 0 ? $"Controllo equipaggiamenti: {fixedCount} correzioni applicate." : "Controllo equipaggiamenti: nessuna correzione necessaria.";
+        var text = string.Join("\n", items.Select(i => (i.Fixed ? "✔ corretto: " : i.IsProblem ? "⚠ da sistemare: " : "✔ ") + i.Message));
+        MessageBox.Show(text, "Controllo equipaggiamenti", MessageBoxButton.OK, items.Any(i => i.IsProblem && !i.Fixed) ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+
     private string NextId(string prefix, IEnumerable<ComponentBase> existing)
     {
         var ids = existing.Select(e => e.Id).ToHashSet();
@@ -802,7 +812,10 @@ public sealed partial class MainViewModel : ObservableObject
         if (MessageBox.Show($"Eliminare {m}?", "Conferma", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         switch (m)
         {
-            case RollerSection s: _project.Sections.Remove(s); break;
+            case RollerSection s:
+                _project.Sections.Remove(s);
+                LineReflow.CloseGap(_project, s.StartMm, s.EndMm);      // gli equipaggiamenti seguono: le vie rimaste restano ricollegate
+                break;
             case PhotocellConfig pc: _project.Photocells.Remove(pc); break;
             case StrapperConfig st: _project.Strappers.Remove(st); break;
             case PackageType t: _project.PackageTypes.Remove(t); break;
@@ -843,7 +856,16 @@ public sealed partial class MainViewModel : ObservableObject
                 }
                 sec.EndOverhangMm = 150;
                 sec.RecalculateLength();
-                sec.StartMm = Math.Max(0, Snap(x - sec.LengthMm / 2));
+                // la nuova via si aggancia alla giunzione più vicina; gli equipaggiamenti a valle avanzano
+                var ordered = _project.Sections.OrderBy(v => v.StartMm).ToList();
+                double joint = 0;
+                if (ordered.Count > 0)
+                {
+                    var candidates = ordered.Select(v => v.StartMm).Concat(ordered.Select(v => v.EndMm)).ToList();
+                    joint = candidates.OrderBy(c => Math.Abs(c - x)).First();
+                }
+                if (ordered.Count > 0 && joint < ordered.Max(v => v.EndMm) - 1e-6) LineReflow.OpenGap(_project, joint, sec.LengthMm);
+                sec.StartMm = joint;
                 _project.Sections.Add(sec);
                 added = sec;
                 break;
@@ -925,8 +947,6 @@ public sealed partial class MainViewModel : ObservableObject
         ProjectNormalizer.AlignStopperToLastRoller(_project);
         LayoutScene.Build(_project);
         LayoutScene.Highlight(m);
-        Scene.Build(_project);                  // anche lo spazio di simulazione segue lo spostamento
-        Scene.Highlight(m);
         foreach (var item in Properties) item.Refresh();
     }
 
