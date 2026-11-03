@@ -245,7 +245,7 @@ public sealed class IntermediateStopConfig : ComponentBase
 
     /// <summary>Intestatura di coda: corsa oltre il fermo prima che il fermo si sollevi e il pacco torni indietro.</summary>
     [UiProperty("Extra corsa oltre il fermo (intestatura di coda)", "mm", "Funzionamento", Order = 22)]
-    public double TailOvershootMm { get; set; } = 200;
+    public double TailOvershootMm { get; set; } = 100;
 
     /// <summary>Intestatura di coda: velocità di ritorno del pacco contro il fermo sollevato.</summary>
     [UiProperty("Velocità di ritorno (intestatura di coda)", "m/s", "Funzionamento", Order = 23)]

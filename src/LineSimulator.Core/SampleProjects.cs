@@ -169,9 +169,6 @@ public static class SampleProjects
             TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
             BlockInfeedUntilHome = true, BatchSize = 2, BatchWaitTimeoutS = 60
         };
-        // Banking e intestatura si scelgono nelle simulazioni: questo campione lavora in double banking di testa
-        p.Simulation.Banking = AccumulationMode.DoubleBanking;
-        p.Simulation.Heading = StopReference.Head;
         p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = 44000, LengthMm = 6200 });
         p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = 50300, LengthMm = 6300 });
 
@@ -185,7 +182,8 @@ public static class SampleProjects
             TypeSequence = new List<string> { "P6", "P6", "P12", "P4" },
             WeightOverrides = "2=1480; 6=1525"
         };
-        p.Simulation = new SimulationSettings();
+        // Banking e intestatura si scelgono nelle simulazioni: questo campione lavora in double banking di testa
+        p.Simulation = new SimulationSettings { Banking = AccumulationMode.DoubleBanking, Heading = StopReference.Head };
         return Complete(p);
     }
 

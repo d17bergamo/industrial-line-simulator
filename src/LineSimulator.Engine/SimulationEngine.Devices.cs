@@ -29,6 +29,8 @@ public sealed partial class SimulationEngine
     public StopReference EffectiveHeading { get; private set; } = StopReference.Head;
     private readonly List<(EventSeverity, string)> _bankingNotes = new();
     private bool DoubleBanking => EffectiveBanking == AccumulationMode.DoubleBanking;
+    /// <summary>Margine minimo dal pacco a valle durante l'extra corsa oltre il fermo (intestatura di coda).</summary>
+    private const double TailOvershootClearanceM = 0.05;
     public IReadOnlyList<ScaleRuntime> Scales => _scales;
     public int RejectedPackages { get; private set; }
     public int WeighedPackages { get; private set; }
@@ -730,7 +732,8 @@ public sealed partial class SimulationEngine
             if (prev.Package == null) return false;
             aheadTail = prev.TargetHeadM - prev.Package.LengthM;
         }
-        return reach <= aheadTail - _minSafety + 1e-6;
+        // Distanza di sicurezza sulla posizione finale; durante l'extra corsa dell'intestatura di coda basta un margine minimo
+        return head <= aheadTail - _minSafety + 1e-6 && reach <= aheadTail - Math.Min(_minSafety, TailOvershootClearanceM) + 1e-6;
     }
 
     private void AssignStop(PackageRuntime p, int idx, ZoneRuntime z)

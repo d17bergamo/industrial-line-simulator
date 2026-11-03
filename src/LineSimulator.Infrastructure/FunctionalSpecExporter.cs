@@ -139,7 +139,7 @@ public static class FunctionalSpecExporter
                 bool dbl = stops.Any(s => HeadAt(s, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(s, t) <= p.Stopper.PositionMm - t.LengthMm - safety + 1);
                 body.Append(Bullet(dbl
                     ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo intermedio scomparente ({string.Join(", ", stops.Select(HeadText))}). Il trasferitore preleva i due pacchi insieme."
-                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking non possibile per lunghezza; il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
+                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (double banking non possibile per lunghezza). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
             }
             else if (tailMode)
             {
