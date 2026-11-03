@@ -34,6 +34,10 @@ public sealed class PackageType : ComponentBase
     [UiProperty("Posizioni legature dalla testa", "mm", "Legatura", Order = 20)]
     public List<double> StrapPositionsMm { get; set; } = new() { 1500, 6000, 10500 };
 
+    /// <summary>Un solo tipo per pacco: legature a filo (KNCA) oppure reggettature a reggia d'acciaio (SMA).</summary>
+    [UiProperty("Tipo di legatura (filo KNCA / reggia SMA)", "", "Legatura", Order = 19)]
+    public BindingType BindingType { get; set; } = BindingType.Wire;
+
     [UiProperty("Distanza minima legatura-estremità", "mm", "Legatura", Order = 21)]
     public double MinStrapDistanceFromEndsMm { get; set; } = 300;
 

@@ -39,6 +39,7 @@ internal static class TestLines
         p.Stopper.PositionMm = 27000;
         p.Transfer.PositionMm = 15000;
         p.Transfer.LiftTimeS = 120; // il pacco resta a lungo allo stopper
+        p.Simulation.AutoAddProcessSensors = false; // configurazione volutamente pericolosa: nessuna protezione automatica
         p.Infeed.IntervalS = 10;
         p.Simulation.DeadlockTimeoutS = 300;
         return p;
@@ -50,6 +51,8 @@ internal static class TestLines
         Id = id, Name = id, StartMm = start, LengthMm = length, RollerCount = rollers, RollerPitchMm = 300, RollerDiameterMm = 150,
         LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6
     };
+
+    public static T Also<T>(this T value, Action<T> action) { action(value); return value; }
 
     public static SimEvent First(SimulationEngine e, SimEventType type) => e.Events.First(x => x.Type == type);
 }

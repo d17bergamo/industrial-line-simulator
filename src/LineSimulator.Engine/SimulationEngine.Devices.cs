@@ -133,6 +133,9 @@ public sealed partial class SimulationEngine
                 }
                 break;
             }
+            case StationState.WaitingStrappers:
+                StartStrappingAtStop(st, p, t);
+                break;
             case StationState.Clamping:
             {
                 var k = BundleClamp!;
@@ -179,6 +182,12 @@ public sealed partial class SimulationEngine
 
     private void ArrivedAtStop(StationRuntime st, PackageRuntime p, double t)
     {
+        if (!p.EncoderReferenced && _photocells.Any(x => x.Config.Purpose == PhotocellPurpose.StrappingReference && x.Config.IsEnabled)
+            && _reportedOnce.Add("noref:" + p.Id))
+        {
+            PositioningErrors++;
+            Emit(SimEventType.PositioningError, EventSeverity.Error, $"{p.Id} in fermata senza riferimento encoder (fotocellula di riferimento non impegnata)", st.Zone.Id, p.Id);
+        }
         st.PhaseElapsedS = 0;
         st.StrappingPhaseDone = false;
         st.CompactorOpenCommanded = false;
@@ -278,6 +287,21 @@ public sealed partial class SimulationEngine
             return false;
         }
         var stop = st.Plan!.Stops[st.StopIndex];
+        // Le macchine della fermata devono essere armate (carica del filo KNCA / riarmo SMA)
+        var notArmed = stop.Tasks.Select(k => _strappers.First(x => x.Id == k.StrapperId)).Where(x => !x.Busy && !x.IsArmed).ToList();
+        if (notArmed.Count > 0)
+        {
+            foreach (var x in notArmed)
+                if (x.BeginArming())
+                    Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{x.Id}: {(x.IsSma ? "riarmo" : "carica del filo")} (pacco {p.Id} in posizione)", x.Id, p.Id);
+            if (st.State != StationState.WaitingStrappers)
+            {
+                st.State = StationState.WaitingStrappers;
+                p.State = PackageState.Strapping;
+                Emit(SimEventType.Interlock, EventSeverity.Info, $"{p.Id} in posizione: attesa {(notArmed.Any(x => !x.IsSma) ? "carica del filo" : "riarmo")} di {string.Join(", ", notArmed.Select(x => x.Id))}", st.Zone.Id, p.Id);
+            }
+            return false;
+        }
         st.State = StationState.Strapping;
         st.StrappingPhaseDone = false;
         p.State = PackageState.Strapping;
@@ -403,7 +427,7 @@ public sealed partial class SimulationEngine
             return st.State switch
             {
                 StationState.Positioning => StrapperProcessState.Positioning,
-                StationState.Compacting => StrapperProcessState.PackageInPosition,
+                StationState.Compacting or StationState.WaitingStrappers => StrapperProcessState.PackageInPosition,
                 StationState.Clamping => StrapperProcessState.WaitingClampConsent,
                 _ => StrapperProcessState.CycleCompleted
             };
@@ -712,7 +736,7 @@ public sealed partial class SimulationEngine
             return InverterMode.Position;
         }
         if (_stops.Any(s => s.State == StopState.Aligning)) { reason = "Intestatura di coda in corso"; return InverterMode.Stop; }
-        if (z.MultiCanAcceptNew && ZoneDemand(z, t, false, out _)) { reason = "Marcia: ingresso del pacco successivo"; return InverterMode.Run; }
+        if (z.MultiCanAcceptNew && !ShouldAutoStop(z)) { reason = "Marcia: ingresso del pacco successivo"; return InverterMode.Run; }
         bool anyHeld = Stopper.Package != null || _stops.Any(s => s.Package != null);
         autoStop = z.MultiCanAcceptNew;
         reason = anyHeld ? "Pacchi allineati: attesa trasferitore/pacco successivo" : "Arresto automatico: nessun pacco da movimentare";
@@ -1036,6 +1060,7 @@ public sealed partial class SimulationEngine
     {
         var s = _strappers.FirstOrDefault(x => x.Id == id);
         if (s != null) return (s.ProcessState.ToString(), s.ProcessState != StrapperProcessState.Available);
+        if (id == "STATION" && Station != null) return (Station.State.ToString(), Station.State != StationState.Idle);
         if (BundleClamp != null && BundleClamp.Id == id) return (BundleClamp.State.ToString(), !BundleClamp.IsOpen);
         if (Compactor != null && Compactor.Id == id) return (Compactor.State.ToString(), !Compactor.IsOpen);
         if (Rejector != null && Rejector.Id == id) return (Rejector.State.ToString(), Rejector.Busy);

@@ -13,7 +13,7 @@ public enum ZoneKind
     Stopper = 2
 }
 
-/// <summary>Zona di comando = modulo di via a rulli con il suo inverter.</summary>
+/// <summary>Zona di comando: uno o più moduli di via a rulli contigui comandati dallo stesso inverter.</summary>
 public sealed class ZoneInfo
 {
     /// <summary>Parametri di azionamento del modulo.</summary>
@@ -39,17 +39,27 @@ public sealed class LineTopology
     public LineTopology(LineProject project)
     {
         Project = project;
-        // Ogni modulo di via a rulli ha il proprio inverter: una zona = un modulo.
+        // Zona di comando = insieme dei moduli con la stessa zona/inverter (default: un inverter per modulo).
+        // I parametri di azionamento sono quelli del primo modulo della zona.
         var zones = new List<ZoneInfo>();
-        foreach (var sec in project.Sections)
+        foreach (var g in project.Sections.GroupBy(s => s.EffectiveZoneId))
         {
+            var secs = g.OrderBy(s => s.StartMm).ToList();
+            bool contiguous = true;
+            for (int i = 1; i < secs.Count; i++)
+                if (Math.Abs(secs[i].StartMm - secs[i - 1].EndMm) > 0.5) contiguous = false;
+            var drive = secs[0].ToDrive();
+            drive.Id = g.Key;
+            if (secs.Count > 1 || g.Key != secs[0].Id)
+                drive.Name = secs.Count > 1 ? $"Inverter {g.Key} ({string.Join("+", secs.Select(x => x.Id))})" : $"Inverter {g.Key}";
+            drive.IsEnabled = secs.All(x => x.IsEnabled);
             zones.Add(new ZoneInfo
             {
-                Inverter = sec.ToDrive(),
-                Sections = new[] { sec },
-                StartM = Units.MmToM(sec.StartMm),
-                EndM = Units.MmToM(sec.EndMm),
-                IsContiguous = true
+                Inverter = drive,
+                Sections = secs,
+                StartM = Units.MmToM(secs[0].StartMm),
+                EndM = Units.MmToM(secs.Max(x => x.EndMm)),
+                IsContiguous = contiguous
             });
         }
         zones.Sort((a, b) => a.StartM.CompareTo(b.StartM));
@@ -58,6 +68,9 @@ public sealed class LineTopology
         Zones = zones;
         _byInverter = new Dictionary<string, ZoneInfo>();
         foreach (var z in zones) _byInverter.TryAdd(z.Inverter.Id, z); // ID duplicati segnalati dal validatore
+        // Alias: un riferimento all'ID di un modulo indica la sua zona di comando
+        foreach (var z in zones)
+            foreach (var sec in z.Sections) _byInverter.TryAdd(sec.Id, z);
 
         LineStartM = project.Sections.Count > 0 ? Units.MmToM(project.Sections.Min(s => s.StartMm)) : 0;
         LineEndM = project.Sections.Count > 0 ? Units.MmToM(project.Sections.Max(s => s.EndMm)) : 0;
@@ -80,7 +93,11 @@ public sealed class LineTopology
     public ZoneInfo? StopperZone { get; }
     public ZoneInfo? StrappingZone { get; }
 
-    public ZoneInfo? Zone(string inverterId) => _byInverter.TryGetValue(inverterId, out var z) ? z : null;
+    /// <summary>Zona di comando per ID di zona/inverter o per ID di un suo modulo.</summary>
+    public ZoneInfo? Zone(string inverterId) => _byInverter.TryGetValue(inverterId ?? string.Empty, out var z) ? z : null;
+
+    /// <summary>ID della zona di comando a cui si riferisce un ID (zona o modulo); invariato se sconosciuto.</summary>
+    public string ResolveZoneId(string id) => Zone(id)?.Id ?? id;
 
     /// <summary>Zona che contiene la posizione x (in m), o null se fuori dalle sezioni.</summary>
     public ZoneInfo? ZoneAt(double xM)

@@ -270,7 +270,7 @@ public sealed class LineScene
         if (_zoneBrushes.ContainsKey(s.Id))
         {
             // il colore della struttura indica lo stato della zona (vedi ApplyFrame)
-            _sectionFrameBrushes.Add((s.Id, fb, zc.Item2));
+            _sectionFrameBrushes.Add((s.EffectiveZoneId, fb, zc.Item2)); // stato della zona di comando (inverter)
         }
 
         // Rulli
@@ -334,7 +334,7 @@ public sealed class LineScene
     /// </summary>
     private void AddStrapper(StrapperConfig st)
     {
-        bool sma = st.Model.Contains("SMA", StringComparison.OrdinalIgnoreCase);
+        bool sma = st.MachineType == StrapperMachineType.SMA;
         double x = st.PositionMm / 1000.0, w = _lineWidth, fp = Math.Max(0.3, st.FootprintLengthMm / 1000.0);
         double side = st.Side == LateralSide.Left ? 1 : -1;
         double yc = side * (w / 2 + 0.55);              // asse del telaio, lato macchina
@@ -671,7 +671,7 @@ public sealed class LineScene
         {
             int zi = _zoneOrder.IndexOf(inv);
             bool moving = f != null && zi >= 0 && zi < f.ZoneSpeeds.Length && f.ZoneSpeeds[zi] > 1e-4;
-            if (_highlighted is RollerSection rs && rs.Id == inv) continue;
+            if (_highlighted is RollerSection rs && rs.EffectiveZoneId == inv) continue;
             brush.Color = moving ? color : Blend(color, Color.FromRgb(0x55, 0x55, 0x55), 0.6);
         }
 

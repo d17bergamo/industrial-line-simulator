@@ -49,6 +49,8 @@ public static class ProjectSerializer
         var p = node.Deserialize<LineProject>(Options) ?? throw new InvalidDataException("Progetto vuoto.");
         // v1 → v2: la fotocellula di ingresso è obbligatoria; i nuovi dispositivi restano disabilitati.
         if (version < 2) ProjectNormalizer.EnsureEntryPhotocell(p);
+        // Sensori di processo obbligatori (arresto davanti al trasferitore, riferimento encoder di legatura)
+        ProjectNormalizer.EnsureProcessSensors(p);
         p.SchemaVersion = LineProject.CurrentSchemaVersion;
         return p;
     }

@@ -54,12 +54,13 @@ public sealed partial class SimulationEngine : ILogicContext
     private readonly double _minSafety;
     private readonly double _frictionDecel;
     private readonly double _transferClearanceM;
-    private readonly ZoneRuntime? _firstZone;
     private readonly ZoneRuntime? _stationUpstream;
 
     public SimulationEngine(LineProject project)
     {
         Project = project;
+        // Sensori di processo obbligatori aggiunti in automatico se mancano (vedi ProjectNormalizer)
+        AutoAddedSensors = ProjectNormalizer.EnsureProcessSensors(project);
         Validation = ProjectValidator.Validate(project);
         Topology = new LineTopology(project);
         Dt = Math.Clamp(project.Simulation.TimeStepMs, 0.1, 100) / 1000.0;
@@ -76,26 +77,26 @@ public sealed partial class SimulationEngine : ILogicContext
             _requests[z.Id] = new InverterRequests();
             _zoneOccupants[zr] = new HashSet<PackageRuntime>();
             foreach (var s in z.Sections)
+            {
                 _sections.Add((s.StartMm / 1000.0, s.EndMm / 1000.0, zr, s.IsEnabled));
+                // Alias: un riferimento all'ID del modulo indica la sua zona di comando
+                if (s.Id != z.Id && !string.IsNullOrEmpty(s.Id)) { _zoneById.TryAdd(s.Id, zr); _requests.TryAdd(s.Id, _requests[z.Id]); }
+            }
         }
         _sections.Sort((a, b) => a.Start.CompareTo(b.Start));
-        _firstZone = _zones.FirstOrDefault();
-
-        // Distanza di preavviso per il riavvio automatico: almeno la sezione precedente e lo spazio
-        // percorso dal pacco in arrivo durante l'accelerazione della zona.
-        foreach (var zr in _zones)
-        {
-            var up = Topology.Upstream(zr.Info);
-            if (up == null) { zr.LookaheadM = 0; continue; }
-            double tAcc = zr.Config.Acceleration > 0 ? zr.Config.HighSpeed / zr.Config.Acceleration : 0;
-            zr.LookaheadM = Math.Max(up.LengthM, up.Inverter.HighSpeed * tAcc + 0.5);
-        }
 
         foreach (var pc in project.Photocells)
         {
-            var r = new PhotocellRuntime(pc);
+            var r = new PhotocellRuntime(pc) { ControlledZoneId = Topology.ResolveZoneId(pc.ControlledInverterId) };
             _photocells.Add(r);
             _pcById[pc.Id] = r;
+        }
+        // Arresto automatico e ripartenza: fotocellule della zona e fotocellula a monte (la più vicina prima dell'inizio zona)
+        foreach (var zr in _zones)
+        {
+            zr.OwnPhotocells = _photocells.Where(pc => pc.Config.IsEnabled && pc.PositionM >= zr.Info.StartM - 1e-9 && pc.PositionM <= zr.Info.EndM + 1e-9).ToList();
+            zr.RestartPhotocell = _photocells.Where(pc => pc.Config.IsEnabled && pc.PositionM < zr.Info.StartM - 1e-9)
+                .OrderByDescending(pc => pc.PositionM).FirstOrDefault();
         }
         for (int i = 0; i < project.Strappers.Count; i++)
             _strappers.Add(new StrapperRuntime(project.Strappers[i], i));
@@ -174,6 +175,8 @@ public sealed partial class SimulationEngine : ILogicContext
     public IReadOnlyList<SimEvent> Events => _events;
     public SimulationRecorder Recorder { get; } = new();
     public IReadOnlyCollection<string> ActiveSignals => _signals;
+    /// <summary>Sensori di processo aggiunti automaticamente al progetto all'avvio (descrizioni).</summary>
+    public IReadOnlyList<string> AutoAddedSensors { get; }
 
     // Contatori anomalie
     public int Collisions { get; private set; }
@@ -207,7 +210,7 @@ public sealed partial class SimulationEngine : ILogicContext
 
         _step++;
         double t1 = Time;
-        UpdateZoneTracking();
+        UpdateZoneTracking(dt);
         UpdateStation(t1, dt);
         UpdateStrappers(t1, dt);
         UpdateClamps(dt);
@@ -377,6 +380,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 pc.Activations++;
                 Emit(SimEventType.PhotocellArrival, sev, $"{pc.Id} OCCUPATA: arrivo {pk?.Id}", pc.Id, pk?.Id);
                 if (pc.IsEntry && pk != null && !pk.Identified) Identify(pk, pc, t);
+                if (pc.Config.Purpose == PhotocellPurpose.StrappingReference && pk != null) StrappingReference(pk, pc);
             }
             else
             {
@@ -501,13 +505,20 @@ public sealed partial class SimulationEngine : ILogicContext
         foreach (var pc in _photocells)
         {
             if (!pc.Active || pc.Config.Action is PhotocellAction.None or PhotocellAction.Accumulation) continue;
-            if (!_requests.TryGetValue(pc.Config.ControlledInverterId, out var req)) continue;
+            if (!_requests.TryGetValue(pc.ControlledZoneId, out var req)) continue;
             switch (pc.Config.Action)
             {
                 case PhotocellAction.SlowDown: req.Low = true; req.SpeedReasons.Add($"Rallentamento {pc.Id}"); break;
                 case PhotocellAction.SpeedUp: req.High = true; req.SpeedReasons.Add($"Alta {pc.Id}"); break;
                 case PhotocellAction.Stop: req.Stop = true; req.StopReasons.Add($"Arresto {pc.Id}"); break;
             }
+        }
+        // Fotocellula di arresto davanti al trasferitore: con il trasferitore sollevato il materiale si ferma sulla via a rulli
+        bool transferRaised = Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination;
+        foreach (var pc in _photocells)
+        {
+            if (pc.Config.Purpose != PhotocellPurpose.TransferStop || !pc.Config.IsEnabled || !pc.Output || !transferRaised) continue;
+            if (_requests.TryGetValue(pc.ControlledZoneId, out var req)) { req.Stop = true; req.StopReasons.Add($"trasferitore sollevato ({pc.Id})"); }
         }
         LogicEvaluator.ApplyRules(Project.Rules, this, _requests, _nextSignals);
         (_signals, _nextSignals) = (_nextSignals, _signals);
@@ -549,7 +560,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 z.PositionCommand = Station.VelocityCommand(dt);
             }
             else if (Station != null && z == Station.Zone && Station.State is StationState.Strapping or StationState.Compacting
-                         or StationState.Clamping or StationState.Unclamping)
+                         or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers)
             {
                 mode = InverterMode.Stop;
                 reason = Station.State switch
@@ -557,6 +568,7 @@ public sealed partial class SimulationEngine : ILogicContext
                     StationState.Compacting => "Compattazione laterale in corso",
                     StationState.Clamping => "Chiusura stringifascio in corso",
                     StationState.Unclamping => "Apertura stringifascio/compattatore",
+                    StationState.WaitingStrappers => "Attesa carica filo / riarmo legatrici",
                     _ => "Legatura in corso"
                 };
             }
@@ -568,9 +580,10 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 mode = InverterMode.Align; reason = Stopper.State == StopperState.Aligned ? "Allineato, attesa trasferitore" : "Allineamento allo stopper";
             }
-            else if (z.Config.AutoStopWhenEmpty && !ZoneDemand(z, t, true, out demandCause))
+            else if (z.Config.AutoStopWhenEmpty && ShouldAutoStop(z))
             {
-                mode = InverterMode.Stop; reason = "Arresto automatico: nessun pacco in zona, nella sezione precedente o in arrivo";
+                mode = InverterMode.Stop;
+                reason = $"Arresto automatico: corsa a vuoto {z.EmptyTravelM:0.0} m ≥ lunghezza zona {z.Info.LengthM:0.0} m senza pacchi sulle fotocellule";
                 autoStop = true;
             }
             else
@@ -578,7 +591,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 mode = InverterMode.Run; reason = "Marcia";
                 foreach (var pc in _photocells)
                 {
-                    if (pc.Config.Action != PhotocellAction.Accumulation || pc.Config.ControlledInverterId != z.Id || !pc.Active) continue;
+                    if (pc.Config.Action != PhotocellAction.Accumulation || pc.ControlledZoneId != z.Id || !pc.Active) continue;
                     var p = pc.RawPackage ?? pc.LastPackage;
                     var next = i + 1 < _zones.Count ? _zones[i + 1] : null;
                     bool accept = next != null && next.AcceptsFor(p);
@@ -619,8 +632,12 @@ public sealed partial class SimulationEngine : ILogicContext
             if (z.AutoStopped && !prevAuto && t > 0)
                 Emit(SimEventType.AutoStop, EventSeverity.Info, $"{z.Id}: arresto automatico (nessun pacco da movimentare)", z.Id);
             else if (prevAuto && !z.AutoStopped && mode != InverterMode.Stop)
+            {
+                var pcStart = z.RestartPhotocell != null && z.RestartPhotocell.Output ? z.RestartPhotocell : z.OwnPhotocells.FirstOrDefault(x => x.Output);
+                demandCause = pcStart?.RawPackage ?? pcStart?.LastPackage;
                 Emit(SimEventType.AutoStart, EventSeverity.Info,
-                    $"{z.Id}: riavvio automatico{(demandCause != null ? $", {demandCause.Id} in arrivo" : ", pacco in ingresso")}", z.Id, demandCause?.Id);
+                    $"{z.Id}: ripartenza comandata da {pcStart?.Id ?? "fotocellula"}{(demandCause != null ? $" (arrivo {demandCause.Id})" : "")}", z.Id, demandCause?.Id);
+            }
 
             if (mode != prevMode || (mode == InverterMode.Run && z.Level != prevLevel) || (mode == InverterMode.Stop && reason != prevReason))
             {
@@ -637,23 +654,22 @@ public sealed partial class SimulationEngine : ILogicContext
     }
 
     /// <summary>
-    /// Presenza di pacchi da movimentare per la zona: pacco nella zona (se richiesto), pacco nella sezione
-    /// precedente o in arrivo entro la distanza di preavviso, oppure (prima zona) ingresso imminente.
+    /// Arresto automatico (regola di linea): la zona si spegne quando i suoi rulli hanno compiuto una corsa pari alla
+    /// lunghezza della zona senza che le sue fotocellule (né quella di ripartenza a monte) rilevino pacchi.
+    /// Non si considerano la sezione precedente né i pacchi in arrivo: la ripartenza è comandata dalla fotocellula a monte.
+    /// Salvaguardia di simulazione: se un pacco è fisicamente nella zona ma non è visto da alcuna fotocellula,
+    /// l'arresto viene rinviato e segnalato (manca una fotocellula).
     /// </summary>
-    private bool ZoneDemand(ZoneRuntime z, double t, bool includeInside, out PackageRuntime? cause)
+    private bool ShouldAutoStop(ZoneRuntime z)
     {
-        cause = null;
-        foreach (var p in _active)
+        if (!z.SensorsEmpty) return false;
+        var hidden = _active.FirstOrDefault(p => p.OnRollers && p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9);
+        if (hidden == null) return true;
+        if (!z.UndetectedWarned)
         {
-            if (!p.OnRollers) continue;
-            bool inside = p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9;
-            if (inside && (includeInside || !z.Assigned.Contains(p))) { cause = p; return true; }
-            if (!inside && p.HeadM <= z.Info.StartM + 1e-9 && p.HeadM > z.Info.StartM - z.LookaheadM) { cause = p; return true; }
-        }
-        if (z == _firstZone && _nextIndex < Project.Infeed.PackageCount && _typeSequence.Count > 0)
-        {
-            double tAcc = z.Config.Acceleration > 0 ? z.Config.HighSpeed / z.Config.Acceleration : 0;
-            if (t >= NextDueTime() - tAcc - 1e-9) return true;
+            z.UndetectedWarned = true;
+            Emit(SimEventType.DeviceAlarm, EventSeverity.Warning,
+                $"{z.Id}: {hidden.Id} nella zona non è rilevato da alcuna fotocellula dopo una corsa pari alla lunghezza della zona: arresto automatico rinviato, aggiungere una fotocellula.", z.Id, hidden.Id);
         }
         return false;
     }
@@ -840,10 +856,13 @@ public sealed partial class SimulationEngine : ILogicContext
     }
 
     /// <summary>Tracciamento per zona: evento di uscita completa del pacco dalla sezione comandata.</summary>
-    private void UpdateZoneTracking()
+    private void UpdateZoneTracking(double dt)
     {
         foreach (var z in _zones)
         {
+            // Corsa a vuoto: si azzera quando una fotocellula della zona o quella di ripartenza a monte vede un pacco
+            if (z.OwnPhotocells.Any(pc => pc.Output) || (z.RestartPhotocell?.Output ?? false)) z.EmptyTravelM = 0;
+            else z.EmptyTravelM += z.ActualSpeed * dt;
             var set = _zoneOccupants[z];
             foreach (var p in set.ToList())
             {
@@ -867,7 +886,11 @@ public sealed partial class SimulationEngine : ILogicContext
     {
         foreach (var s in _strappers)
         {
+            if (s.AdvanceArming(dt))
+                Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: {(s.IsSma ? "riarmata" : "filo caricato, legatrice armata")}", s.Id, Station?.Package?.Id);
+            var pkgBefore = s.Package;
             var changed = s.Advance(dt);
+            if (changed == StrapperState.Idle) Rearm(s, pkgBefore);
             if (s.FaultJustCleared)
             {
                 s.FaultJustCleared = false;
@@ -885,6 +908,33 @@ public sealed partial class SimulationEngine : ILogicContext
                 Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: {phase}", s.Id, s.Package?.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// Riarmo a fine ciclo. SMA: sempre in automatico. KNCA: in automatico solo se il pacco ha ancora legature da
+    /// eseguire con questa macchina (stesso pattern); a pattern concluso attende il pacco successivo alla fotocellula di riferimento.
+    /// </summary>
+    private void Rearm(StrapperRuntime s, PackageRuntime? p)
+    {
+        bool again = s.IsSma;
+        if (!again && Station?.Plan != null && p != null && Station.Package == p)
+            again = Station.Plan.Stops.Skip(Station.StopIndex + 1).Any(st => st.Tasks.Any(k => k.StrapperId == s.Id));
+        if (again && s.BeginArming())
+            Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: {(s.IsSma ? "riarmo automatico" : "carica del filo per la legatura successiva")}", s.Id, p?.Id);
+    }
+
+    /// <summary>Fotocellula di riferimento dell'encoder: azzera il conteggio e avvia la carica del filo delle KNCA.</summary>
+    private void StrappingReference(PackageRuntime p, PhotocellRuntime pc)
+    {
+        if (!p.EncoderReferenced)
+        {
+            p.EncoderReferenced = true;
+            Emit(SimEventType.PositioningStarted, EventSeverity.Info, $"{p.Id} riferito all'encoder di legatura ({pc.Id})", pc.Id, p.Id);
+        }
+        if (p.StrapStatus is StrapStatus.Done or StrapStatus.NotRequired) return;
+        foreach (var s in _strappers.Where(x => x.Config.IsEnabled && !x.IsSma && !x.Busy))
+            if (s.BeginArming())
+                Emit(SimEventType.StrapperPhase, EventSeverity.Info, $"{s.Id}: carica del filo (testa di {p.Id} sulla fotocellula {pc.Id})", s.Id, p.Id);
     }
 
     private void UpdateStopper(double t, double dt)
@@ -1078,7 +1128,7 @@ public sealed partial class SimulationEngine : ILogicContext
         foreach (var s in Project.Strappers) Recorder.Track("STR:" + s.Id, s.Name.Length > 0 ? s.Name : s.Id, TrackGroup.Strapper);
         if (BundleClamp != null) Recorder.Track("KNOF", Label(Project.BundleClamp), TrackGroup.Clamp);
         if (Compactor != null) Recorder.Track("CMP", Label(Project.Compactor), TrackGroup.Clamp);
-        if (Rejector != null) Recorder.Track("SMA", Label(Project.Rejector), TrackGroup.Rejector);
+        if (Rejector != null) Recorder.Track("RJT", Label(Project.Rejector), TrackGroup.Rejector);
         Recorder.Track("STOPPER", Project.Stopper.Name.Length > 0 ? Project.Stopper.Name : "Stopper", TrackGroup.Stopper);
         foreach (var s in _stops) Recorder.Track("STOP:" + s.Id, s.Config.Name.Length > 0 ? s.Config.Name : s.Id, TrackGroup.Stop);
         Recorder.Track("TRANSFER", Project.Transfer.Name.Length > 0 ? Project.Transfer.Name : "Trasferitore", TrackGroup.Transfer);
@@ -1109,12 +1159,13 @@ public sealed partial class SimulationEngine : ILogicContext
                 StrapperProcessState.CycleCompleted => CycleState.Completed,
                 StrapperProcessState.Unloading => CycleState.Unloading,
                 StrapperProcessState.Fault => CycleState.Fault,
-                _ => CycleState.Idle
-            }, ProcessLabel(s.ProcessState) + (s.Package != null ? " " + s.Package.Id : ""));
+                _ => s.ArmState == StrapperArmState.Arming ? CycleState.Preparing : CycleState.Idle
+            }, (s.ArmState == StrapperArmState.Arming && !s.Busy ? (s.IsSma ? "Riarmo" : "Carica filo") : ProcessLabel(s.ProcessState))
+               + (s.Package != null ? " " + s.Package.Id : ""));
         if (BundleClamp != null) Recorder.Set("KNOF", t, ClampCycle(BundleClamp.State), Station?.Package?.Id ?? "");
         if (Compactor != null) Recorder.Set("CMP", t, ClampCycle(Compactor.State), Station?.Package?.Id ?? "");
         if (Rejector != null)
-            Recorder.Set("SMA", t, Rejector.State switch
+            Recorder.Set("RJT", t, Rejector.State switch
             {
                 RejectorState.Enabled => CycleState.Consent,
                 RejectorState.Positioning => CycleState.Positioning,
@@ -1210,7 +1261,8 @@ public sealed partial class SimulationEngine : ILogicContext
                     || (Rejector != null && Rejector.Busy && Rejector.State != RejectorState.Enabled) || _scales.Any(s => s.Busy)
                     || (BundleClamp != null && !BundleClamp.IsOpen && !BundleClamp.IsClosed)
                     || (Compactor != null && !Compactor.IsOpen && !Compactor.IsClosed)
-                    || (Station != null && Station.State is StationState.Compacting or StationState.Clamping or StationState.Unclamping)
+                    || (Station != null && Station.State is StationState.Compacting or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers)
+                    || _strappers.Any(s => s.ArmState == StrapperArmState.Arming)
                     || _stops.Any(s => s.State == StopState.Aligning) || _batchWaitSince != null;
         if (busy) _lastProgressTime = t;
         if (_active.Count > 0 && t - _lastProgressTime > Project.Simulation.DeadlockTimeoutS)
@@ -1274,6 +1326,9 @@ public sealed partial class SimulationEngine : ILogicContext
 
     bool ILogicContext.DeviceState(string deviceId, string state)
     {
+        // Stato di carica della macchina di legatura: DEV(L1,Armed) / DEV(L1,Arming) / DEV(L1,Unarmed)
+        var str = _strappers.FirstOrDefault(x => x.Id == deviceId);
+        if (str != null && Enum.TryParse<StrapperArmState>(state?.Trim(), true, out var arm)) return str.ArmState == arm;
         var info = DeviceStatus(deviceId);
         if (info == null) return false;
         return string.IsNullOrWhiteSpace(state) ? info.Value.Busy : string.Equals(info.Value.State, state.Trim(), StringComparison.OrdinalIgnoreCase);

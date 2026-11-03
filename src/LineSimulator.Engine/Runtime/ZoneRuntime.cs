@@ -42,8 +42,18 @@ public sealed class ZoneRuntime
     public bool Accepting { get; internal set; }
     /// <summary>Ferma per arresto automatico (nessun pacco in zona, nella sezione precedente o in arrivo).</summary>
     public bool AutoStopped { get; internal set; }
-    /// <summary>Distanza a monte entro cui un pacco in arrivo riavvia la zona.</summary>
-    public double LookaheadM { get; internal set; }
+    /// <summary>
+    /// Corsa compiuta dai rulli della zona senza che le sue fotocellule (o quella di ripartenza a monte) rilevino pacchi.
+    /// Quando raggiunge la lunghezza della zona, la zona è vuota e l'inverter può spegnersi.
+    /// </summary>
+    public double EmptyTravelM { get; internal set; }
+    /// <summary>Fotocellule poste nella zona (rilevano i pacchi presenti).</summary>
+    public IReadOnlyList<PhotocellRuntime> OwnPhotocells { get; internal set; } = Array.Empty<PhotocellRuntime>();
+    /// <summary>Fotocellula a monte della zona che ne comanda la ripartenza all'arrivo di un pacco (null per la prima zona).</summary>
+    public PhotocellRuntime? RestartPhotocell { get; internal set; }
+    internal bool UndetectedWarned;
+    /// <summary>Zona vuota secondo le fotocellule: corsa a vuoto ≥ lunghezza, nessuna fotocellula della zona o di ripartenza occupata.</summary>
+    public bool SensorsEmpty => EmptyTravelM >= Info.LengthM - 1e-9 && !OwnPhotocells.Any(p => p.Output) && !(RestartPhotocell?.Output ?? false);
 
     /// <summary>Zona dello stopper con fermi intermedi: può contenere più pacchi, uno per fermo.</summary>
     internal bool MultiStop;

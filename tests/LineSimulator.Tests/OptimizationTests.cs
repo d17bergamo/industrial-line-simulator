@@ -28,8 +28,8 @@ public class OptimizationTests
         Assert.Equal(new[] { "L1", "L2", "L3" }, best.UsedStrapperIds);
         Assert.Equal(41.0, best.Stops[0].HeadPositionM, 9);
 
-        // Tempo atteso: ingresso 26→41 m a 0.6 m/s + ciclo 12 s + uscita 41→54 m
-        double expected = Kinematics.PointToPointTime(15, 0.6, 0.5, 0.6) + 12 + Kinematics.PointToPointTime(13, 0.6, 0.5, 0.6);
+        // Tempo atteso: ingresso 26→41 m a 0.6 m/s + ciclo KNCA 11.5 s + uscita 41→54 m
+        double expected = Kinematics.PointToPointTime(15, 0.6, 0.5, 0.6) + 11.5 + Kinematics.PointToPointTime(13, 0.6, 0.5, 0.6);
         Assert.Equal(expected, best.TotalTimeS, 6);
         Assert.Contains("AUTOMATICA", cmp.SelectionReason);
     }
@@ -44,7 +44,7 @@ public class OptimizationTests
         var def = opt.DefaultPlan(pb);
         Assert.True(def.IsFeasible);
         Assert.Equal(3, def.Stops.Count);
-        Assert.Equal(res.Best!.TotalTimeS + 24, def.TotalTimeS, 6); // 3 cicli in sequenza invece che in parallelo
+        Assert.Equal(res.Best!.TotalTimeS + 23, def.TotalTimeS, 6); // 3 cicli KNCA da 11.5 s in sequenza invece che in parallelo
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class OptimizationTests
         Assert.Equal(new[] { 38.5, 43.0, 47.5 }, best.Stops.Select(s => Math.Round(s.HeadPositionM, 6)));
         double expected = Kinematics.PointToPointTime(12.5, 0.6, 0.5, 0.6)
                         + 2 * Kinematics.PointToPointTime(4.5, 0.3, 0.5, 0.6)
-                        + 3 * 12
+                        + 3 * 11.5
                         + Kinematics.PointToPointTime(48 + 12 - 47.5, 0.6, 0.5, 0.6);
         Assert.Equal(expected, best.TotalTimeS, 6);
     }

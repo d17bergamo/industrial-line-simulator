@@ -43,7 +43,7 @@ public sealed class EquipmentStatusRow : ObservableObject
     public bool Alarm { get => _alarm; set => Set(ref _alarm, value); }
 }
 
-public sealed class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ProjectRepository _repo = new();
     private readonly DispatcherTimer _timer;
@@ -849,13 +849,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 if (_project.Strappers.Count >= LineProject.MaxStrappers) { Status = $"Massimo {LineProject.MaxStrappers} legatrici."; return; }
                 var st = new StrapperConfig { Id = NextId("L", AllComponents()), Name = $"Legatrice {_project.Strappers.Count + 1}", PositionMm = x, Side = yM >= 0 ? LateralSide.Left : LateralSide.Right };
-                if (e.Key == "sma")
-                {
-                    // reggia d'acciaio: si abbassa per il tempo di legatura (10 s), si rialza, poi riarmo (5 s)
-                    st.Model = "Sund Birsta SMA";
-                    st.StrappingTimeS = 10;
-                    st.ReturnTimeS = 5;
-                }
+                if (e.Key == "sma") st.MachineType = StrapperMachineType.SMA;   // reggia d'acciaio: default 10 s + riarmo 5 s
                 _project.Strappers.Add(st);
                 added = st;
                 break;

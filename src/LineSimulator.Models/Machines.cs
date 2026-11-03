@@ -2,9 +2,40 @@ using System.Text.Json.Serialization;
 
 namespace LineSimulator.Models;
 
-/// <summary>Legatrice automatica fissa: lega nel piano trasversale alla sua posizione in linea.</summary>
+/// <summary>
+/// Macchina di legatura fissa: legatrice a filo KNCA 7/800 o reggettatrice a reggia SMA.
+/// Lega nel piano trasversale alla sua posizione in linea. Ciclo: la macchina si abbassa, lega e si rialza
+/// (tempo di legatura); prima di ogni ciclo deve essere armata (carica del filo / riarmo).
+/// </summary>
 public sealed class StrapperConfig : ComponentBase
 {
+    public const double KncaStrappingTimeS = 11.5, KncaArmingTimeS = 3.0, SmaStrappingTimeS = 10.0, SmaArmingTimeS = 5.0;
+
+    private StrapperMachineType _machineType = StrapperMachineType.KNCA;
+
+    /// <summary>
+    /// Tipo di macchina. Passando da un tipo all'altro con i tempi di default, vengono proposti i default del nuovo tipo
+    /// (KNCA: legatura 11,5 s, carica filo 3 s; SMA: legatura 10 s, riarmo 5 s).
+    /// </summary>
+    [UiProperty("Tipo di macchina (KNCA filo / SMA reggia)", "", "Funzionamento", Order = 18)]
+    public StrapperMachineType MachineType
+    {
+        get => _machineType;
+        set
+        {
+            if (value == _machineType) return;
+            bool defaults = _machineType == StrapperMachineType.KNCA
+                ? StrappingTimeS == KncaStrappingTimeS && ArmingTimeS == KncaArmingTimeS
+                : StrappingTimeS == SmaStrappingTimeS && ArmingTimeS == SmaArmingTimeS;
+            _machineType = value;
+            if (!defaults) return;
+            bool sma = value == StrapperMachineType.SMA;
+            StrappingTimeS = sma ? SmaStrappingTimeS : KncaStrappingTimeS;
+            ArmingTimeS = sma ? SmaArmingTimeS : KncaArmingTimeS;
+            Model = sma ? "Sund Birsta SMA" : "Sund Birsta KNCA 7/800";
+        }
+    }
+
     [UiProperty("Modello", "", "Funzionamento", Order = 19)]
     public string Model { get; set; } = "Sund Birsta KNCA 7/800";
 
@@ -17,14 +48,22 @@ public sealed class StrapperConfig : ComponentBase
     [UiProperty("Lato macchina", "", "Geometria", Order = 3)]
     public LateralSide Side { get; set; } = LateralSide.Left;
 
-    [UiProperty("Tempo di preparazione", "s", "Tempi", Order = 10)]
-    public double PreparationTimeS { get; set; } = 2.0;
+    /// <summary>
+    /// Carica del filo (KNCA) o riarmo (SMA). KNCA: parte quando la testa del pacco impegna la fotocellula
+    /// di riferimento a monte della legatrice e, tra le legature dello stesso pattern, in automatico;
+    /// a pattern concluso attende il pacco successivo. SMA: riarmo automatico dopo ogni ciclo (sempre armata).
+    /// </summary>
+    [UiProperty("Carica filo (KNCA) / riarmo (SMA)", "s", "Tempi", Order = 9)]
+    public double ArmingTimeS { get; set; } = KncaArmingTimeS;
 
-    [UiProperty("Tempo di legatura", "s", "Tempi", Order = 11)]
-    public double StrappingTimeS { get; set; } = 8.0;
+    [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]
+    public double PreparationTimeS { get; set; }
 
-    [UiProperty("Tempo di ritorno", "s", "Tempi", Order = 12)]
-    public double ReturnTimeS { get; set; } = 2.0;
+    [UiProperty("Ciclo di legatura (abbassa, lega, rialza)", "s", "Tempi", Order = 11)]
+    public double StrappingTimeS { get; set; } = KncaStrappingTimeS;
+
+    [UiProperty("Tempo di ritorno aggiuntivo", "s", "Tempi", Order = 12)]
+    public double ReturnTimeS { get; set; }
 
     [UiProperty("Legatrice abilitata", "", "Funzionamento", Order = 20)]
     public bool IsEnabled { get; set; } = true;
@@ -190,6 +229,10 @@ public sealed class TransferConfig : ComponentBase
 
     [UiProperty("Blocca ingresso finché non torna in posizione", "", "Interblocchi", Order = 20)]
     public bool BlockInfeedUntilHome { get; set; } = true;
+
+    /// <summary>Margine di sicurezza della fotocellula di arresto davanti al trasferitore (distanza = 1,5 s × velocità massima + margine).</summary>
+    [UiProperty("Margine fotocellula di arresto davanti al trasferitore", "mm", "Interblocchi", Order = 23)]
+    public double StopPhotocellMarginMm { get; set; } = 1000;
 
     [UiProperty("Pacchi prelevati per ciclo (max)", "", "Funzionamento", Order = 21)]
     public int BatchSize { get; set; } = 1;
