@@ -11,7 +11,11 @@ public sealed class RollerSection : ComponentBase
     [UiProperty("Inizio modulo (posizione in linea)", "mm", "Geometria", Order = 1)]
     public double StartMm { get; set; }
 
-    [UiProperty("Lunghezza", "mm", "Geometria", Order = 2)]
+    /// <summary>
+    /// Lunghezza fisica complessiva della struttura (interassiale + sporgenze terminali + carpenteria).
+    /// Non si modifica a mano: dipende da passo, numero rulli e sporgenza (vedi <see cref="RecalculateLength"/>).
+    /// </summary>
+    [UiProperty("Lunghezza fisica struttura (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 2)]
     public double LengthMm { get; set; } = 6000;
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
@@ -25,6 +29,28 @@ public sealed class RollerSection : ComponentBase
 
     [UiProperty("Diametro rulli (grafico)", "mm", "Geometria", Order = 6)]
     public double RollerDiameterMm { get; set; } = 150;
+
+    private double _endOverhangMm = -1;
+
+    /// <summary>Sporgenza della struttura oltre l'asse del primo/ultimo rullo, per lato. Se non impostata deriva dalla lunghezza esistente.</summary>
+    [UiProperty("Sporgenza terminale (per lato)", "mm", "Geometria", Order = 7)]
+    public double EndOverhangMm
+    {
+        get
+        {
+            if (_endOverhangMm < 0) _endOverhangMm = Math.Max(0, (LengthMm - InteraxialLengthMm) / 2);
+            return _endOverhangMm;
+        }
+        set => _endOverhangMm = Math.Max(0, value);
+    }
+
+    /// <summary>Distanza tra gli assi del primo e dell'ultimo rullo: L = passo × (N − 1).</summary>
+    [JsonIgnore]
+    [UiProperty("Lunghezza interassiale (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 8)]
+    public double InteraxialLengthMm => RollerPitchMm * Math.Max(0, RollerCount - 1);
+
+    /// <summary>Ricalcola la lunghezza fisica: interasse + sporgenza a entrambe le estremità.</summary>
+    public void RecalculateLength() => LengthMm = InteraxialLengthMm + 2 * EndOverhangMm;
 
     [UiProperty("Velocità bassa", "m/s", "Inverter", Order = 20)]
     public double LowSpeed { get; set; } = 0.15;

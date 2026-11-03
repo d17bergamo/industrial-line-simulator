@@ -170,13 +170,35 @@ public sealed class StopperConfig : ComponentBase
 }
 
 /// <summary>Trasferitore trasversale a valle dello stopper.</summary>
+/// <summary>Sezione del trasferitore sollevabile.</summary>
+public sealed class TransferSection
+{
+    public string Name { get; set; } = "Sezione";
+    public double LengthMm { get; set; } = 6000;
+}
+
 public sealed class TransferConfig : ComponentBase
 {
     [UiProperty("Inizio trasferitore (in linea)", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
 
-    [UiProperty("Lunghezza", "mm", "Geometria", Order = 2)]
+    /// <summary>Lunghezza complessiva: somma delle sezioni (si modifica dall'elenco sezioni).</summary>
+    [UiProperty("Lunghezza totale (somma delle sezioni)", "mm", "Geometria", ReadOnly = true, Order = 2)]
     public double LengthMm { get; set; } = 12000;
+
+    /// <summary>Sezioni del trasferitore sollevabile (numero, nome, lunghezza). Vuoto = una sezione unica lunga <see cref="LengthMm"/>.</summary>
+    public List<TransferSection> Sections { get; set; } = new();
+
+    /// <summary>Elenco effettivo delle sezioni: se non configurate, una sezione unica.</summary>
+    public IReadOnlyList<TransferSection> EffectiveSections() =>
+        Sections.Count > 0 ? Sections : new List<TransferSection> { new() { Name = "Sezione 1", LengthMm = LengthMm } };
+
+    /// <summary>Imposta le sezioni e aggiorna la lunghezza complessiva.</summary>
+    public void SetSections(IEnumerable<TransferSection> sections)
+    {
+        Sections = sections.Select(s => new TransferSection { Name = s.Name, LengthMm = s.LengthMm }).ToList();
+        if (Sections.Count > 0) LengthMm = Sections.Sum(s => s.LengthMm);
+    }
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
     public double WidthMm { get; set; } = 400;

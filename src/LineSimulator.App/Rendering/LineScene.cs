@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using HelixToolkit.Wpf;
 using LineSimulator.Core;
 using LineSimulator.Engine;
 using LineSimulator.Engine.Runtime;
@@ -14,6 +16,21 @@ namespace LineSimulator.App.Rendering;
 /// </summary>
 public sealed class LineScene
 {
+    // Macchine SUND BIRSTA (legatrice KNCA, stringifascio KNOF, rigettatrice SMA): modelli semplificati in grigio neutro.
+    // Macchine di legatura/stringifascio/compattatore: grigio a riposo, verde in lavoro, rosso in guasto, arancione se selezionate.
+    private static readonly Color MachWorking = Color.FromRgb(0x2E, 0x9E, 0x50);
+    private static readonly Color MachBlue = Color.FromRgb(0x8C, 0x92, 0x98);          // telai (grigio normale)
+    private static readonly Color MachBlueActive = MachWorking;
+    private static readonly Color MachYellow = Color.FromRgb(0x8C, 0x92, 0x98);        // parti mobili (grigio normale)
+    private static readonly Color MachYellowActive = MachWorking;
+    private static readonly Color MachLightGrey = Color.FromRgb(0xB5, 0xBA, 0xBF);
+    private static readonly Color MachMidGrey = Color.FromRgb(0x6F, 0x76, 0x7C);
+    private static readonly Color MachBlack = Color.FromRgb(0x4A, 0x4F, 0x54);
+    private static readonly Color GreyBody = Color.FromRgb(0x8C, 0x92, 0x98);
+    private static readonly Color GreyMoving = Color.FromRgb(0xB5, 0xBA, 0xBF);
+    private static readonly Color GreyOff = Color.FromRgb(0xC8, 0xCB, 0xCE);
+    private static readonly Color FaultRed = Color.FromRgb(0xC0, 0x39, 0x2B);
+
     private static readonly Color[] Palette =
     {
         Color.FromRgb(0x2E, 0x86, 0xC1), Color.FromRgb(0x28, 0xB4, 0x63), Color.FromRgb(0xAF, 0x7A, 0xC5),
@@ -43,10 +60,117 @@ public sealed class LineScene
     private double _zTop;
     private double _lineWidth = 1.2;
 
+    private readonly ModelVisual3D _overlay = new();
+    private readonly ModelVisual3D _ghost = new();
+    private readonly ModelVisual3D _dims = new();
+    private readonly ModelVisual3D _names = new();
+    private bool _showDimensions;
+
     public LineScene()
     {
         Visual = new ModelVisual3D { Content = _group };
+        Visual.Children.Add(_overlay);
+        _overlay.Children.Add(_ghost);
+        _overlay.Children.Add(_dims);
+        _overlay.Children.Add(_names);
     }
+
+    /// <summary>Quote delle distanze dall'origine (X = Y = Z = 0) per ogni equipaggiamento.</summary>
+    public bool ShowDimensions
+    {
+        get => _showDimensions;
+        set { _showDimensions = value; RebuildDimensions(); }
+    }
+
+    /// <summary>Anteprima trasparente durante il trascinamento dalla libreria, con punto di inserimento e coordinata.</summary>
+    public void ShowGhost(double xM, double yM, double lenM, double widM, double heightM)
+    {
+        var f = new MeshFactory();
+        f.AddBox(new Point3D(xM, yM, heightM / 2), Math.Max(0.05, lenM), Math.Max(0.05, widM), Math.Max(0.05, heightM));
+        var brush = new SolidColorBrush(Color.FromArgb(110, 0x1F, 0x6F, 0xB2));
+        var mat = new DiffuseMaterial(brush);
+        var body = new GeometryModel3D(f.ToMesh(), mat) { BackMaterial = mat };
+        var m = new MeshFactory();
+        m.AddBox(new Point3D(xM, yM, (_zTop + 1.2) / 2), 0.04, 0.04, _zTop + 1.2);       // punto di inserimento
+        m.AddBox(new Point3D(xM, yM, 0.01), 0.6, 0.04, 0.02);
+        m.AddBox(new Point3D(xM, yM, 0.01), 0.04, 0.6, 0.02);
+        var marker = MeshFactory.Model(m.ToMesh(), Color.FromRgb(0xC0, 0x39, 0x2B), out _);
+        _ghost.Children.Clear();
+        _ghost.Content = new Model3DGroup { Children = { body, marker } };
+        _ghost.Children.Add(Label($"X = {xM.ToString("0.000", CultureInfo.InvariantCulture)} m   Y = {yM.ToString("0.000", CultureInfo.InvariantCulture)} m",
+            new Point3D(xM, yM, _zTop + 1.4)));
+    }
+
+    public void HideGhost()
+    {
+        _ghost.Content = null;
+        _ghost.Children.Clear();
+    }
+
+    private static BillboardTextVisual3D Label(string text, Point3D pos) => new()
+    {
+        Text = text,
+        Position = pos,
+        FontSize = 11,
+        Foreground = Brushes.Black,
+        Background = new SolidColorBrush(Color.FromArgb(215, 255, 255, 255)),
+        Padding = new System.Windows.Thickness(3, 1, 3, 1)
+    };
+
+    private bool _dragging;
+    /// <summary>Durante lo spostamento col mouse le quote tra le macchine si vedono comunque.</summary>
+    public bool Dragging
+    {
+        get => _dragging;
+        set { if (_dragging == value) return; _dragging = value; RebuildDimensions(); }
+    }
+
+    private void RebuildDimensions()
+    {
+        _dims.Children.Clear();
+        if (!(_showDimensions || _dragging) || _project == null) return;
+        double refX = LayoutGeometry.EntryReferenceM(_project);          // origine delle quote: fotocellula di ingresso
+        var info = LayoutGeometry.Describe(_project)
+            .Where(i => i.Kind is not ("Fotocellula" or "Fermo intermedio"))
+            .OrderBy(i => i.CenterXm).ToList();
+        double w = _lineWidth, z = 0.03, laneY0 = -(w / 2 + 1.2);
+        int lanes = 4;
+        double yMax = laneY0 - 0.7 * (lanes - 1);
+        var lines = new LinesVisual3D { Color = Color.FromRgb(0x5A, 0x66, 0x72), Thickness = 1 };
+        var pts = new Point3DCollection();
+        void Seg(Point3D a, Point3D b) { pts.Add(a); pts.Add(b); }
+        // asse di riferimento = fotocellula di ingresso
+        Seg(new Point3D(refX, yMax - 0.3, z), new Point3D(refX, w / 2 + 0.3, z));
+        _dims.Children.Add(Label($"fotocellula di ingresso (X = {Fmt(refX)} m): quote da qui", new Point3D(refX, yMax - 0.5, z)));
+        for (int i = 0; i < info.Count; i++)
+        {
+            var it = info[i];
+            double ly = laneY0 - 0.7 * (i % lanes);
+            Seg(new Point3D(refX, ly, z), new Point3D(it.CenterXm, ly, z));                      // quota dalla fotocellula
+            Seg(new Point3D(it.CenterXm, ly, z), new Point3D(it.CenterXm, it.YM, z));            // richiamo al centro macchina
+            Seg(new Point3D(it.EntryXm, ly - 0.08, z), new Point3D(it.EntryXm, ly + 0.08, z));   // tacca ingresso
+            Seg(new Point3D(it.ExitXm, ly - 0.08, z), new Point3D(it.ExitXm, ly + 0.08, z));     // tacca uscita
+            string t = $"{it.Id}: C {Fmt(it.CenterXm - refX)}  IN {Fmt(it.EntryXm - refX)}  OUT {Fmt(it.ExitXm - refX)} m";
+            if (Math.Abs(it.YM) > 1e-3) t += $"  Y {Fmt(it.YM)}";
+            if (Math.Abs(it.ZM) > 1e-3 && Math.Abs(it.ZM - _zTop) > 1e-3) t += $"  Z {Fmt(it.ZM)}";
+            _dims.Children.Add(Label(t, new Point3D(it.CenterXm, ly - 0.2, z)));
+        }
+        // distanze tra macchine adiacenti, sopra la linea
+        var byId = info.ToDictionary(x => x.Id);
+        double gy = w / 2 + 0.9;
+        foreach (var g in LayoutGeometry.Gaps(_project))
+        {
+            if (!byId.TryGetValue(g.FromId, out var a) || !byId.TryGetValue(g.ToId, out var b)) continue;
+            Seg(new Point3D(a.ExitXm, gy, z), new Point3D(b.EntryXm, gy, z));
+            Seg(new Point3D(a.ExitXm, gy - 0.08, z), new Point3D(a.ExitXm, gy + 0.08, z));
+            Seg(new Point3D(b.EntryXm, gy - 0.08, z), new Point3D(b.EntryXm, gy + 0.08, z));
+            _dims.Children.Add(Label($"{g.FromId}-{g.ToId}: {Fmt(g.ClearM)} m", new Point3D((a.ExitXm + b.EntryXm) / 2, gy + 0.15, z)));
+        }
+        lines.Points = pts;
+        _dims.Children.Add(lines);
+    }
+
+    private static string Fmt(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
 
     public ModelVisual3D Visual { get; }
     public Rect3D Bounds { get; private set; }
@@ -61,6 +185,8 @@ public sealed class LineScene
         _brushesByObject.Clear();
         _beamBrushes.Clear();
         _strapperBrushes.Clear();
+        _strapperMoveT.Clear();
+        _strapperIsSma.Clear();
         _zoneBrushes.Clear();
         _packages.Clear();
         _packageMeshes.Clear();
@@ -68,8 +194,9 @@ public sealed class LineScene
         _sectionFrameBrushes.Clear();
         _stopVisuals.Clear();
         _scaleVisuals.Clear();
-        _knofBrush = _compactorBrush = _smaBrush = null;
+        _knofBrush = _knofBrushR = _compactorBrush = _smaBrush = null;
         _highlighted = null;
+        _names.Children.Clear();
 
         var topo = new LineTopology(p);
         _zoneOrder.AddRange(topo.Zones.Select(z => z.Id));
@@ -109,6 +236,8 @@ public sealed class LineScene
         _group.Children.Add(_packagesGroup);
 
         Bounds = new Rect3D(x0, -5, 0, x1 - x0, 8, 3);
+        _overlay.Transform = tg;
+        RebuildDimensions();
     }
 
     private void Register(Model3D m, object owner, SolidColorBrush brush, Color normal)
@@ -184,20 +313,100 @@ public sealed class LineScene
         _beamBrushes[pc.Id] = bb;
     }
 
+    private readonly Dictionary<string, TranslateTransform3D> _strapperMoveT = new();
+    private readonly Dictionary<string, bool> _strapperIsSma = new();
+
+    private GeometryModel3D Part(MeshFactory f, Color c, object owner, Transform3D? t = null)
+    {
+        var m = MeshFactory.Model(f.ToMesh(), c, out var b);
+        if (t != null) m.Transform = t;
+        _group.Children.Add(m);
+        Register(m, owner, b, c);
+        _lastPartBrush = b;
+        return m;
+    }
+    private SolidColorBrush? _lastPartBrush;
+
+    /// <summary>
+    /// Legatrice (modelli semplificati dal documento). KNCA: telaio blu su basamento, armadio grigio chiaro, grande anello blu
+    /// aperto verso il pacco, scivolo blu in alto, tubi neri; l'anello scende durante la legatura.
+    /// SMA: colonna e telaio blu su due travi, bobina gialla a sinistra, arco giallo a destra, testa grigia con tubi neri,
+    /// armadio grigio; l'arco scorre sulla colonna.
+    /// </summary>
     private void AddStrapper(StrapperConfig st)
     {
+        bool sma = st.MachineType == StrapperMachineType.SMA;
         double x = st.PositionMm / 1000.0, w = _lineWidth, fp = Math.Max(0.3, st.FootprintLengthMm / 1000.0);
-        var color = st.IsEnabled ? Color.FromRgb(0x5D, 0x6D, 0x7E) : Color.FromRgb(0xBB, 0xBB, 0xBB);
-        var f = new MeshFactory();
         double side = st.Side == LateralSide.Left ? 1 : -1;
-        f.AddBox(new Point3D(x, side * (w / 2 + 0.45), (_zTop + 1.3) / 2), fp, 0.5, _zTop + 1.3);   // corpo macchina
-        f.AddBox(new Point3D(x, -side * (w / 2 + 0.2), (_zTop + 1.3) / 2), 0.2, 0.2, _zTop + 1.3);   // montante opposto
-        f.AddBox(new Point3D(x, 0, _zTop + 1.2), 0.25, w + 0.9, 0.2);                                // arco
-        f.AddBox(new Point3D(x, 0, _zTop + 0.02), 0.03, w + 0.3, 0.03);                             // piano di legatura
-        var m = MeshFactory.Model(f.ToMesh(), color, out var b);
-        _group.Children.Add(m);
-        Register(m, st, b, color);
-        _strapperBrushes[st.Id] = b;
+        double yc = side * (w / 2 + 0.55);              // asse del telaio, lato macchina
+        double top = _zTop + 1.3;
+        var move = new TranslateTransform3D();
+        _strapperMoveT[st.Id] = move;
+        _strapperIsSma[st.Id] = sma;
+        Color blue = st.IsEnabled ? MachBlue : GreyOff;
+
+        if (!sma)
+        {
+            var frame = new MeshFactory();
+            frame.AddBox(new Point3D(x, yc, 0.15), fp, 0.9, 0.3);                                     // basamento con slitta
+            frame.AddBox(new Point3D(x, yc, 0.4), fp * 0.8, 0.5, 0.2);                                // slitta di traslazione
+            frame.AddBox(new Point3D(x, side * (w / 2 + 0.25), top / 2), 0.3, 0.3, top);               // montante
+            Part(frame, blue, st);
+            var cab = new MeshFactory();
+            cab.AddBox(new Point3D(x - fp * 0.25, yc + side * 0.55, 0.65), Math.Min(0.7, fp * 0.5), 0.45, 1.3);    // armadio elettrico
+            Part(cab, MachLightGrey, st);
+            // anello di legatura (si abbassa in lavoro): lati, base e traversa; aperto verso il pacco sul lato macchina
+            var ring = new MeshFactory();
+            double rh = 1.2, rz = _zTop + rh / 2 - 0.1;
+            ring.AddBox(new Point3D(x, 0, _zTop + rh - 0.05), 0.22, w + 0.5, 0.14);                   // traversa superiore
+            ring.AddBox(new Point3D(x, -side * (w / 2 + 0.2), rz), 0.22, 0.14, rh);                    // lato opposto
+            ring.AddBox(new Point3D(x, side * (w / 2 + 0.2), rz + 0.35), 0.22, 0.14, rh - 0.7);        // lato macchina (aperto in basso)
+            ring.AddBox(new Point3D(x, 0, _zTop - 0.18), 0.22, w + 0.5, 0.1);                          // catena inferiore
+            Part(ring, blue, st, move);
+            _strapperBrushes[st.Id] = _lastPartBrush!;
+            var chute = new MeshFactory();
+            chute.AddBox(new Point3D(x, side * (w / 2 + 0.3), top + 0.1), 0.25, 0.5, 0.1);             // scivolo inclinato (a gradini)
+            chute.AddBox(new Point3D(x, side * (w / 2 + 0.55), top + 0.25), 0.25, 0.4, 0.1);
+            Part(chute, blue, st);
+            var hoses = new MeshFactory();
+            hoses.AddBox(new Point3D(x + 0.15, side * (w / 2 + 0.3), _zTop + 0.3), 0.06, 0.06, 0.6);   // tubi e valvole neri
+            hoses.AddBox(new Point3D(x - 0.15, side * (w / 2 + 0.3), _zTop + 0.5), 0.06, 0.06, 0.5);
+            Part(hoses, MachBlack, st);
+        }
+        else
+        {
+            var beams = new MeshFactory();
+            beams.AddBox(new Point3D(x - fp * 0.3, yc, 0.1), 0.25, 1.2, 0.2);                          // due travi di base
+            beams.AddBox(new Point3D(x + fp * 0.3, yc, 0.1), 0.25, 1.2, 0.2);
+            beams.AddBox(new Point3D(x, side * (w / 2 + 0.3), top / 2), 0.35, 0.3, top);               // colonna verticale
+            Part(beams, blue, st);
+            var cab = new MeshFactory();
+            cab.AddBox(new Point3D(x, yc + side * 0.55, 0.6), Math.Min(0.7, fp * 0.5), 0.45, 1.2);
+            Part(cab, MachLightGrey, st);
+            var coil = new MeshFactory();
+            coil.AddBox(new Point3D(x - fp * 0.3, yc, 1.0), 0.15, 0.9, 0.9);                           // bobina della reggia
+            coil.AddBox(new Point3D(x - fp * 0.3, yc, 1.0), 0.2, 0.15, 0.15);                          // volantino
+            Part(coil, MachYellow, st);
+            // arco giallo con testa grigia e tubi neri: scorre in verticale sulla colonna
+            var arch = new MeshFactory();
+            double az = _zTop + 0.9;
+            arch.AddBox(new Point3D(x, 0, az + 0.3), 0.2, w + 0.5, 0.12);                              // traversa dell'arco
+            arch.AddBox(new Point3D(x, -side * (w / 2 + 0.2), az), 0.2, 0.12, 0.7);
+            arch.AddBox(new Point3D(x, side * (w / 2 + 0.2), az), 0.2, 0.12, 0.7);
+            Part(arch, MachYellow, st, move);
+            _strapperBrushes[st.Id] = _lastPartBrush!;
+            var head = new MeshFactory();
+            head.AddBox(new Point3D(x, 0, az + 0.45), 0.3, 0.5, 0.2);
+            Part(head, MachMidGrey, st, move);
+            var hoses = new MeshFactory();
+            hoses.AddBox(new Point3D(x, side * 0.3, az + 0.5), 0.05, 0.5, 0.05);
+            Part(hoses, MachBlack, st, move);
+        }
+        var plane = new MeshFactory();
+        plane.AddBox(new Point3D(x, 0, _zTop + 0.02), 0.03, w + 0.3, 0.03);                            // piano di legatura
+        var pm = MeshFactory.Model(plane.ToMesh(), GreyOff, out var pb);
+        _group.Children.Add(pm);
+        Register(pm, st, pb, GreyOff);
     }
 
     private void AddStopper(StopperConfig s)
@@ -216,11 +425,23 @@ public sealed class LineScene
         double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
         var color = Color.FromRgb(0xF1, 0xC4, 0x0F);
         var f = new MeshFactory();
-        int forks = Math.Max(2, (int)Math.Round(len / 2.5) + 1);
-        for (int i = 0; i < forks; i++)
+        // una struttura per ogni sezione, separate da un piccolo vuoto; il nome compare sopra la sezione
+        int forks = 0;
+        double sx = x0;
+        _names.Children.Clear();
+        foreach (var sec in t.EffectiveSections())
         {
-            double x = x0 + 0.2 + (len - 0.4) * i / (forks - 1);
-            f.AddBox(new Point3D(x, 0, _zTop - 0.06), 0.12, _lineWidth + 0.2, 0.08);
+            double sl = Math.Max(0.3, sec.LengthMm / 1000.0), gap = 0.04;
+            int n = Math.Max(2, (int)Math.Round(sl / 2.5) + 1);
+            for (int i = 0; i < n; i++)
+            {
+                double x = sx + 0.1 + (sl - 0.2 - gap) * i / (n - 1);
+                f.AddBox(new Point3D(x, 0, _zTop - 0.06), 0.12, _lineWidth + 0.2, 0.08);
+            }
+            f.AddBox(new Point3D(sx + (sl - gap) / 2, 0, _zTop - 0.1), sl - gap, 0.1, 0.04);       // longherone di sezione
+            _names.Children.Add(Label($"{sec.Name} ({sec.LengthMm:0} mm)", new Point3D(sx + sl / 2, -_lineWidth / 2 - 0.35, _zTop + 0.15)));
+            forks += n;
+            sx += sl;
         }
         var m = MeshFactory.Model(f.ToMesh(), color, out var b);
         _transferT = new TranslateTransform3D();
@@ -231,9 +452,9 @@ public sealed class LineScene
 
         // Guide di traslazione e stazione di destinazione
         var rails = new MeshFactory();
-        for (int i = 0; i < forks; i++)
+        for (int i = 0; i < Math.Max(2, forks); i++)
         {
-            double x = x0 + 0.2 + (len - 0.4) * i / (forks - 1);
+            double x = x0 + 0.2 + (len - 0.4) * i / (Math.Max(2, forks) - 1);
             rails.AddBox(new Point3D(x, sign * stroke / 2, _zTop - 0.25), 0.1, stroke + _lineWidth, 0.06);
         }
         rails.AddBox(new Point3D(x0 + len / 2, sign * stroke, _zTop - 0.12), len, _lineWidth * 0.8, 0.04);
@@ -243,31 +464,50 @@ public sealed class LineScene
         Register(rm, t, rb, railColor);
     }
 
-    /// <summary>Stringifascio KNOF: portale con traversa di chiusura mobile (abbassata = chiuso).</summary>
+    private readonly TranslateTransform3D _knofArmL = new(), _knofArmR = new();
+
+    /// <summary>
+    /// Stringifascio KNOF (modello semplificato): piastra blu a C aperta verso l'alto su trave a doppio T grigia,
+    /// due bracci gialli in alto che chiudono lateralmente sul pacco, arco con golfari, quadro comandi.
+    /// </summary>
     private void AddBundleClamp(BundleClampConfig k)
     {
         double x = k.PositionMm / 1000.0, w = _lineWidth;
-        var frameColor = Color.FromRgb(0x2C, 0x3E, 0x50);
-        var f = new MeshFactory();
-        f.AddBox(new Point3D(x, w / 2 + 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
-        f.AddBox(new Point3D(x, -w / 2 - 0.25, (_zTop + 1.4) / 2), 0.25, 0.2, _zTop + 1.4);
-        f.AddBox(new Point3D(x, 0, _zTop + 1.45), 0.3, w + 0.7, 0.15);
-        var fm = MeshFactory.Model(f.ToMesh(), frameColor, out var fb);
-        _group.Children.Add(fm);
-        Register(fm, k, fb, frameColor);
-        var barColor = Color.FromRgb(0x95, 0xA5, 0xA6);
-        var bar = MeshFactory.Box(new Point3D(x, 0, _zTop + 1.2), 0.2, w + 0.2, 0.12, barColor, out var bb);
-        bar.Transform = _knofT;
-        _group.Children.Add(bar);
-        Register(bar, k, bb, barColor);
-        _knofBrush = bb;
+        double zb = _zTop - 0.35;
+        var beam = new MeshFactory();
+        beam.AddBox(new Point3D(x, 0, zb - 0.1), 0.3, w + 1.1, 0.2);                                  // trave a doppio T
+        beam.AddBox(new Point3D(x, 0, zb - 0.25), 0.5, w + 1.1, 0.06);
+        Part(beam, MachMidGrey, k);
+        var c = new MeshFactory();
+        c.AddBox(new Point3D(x, 0, zb + 0.04), 0.14, w + 0.7, 0.08);                                  // fondo della C
+        c.AddBox(new Point3D(x, w / 2 + 0.3, zb + 0.75), 0.14, 0.08, 1.5);                             // montanti della C (aperta in alto)
+        c.AddBox(new Point3D(x, -w / 2 - 0.3, zb + 0.75), 0.14, 0.08, 1.5);
+        var cm = Part(c, MachBlue, k);
+        var armL = new MeshFactory();
+        armL.AddBox(new Point3D(x, w / 2 + 0.12, _zTop + 0.55), 0.18, 0.35, 0.14);                    // bracci gialli
+        var armR = new MeshFactory();
+        armR.AddBox(new Point3D(x, -w / 2 - 0.12, _zTop + 0.55), 0.18, 0.35, 0.14);
+        Part(armL, MachYellow, k, _knofArmL);
+        _knofBrush = _lastPartBrush;
+        Part(armR, MachYellow, k, _knofArmR);
+        _knofBrushR = _lastPartBrush;
+        var eye = new MeshFactory();
+        eye.AddBox(new Point3D(x, w / 2 + 0.3, zb + 1.6), 0.1, 0.1, 0.1);                              // golfari uniti da un arco
+        eye.AddBox(new Point3D(x, -w / 2 - 0.3, zb + 1.6), 0.1, 0.1, 0.1);
+        eye.AddBox(new Point3D(x, 0, zb + 1.7), 0.06, w + 0.7, 0.05);
+        Part(eye, MachMidGrey, k);
+        var panel = new MeshFactory();
+        panel.AddBox(new Point3D(x, w / 2 + 0.5, zb + 0.6), 0.2, 0.2, 0.3);                            // quadro comandi
+        Part(panel, MachLightGrey, k);
     }
+
+    private SolidColorBrush? _knofBrushR;
 
     /// <summary>Compattatore laterale: due ganasce che si chiudono verso l'asse linea.</summary>
     private void AddCompactor(SideCompactorConfig c)
     {
         double x = c.PositionMm / 1000.0, w = _lineWidth, len = Math.Max(0.3, c.JawLengthMm / 1000.0);
-        var color = Color.FromRgb(0x7D, 0x3C, 0x98);
+        var color = Color.FromRgb(0x8C, 0x92, 0x98);
         var left = MeshFactory.Box(new Point3D(x, w / 2 + 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var lb);
         left.Transform = _jawLeftT;
         var right = MeshFactory.Box(new Point3D(x, -w / 2 - 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var rb);
@@ -288,7 +528,13 @@ public sealed class LineScene
     {
         double x0 = r.PositionMm / 1000.0, len = Math.Max(0.5, r.LengthMm / 1000.0), w = _lineWidth;
         _smaSideSign = r.Side == LateralSide.Left ? 1 : -1;
-        var color = Color.FromRgb(0xA0, 0x40, 0x00);
+        var color = GreyMoving;
+        var body = new MeshFactory();
+        body.AddBox(new Point3D(x0 + 0.4, -_smaSideSign * (w / 2 + 0.5), 0.5), 0.8, 0.5, 1.0);        // corpo macchina
+        body.AddBox(new Point3D(x0 + 0.4, -_smaSideSign * (w / 2 + 0.3), (_zTop + 0.6) / 2), 0.3, 0.2, _zTop + 0.6); // montante
+        var bm = MeshFactory.Model(body.ToMesh(), GreyBody, out var bbr);
+        _group.Children.Add(bm);
+        Register(bm, r, bbr, GreyBody);
         var pusher = MeshFactory.Box(new Point3D(x0 + len / 2, -_smaSideSign * (w / 2 + 0.15), _zTop + 0.25), len, 0.12, 0.3, color, out var pb);
         pusher.Transform = _smaT;
         _group.Children.Add(pusher);
@@ -302,7 +548,7 @@ public sealed class LineScene
             double x = x0 + 0.2 + (len - 0.4) * i / (n - 1);
             table.AddBox(new Point3D(x, _smaSideSign * (w / 2 + stroke / 2), _zTop - 0.05), 0.1, stroke, 0.06);
         }
-        var tColor = Color.FromRgb(0xCA, 0x6F, 0x1E);
+        var tColor = GreyOff;
         var tm = MeshFactory.Model(table.ToMesh(), tColor, out var tb);
         _group.Children.Add(tm);
         Register(tm, r, tb, tColor);
@@ -411,13 +657,14 @@ public sealed class LineScene
             var st = p.Strappers[i];
             if (!_strapperBrushes.TryGetValue(st.Id, out var b) || IsHighlighted(st)) continue;
             var state = f != null && i < f.StrapperStates.Length ? f.StrapperStates[i] : StrapperState.Idle;
-            b.Color = state switch
-            {
-                StrapperState.Preparing => Color.FromRgb(0xF4, 0xD0, 0x3F),
-                StrapperState.Strapping => Color.FromRgb(0xE6, 0x7E, 0x22),
-                StrapperState.Returning => Color.FromRgb(0x5D, 0xAD, 0xE2),
-                _ => st.IsEnabled ? Color.FromRgb(0x5D, 0x6D, 0x7E) : Color.FromRgb(0xBB, 0xBB, 0xBB)
-            };
+            // Grigio neutro: la fase si vede dal ciclogramma; in lavoro la macchina si schiarisce leggermente.
+            bool isSma = _strapperIsSma.TryGetValue(st.Id, out var sm) && sm;
+            var baseC = isSma ? MachYellow : MachBlue;
+            var activeC = isSma ? MachYellowActive : MachBlueActive;
+            b.Color = !st.IsEnabled ? GreyOff : state == StrapperState.Idle ? baseC : activeC;
+            // anello (KNCA) o arco (SMA): scende durante la legatura e si rialza dopo
+            if (_strapperMoveT.TryGetValue(st.Id, out var mt))
+                mt.OffsetZ = state == StrapperState.Strapping ? -(isSma ? 0.55 : 0.3) : 0;
         }
 
         // Zone: struttura accesa se l'inverter è in moto
@@ -445,13 +692,19 @@ public sealed class LineScene
         for (int i = 0; i < p.Strappers.Count; i++)
         {
             if (f == null || i >= f.StrapperProcessStates.Length || f.StrapperProcessStates[i] != StrapperProcessState.Fault) continue;
-            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = Color.FromRgb(0xC0, 0x39, 0x2B);
+            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = FaultRed;
         }
 
         // Stringifascio: traversa che scende in chiusura
-        _knofT.OffsetZ = -(f?.BundleClampClosed ?? 0) * 0.6;
+        double arm = (f?.BundleClampClosed ?? 0) * 0.3;
+        _knofArmL.OffsetY = -arm;
+        _knofArmR.OffsetY = arm;
         if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
-            _knofBrush.Color = ClampColor(f?.BundleClampState ?? ClampState.Open, Color.FromRgb(0x95, 0xA5, 0xA6));
+        {
+            var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
+            _knofBrush.Color = kc;
+            if (_knofBrushR != null) _knofBrushR.Color = kc;
+        }
 
         // Compattatore: ganasce verso l'asse
         double jaw = (f?.CompactorClosed ?? 0) * 0.12;
@@ -459,7 +712,7 @@ public sealed class LineScene
         _jawRightT.OffsetY = jaw;
         if (_compactorBrush != null && !IsHighlighted(p.Compactor))
         {
-            var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x7D, 0x3C, 0x98));
+            var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x8C, 0x92, 0x98));
             _compactorBrush.Color = cc;
             if (_compactorRightBrush != null) _compactorRightBrush.Color = cc;
         }
@@ -469,9 +722,9 @@ public sealed class LineScene
         if (_smaBrush != null && !IsHighlighted(p.Rejector))
             _smaBrush.Color = (f?.RejectorState ?? RejectorState.Idle) switch
             {
-                RejectorState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
-                RejectorState.Idle => Color.FromRgb(0xA0, 0x40, 0x00),
-                _ => Color.FromRgb(0xFF, 0x8F, 0x00)
+                RejectorState.Fault => FaultRed,
+                RejectorState.Idle => GreyMoving,
+                _ => Blend(GreyMoving, GreyBody, 0.5)
             };
 
         // Fermi intermedi: sollevati e colorati secondo lo stato
@@ -511,8 +764,7 @@ public sealed class LineScene
 
     private static Color ClampColor(ClampState s, Color idle) => s switch
     {
-        ClampState.Closing or ClampState.Opening => Color.FromRgb(0xF3, 0x9C, 0x12),
-        ClampState.Closed => Color.FromRgb(0xE6, 0x7E, 0x22),
+        ClampState.Closing or ClampState.Opening or ClampState.Closed => MachWorking,
         ClampState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
         _ => idle
     };

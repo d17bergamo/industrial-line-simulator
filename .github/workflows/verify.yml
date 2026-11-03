@@ -1,0 +1,26 @@
+name: Verifica rapida (motore e test)
+
+# Compila e collauda solo i progetti senza WPF (Linux): feedback veloce a ogni push sui branch di lavoro.
+# Il build completo con WPF, EXE e installer resta nel workflow "Build, test e pubblicazione" (pull request e main).
+
+on:
+  push:
+    branches-ignore: [ main ]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  engine-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test (motore, ottimizzazione, infrastruttura)
+        run: dotnet test IndustrialLineSimulator.Core.slnx -c Release --logger "console;verbosity=normal"
