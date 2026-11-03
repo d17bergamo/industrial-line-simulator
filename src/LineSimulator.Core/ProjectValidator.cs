@@ -443,15 +443,16 @@ public static class ProjectValidator
         foreach (var g in stops.GroupBy(s => Math.Round(s.PositionMm)).Where(g => g.Count() > 1))
             r.Error("STOP_DUP", $"Più fermi nella stessa posizione ({F(g.Key)} mm).");
         var tr = p.Transfer;
-        if (tr.BatchSize < 1) r.Error("TRF_BATCH", "Pacchi per ciclo del trasferitore deve essere ≥ 1.", tr.Id);
-        else if (tr.BatchSize > 1 + stops.Count)
-            r.Warn("TRF_BATCH_STOPS", $"Pacchi per ciclo ({tr.BatchSize}) maggiore dei fermi disponibili ({1 + stops.Count}).", tr.Id);
+        if (stops.Count == 0 && p.Simulation.Banking == AccumulationMode.DoubleBanking)
+            r.Warn("BANKING_DOUBLE", "Double banking scelto ma nessun fermo intermedio scomparente abilitato: si simula in single banking.", tr.Id);
+        if (stops.Count == 0 && p.Simulation.Heading == StopReference.Tail)
+            r.Warn("HEADING_TAIL", "Intestatura di coda scelta ma nessun fermo intermedio scomparente abilitato: si simula con intestatura di testa.", tr.Id);
         if (tr.BatchWaitTimeoutS < 0) r.Error("TRF_BATCH", "Attesa gruppo negativa.", tr.Id);
-        if (stops.Count > 0 && p.PackageTypes.Count > 0)
+        if (stops.Count > 0 && p.PackageTypes.Count > 0 && p.Simulation.Banking == AccumulationMode.DoubleBanking)
         {
             double minLen = p.PackageTypes.Min(t => t.LengthMm);
             var first = stops.OrderByDescending(s => s.PositionMm).First();
-            double head = first.Reference == StopReference.Head ? first.PositionMm : first.PositionMm + minLen;
+            double head = p.Simulation.Heading == StopReference.Head ? first.PositionMm : first.PositionMm + minLen + first.TailOvershootMm;
             if (head > p.Stopper.PositionMm - minLen - p.Simulation.MinSafetyDistanceMm + 1e-6)
                 r.Warn("STOP_OVERLAP", $"Con il pacco più corto ({F(minLen)} mm) il fermo {first.Id} si sovrappone al pacco allo stopper: verrà usato solo se c'è spazio.", first.Id);
         }

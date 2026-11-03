@@ -47,12 +47,28 @@ public static class ProjectSerializer
         Migrate(node, version);
 
         var p = node.Deserialize<LineProject>(Options) ?? throw new InvalidDataException("Progetto vuoto.");
+        MigrateBankingSettings(node, p);
         // v1 → v2: la fotocellula di ingresso è obbligatoria; i nuovi dispositivi restano disabilitati.
         if (version < 2) ProjectNormalizer.EnsureEntryPhotocell(p);
         // Sensori di processo obbligatori (arresto davanti al trasferitore, riferimento encoder di legatura)
         ProjectNormalizer.EnsureProcessSensors(p);
         p.SchemaVersion = LineProject.CurrentSchemaVersion;
         return p;
+    }
+
+    /// <summary>
+    /// Progetti salvati prima che banking e intestatura passassero alle impostazioni della simulazione:
+    /// "pacchi per ciclo" ≥ 2 con un fermo intermedio → double banking; fermo intermedio con riferimento di coda → intestatura di coda.
+    /// </summary>
+    private static void MigrateBankingSettings(JsonObject node, LineProject p)
+    {
+        var sim = Get(node, "simulation") as JsonObject;
+        var stops = p.IntermediateStops.Where(s => s.IsEnabled).ToList();
+        if (stops.Count == 0) return;
+        if (sim == null || Get(sim, "banking") == null)
+            p.Simulation.Banking = p.Transfer.BatchSize >= 2 ? AccumulationMode.DoubleBanking : AccumulationMode.SingleBanking;
+        if (sim == null || Get(sim, "heading") == null)
+            p.Simulation.Heading = stops.Any(s => s.Reference == StopReference.Tail) ? StopReference.Tail : StopReference.Head;
     }
 
     /// <summary>Punto di estensione: trasformazioni successive dello schema (v1 → v2 → ...).</summary>

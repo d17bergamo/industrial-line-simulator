@@ -228,7 +228,10 @@ public sealed class IntermediateStopConfig : ComponentBase
     [UiProperty("Altezza grafica", "mm", "Geometria", Order = 2)]
     public double GraphicHeightMm { get; set; } = 250;
 
-    [UiProperty("Intestatura", "", "Funzionamento", Order = 10)]
+    /// <summary>
+    /// Non più usato dal motore: l'intestatura (testa/coda) si sceglie nella sezione Simulazioni
+    /// (<see cref="SimulationSettings.Heading"/>). Mantenuto per leggere i progetti salvati.
+    /// </summary>
     public StopReference Reference { get; set; } = StopReference.Head;
 
     [UiProperty("Fermo abilitato", "", "Funzionamento", Order = 11)]
@@ -239,6 +242,14 @@ public sealed class IntermediateStopConfig : ComponentBase
 
     [UiProperty("Tolleranza di posizionamento", "mm", "Funzionamento", Order = 21)]
     public double PositionToleranceMm { get; set; } = 3;
+
+    /// <summary>Intestatura di coda: corsa oltre il fermo prima che il fermo si sollevi e il pacco torni indietro.</summary>
+    [UiProperty("Extra corsa oltre il fermo (intestatura di coda)", "mm", "Funzionamento", Order = 22)]
+    public double TailOvershootMm { get; set; } = 200;
+
+    /// <summary>Intestatura di coda: velocità di ritorno del pacco contro il fermo sollevato.</summary>
+    [UiProperty("Velocità di ritorno (intestatura di coda)", "m/s", "Funzionamento", Order = 23)]
+    public double TailReturnSpeed { get; set; } = 0.2;
 }
 
 /// <summary>Bilico di pesatura sul lato di deposito del trasferitore.</summary>

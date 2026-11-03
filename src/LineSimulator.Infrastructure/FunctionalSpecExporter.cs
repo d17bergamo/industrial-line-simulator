@@ -125,16 +125,31 @@ public static class FunctionalSpecExporter
         body.Append(Para("3.3 Accumulo sul trasferitore: single e double banking", "Heading2"));
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         double safety = p.Simulation.MinSafetyDistanceMm;
+        bool tailMode = p.Simulation.Heading == StopReference.Tail && stops.Count > 0;
+        bool dblMode = p.Simulation.Banking == AccumulationMode.DoubleBanking && stops.Count > 0;
+        body.Append(Para($"Impostazione della simulazione: {(dblMode ? "double banking" : "single banking")}, intestatura di {(tailMode ? "coda" : "testa")}." +
+            (tailMode ? " Intestatura di coda: il pacco supera il fermo intermedio abbassato di un'extra corsa, il fermo si solleva dietro la coda e il pacco torna indietro fino alla battuta." : "")));
+        string HeadText(IntermediateStopConfig s) => tailMode ? $"{s.Id}, intestatura di coda" : $"{s.Id}, intestatura di testa";
+        double HeadAt(IntermediateStopConfig s, PackageType t) => tailMode ? s.PositionMm + t.LengthMm : s.PositionMm;
+        double Reach(IntermediateStopConfig s, PackageType t) => HeadAt(s, t) + (tailMode ? s.TailOvershootMm : 0);
         foreach (var t in p.PackageTypes)
         {
-            bool dbl = stops.Count > 0 && Math.Max(1, p.Transfer.BatchSize) >= 2 && stops.Any(s =>
+            if (dblMode)
             {
-                double head = s.Reference == StopReference.Head ? s.PositionMm : s.PositionMm + t.LengthMm;
-                return head - t.LengthMm >= p.Transfer.PositionMm - 1 && head <= p.Stopper.PositionMm - t.LengthMm - safety + 1;
-            });
-            body.Append(Bullet(dbl
-                ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo intermedio scomparente ({string.Join(", ", stops.Select(s => $"{s.Id}, intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")}"))}). Il trasferitore preleva i due pacchi insieme."
-                : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking. Il pacco va in fondo e si intesta di testa sullo stopper; il trasferitore lo preleva da solo."));
+                bool dbl = stops.Any(s => HeadAt(s, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(s, t) <= p.Stopper.PositionMm - t.LengthMm - safety + 1);
+                body.Append(Bullet(dbl
+                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo intermedio scomparente ({string.Join(", ", stops.Select(HeadText))}). Il trasferitore preleva i due pacchi insieme."
+                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking non possibile per lunghezza; il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
+            }
+            else if (tailMode)
+            {
+                var s = stops.FirstOrDefault(x => HeadAt(x, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(x, t) <= p.Stopper.PositionMm + 1);
+                body.Append(Bullet(s != null
+                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking, intestatura di coda sul fermo {s.Id} ({N(s.PositionMm, "0")} mm); il trasferitore preleva un pacco per ciclo."
+                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking; intestatura di coda non possibile per lunghezza, il pacco si intesta di testa sullo stopper."));
+            }
+            else
+                body.Append(Bullet($"{t.Id} ({N(t.LengthMm, "0")} mm): single banking. Il pacco va in fondo e si intesta di testa sullo stopper; il trasferitore lo preleva da solo."));
         }
         if (p.Scales.Any(s => s.IsEnabled))
             body.Append(Bullet("Il trasferitore deposita i pacchi sui bilici liberi; pesatura (stabilizzazione e acquisizione), consenso a proseguire e scarico. Un pacco più lungo di un bilico è pesato su più bilici insieme."));

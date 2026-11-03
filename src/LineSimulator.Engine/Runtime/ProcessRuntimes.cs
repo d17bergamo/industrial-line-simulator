@@ -258,6 +258,8 @@ public enum StopState
     Free,
     Assigned,
     Positioning,
+    /// <summary>Intestatura di coda: pacco oltre il fermo, fermo sollevato, ritorno indietro fino a battere di coda.</summary>
+    Returning,
     Aligning,
     Aligned
 }
@@ -265,18 +267,25 @@ public enum StopState
 /// <summary>Fermo intermedio: assegnazione del pacco, posizionamento, intestatura di testa o di coda.</summary>
 public sealed class StopRuntime
 {
-    public StopRuntime(IntermediateStopConfig config)
+    public StopRuntime(IntermediateStopConfig config, StopReference reference)
     {
         Config = config;
+        Reference = reference;
         PositionM = config.PositionMm / 1000.0;
         ToleranceM = Math.Max(0.0005, config.PositionToleranceMm / 1000.0);
+        OvershootM = reference == StopReference.Tail ? Math.Max(0.02, config.TailOvershootMm / 1000.0) : 0;
+        ReturnSpeed = Math.Max(0.01, config.TailReturnSpeed);
     }
 
     public IntermediateStopConfig Config { get; }
     public string Id => Config.Id;
     public double PositionM { get; }
     public double ToleranceM { get; }
-    public StopReference Reference => Config.Reference;
+    /// <summary>Intestatura applicata (dalle impostazioni della simulazione).</summary>
+    public StopReference Reference { get; }
+    /// <summary>Corsa oltre il fermo prima del ritorno (solo intestatura di coda).</summary>
+    public double OvershootM { get; }
+    public double ReturnSpeed { get; }
     public StopState State { get; internal set; } = StopState.Free;
     public PackageRuntime? Package { get; internal set; }
     public double TargetHeadM { get; internal set; }

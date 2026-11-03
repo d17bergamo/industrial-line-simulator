@@ -8,7 +8,9 @@ public enum InverterMode
     Stop,
     Run,
     Position,
-    Align
+    Align,
+    /// <summary>Ritorno indietro del pacco contro il fermo intermedio (intestatura di coda).</summary>
+    Reverse
 }
 
 /// <summary>
@@ -111,6 +113,7 @@ public sealed class ZoneRuntime
         get
         {
             const double e = 1e-4;
+            if (Mode == InverterMode.Reverse) return CycleState.Positioning;
             if (ActualSpeed < e && ReferenceSpeed < e) return CycleState.Stopped;
             if (ReferenceSpeed > ActualSpeed + e) return CycleState.Accelerating;
             if (ReferenceSpeed < ActualSpeed - e) return CycleState.Decelerating;

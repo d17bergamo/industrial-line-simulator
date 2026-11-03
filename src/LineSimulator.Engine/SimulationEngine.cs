@@ -129,6 +129,8 @@ public sealed partial class SimulationEngine : ILogicContext
 
         foreach (var c in Preparation.Changes)
             Emit(SimEventType.ConfigurationError, EventSeverity.Info, "Preparazione del ciclo: " + c);
+        foreach (var (sev, msg) in _bankingNotes)
+            Emit(SimEventType.ConfigurationError, sev, msg, Project.Transfer.Id);
         if (Validation.HasErrors || Preparation.HasErrors)
         {
             foreach (var e in Validation.Errors)
@@ -658,6 +660,7 @@ public sealed partial class SimulationEngine : ILogicContext
                     InverterMode.Run => z.Level == SpeedLevel.High ? "MARCIA ALTA" : "MARCIA BASSA",
                     InverterMode.Stop => "ARRESTO",
                     InverterMode.Position => "POSIZIONAMENTO",
+                    InverterMode.Reverse => "RITORNO INDIETRO",
                     _ => "ALLINEAMENTO"
                 };
                 Emit(SimEventType.InverterCommand, EventSeverity.Trace, $"{z.Id}: {what} - {z.Reason}", z.Id);
@@ -1199,6 +1202,7 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 StopState.Assigned => CycleState.Waiting,
                 StopState.Positioning => CycleState.Positioning,
+                StopState.Returning => CycleState.Positioning,
                 StopState.Aligning => CycleState.Aligning,
                 StopState.Aligned => CycleState.Aligned,
                 _ => CycleState.Idle
@@ -1275,7 +1279,7 @@ public sealed partial class SimulationEngine : ILogicContext
                     || (Compactor != null && !Compactor.IsOpen && !Compactor.IsClosed)
                     || (Station != null && Station.State is StationState.Compacting or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers)
                     || _strappers.Any(s => s.ArmState == StrapperArmState.Arming)
-                    || _stops.Any(s => s.State == StopState.Aligning) || _batchWaitSince != null;
+                    || _stops.Any(s => s.State is StopState.Aligning or StopState.Returning) || _batchWaitSince != null;
         if (busy) _lastProgressTime = t;
         if (_active.Count > 0 && t - _lastProgressTime > Project.Simulation.DeadlockTimeoutS)
         {

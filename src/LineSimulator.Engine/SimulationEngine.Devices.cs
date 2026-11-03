@@ -23,6 +23,12 @@ public sealed partial class SimulationEngine
     public ClampRuntime? Compactor { get; private set; }
     public RejectorRuntime? Rejector { get; private set; }
     public IReadOnlyList<StopRuntime> IntermediateStops => _stops;
+    /// <summary>Banking applicato (dalle impostazioni della simulazione; single se non c'è un fermo intermedio).</summary>
+    public AccumulationMode EffectiveBanking { get; private set; } = AccumulationMode.SingleBanking;
+    /// <summary>Intestatura applicata (dalle impostazioni della simulazione; testa se non c'è un fermo intermedio).</summary>
+    public StopReference EffectiveHeading { get; private set; } = StopReference.Head;
+    private readonly List<(EventSeverity, string)> _bankingNotes = new();
+    private bool DoubleBanking => EffectiveBanking == AccumulationMode.DoubleBanking;
     public IReadOnlyList<ScaleRuntime> Scales => _scales;
     public int RejectedPackages { get; private set; }
     public int WeighedPackages { get; private set; }
@@ -43,8 +49,25 @@ public sealed partial class SimulationEngine
             try { numbers = p.Rejector.ParseRejectNumbers(); } catch (FormatException) { numbers = Array.Empty<int>(); }
             if (rz != null) Rejector = new RejectorRuntime(p.Rejector, _zoneById[rz.Id], numbers.ToList());
         }
-        foreach (var s in p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm))
-            _stops.Add(new StopRuntime(s));
+        // Banking e intestatura: scelti nella sezione Simulazioni (non nel pacco né nel fermo)
+        var stopCfg = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
+        EffectiveBanking = p.Simulation.Banking;
+        EffectiveHeading = p.Simulation.Heading;
+        if (stopCfg.Count == 0)
+        {
+            if (EffectiveBanking == AccumulationMode.DoubleBanking)
+                _bankingNotes.Add((EventSeverity.Warning, "Double banking non possibile: nessun fermo intermedio scomparente abilitato sul trasferitore. Si simula in single banking."));
+            if (EffectiveHeading == StopReference.Tail)
+                _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile: serve un fermo intermedio scomparente. Si simula con intestatura di testa sullo stopper finale."));
+            EffectiveBanking = AccumulationMode.SingleBanking;
+            EffectiveHeading = StopReference.Head;
+        }
+        _bankingNotes.Insert(0, (EventSeverity.Info,
+            $"Accumulo sul trasferitore: {(DoubleBanking ? "double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo sul fermo intermedio)" : "single banking (1 pacco per ciclo)")}, " +
+            $"intestatura di {(EffectiveHeading == StopReference.Head ? "testa" : "coda (oltre il fermo, il fermo si solleva e il pacco torna indietro)")}"));
+        // Single banking di testa: i fermi intermedi restano abbassati e il pacco va fino allo stopper finale
+        if (DoubleBanking || EffectiveHeading == StopReference.Tail)
+            foreach (var s in stopCfg) _stops.Add(new StopRuntime(s, EffectiveHeading));
         if (_stops.Count > 0 && Topology.StopperZone != null)
             _zoneById[Topology.StopperZone.Id].MultiStop = true;
         for (int i = 0; i < p.Scales.Count; i++)
@@ -652,6 +675,12 @@ public sealed partial class SimulationEngine
     /// <summary>Primo fermo libero nell'ordine stopper finale → fermi intermedi da valle a monte (-1 se nessuno).</summary>
     private int FirstFreeStop()
     {
+        if (!DoubleBanking)
+        {
+            // Single banking: un solo pacco alla volta nella zona dello stopper; con intestatura di coda va al fermo intermedio
+            if (_finalAssigned != null || Stopper.Package != null || _stops.Any(s => s.Package != null)) return -1;
+            return _stops.Count > 0 ? 1 : 0;
+        }
         if (_finalAssigned == null && Stopper.Package == null) return 0;
         for (int k = 0; k < _stops.Count; k++)
             if (_stops[k].Package == null) return k + 1;
@@ -662,6 +691,13 @@ public sealed partial class SimulationEngine
     {
         int idx = FirstFreeStop();
         if (idx <= 0) return idx;
+        if (!DoubleBanking)
+        {
+            // Primo fermo (da valle) dove il pacco ci sta di coda; altrimenti di testa sullo stopper finale
+            for (int k = 0; k < _stops.Count; k++)
+                if (FitsAtStop(p, k)) return k + 1;
+            return 0;
+        }
         return FitsAtStop(p, idx - 1) ? idx : -1;
     }
 
@@ -677,8 +713,10 @@ public sealed partial class SimulationEngine
         var zi = Topology.StopperZone!;
         double head = StopTargetHead(s, p);
         double tail = head - p.LengthM;
+        double reach = head + s.OvershootM;   // con intestatura di coda il pacco supera il fermo prima di tornare indietro
         if (tail < Math.Max(zi.StartM, Transfer.StartM) - 1e-6) return false;
-        if (head > Stopper.PositionM + 1e-6) return false;
+        if (reach > Stopper.PositionM + 1e-6) return false;
+        if (!DoubleBanking) return true;
         double aheadTail;
         if (k == 0)
         {
@@ -692,7 +730,7 @@ public sealed partial class SimulationEngine
             if (prev.Package == null) return false;
             aheadTail = prev.TargetHeadM - prev.Package.LengthM;
         }
-        return head <= aheadTail - _minSafety + 1e-6;
+        return reach <= aheadTail - _minSafety + 1e-6;
     }
 
     private void AssignStop(PackageRuntime p, int idx, ZoneRuntime z)
@@ -702,6 +740,9 @@ public sealed partial class SimulationEngine
         z.Reservations++;
         if (idx == 0)
         {
+            if (!DoubleBanking && EffectiveHeading == StopReference.Tail && _reportedOnce.Add("tailfallback:" + p.Type.Id))
+                Emit(SimEventType.StopPhase, EventSeverity.Warning,
+                    $"{p.Id} ({p.Type.Id}, {p.LengthM * 1000:0} mm): intestatura di coda non possibile, il pacco non ci sta oltre il fermo intermedio; intestatura di testa sullo stopper finale", Project.Stopper.Id, p.Id);
             _finalAssigned = p;
             Emit(SimEventType.StopPhase, EventSeverity.Info, $"{p.Id} destinato allo stopper finale (testa a {Stopper.PositionM * 1000:0} mm)", Project.Stopper.Id, p.Id);
             return;
@@ -723,6 +764,8 @@ public sealed partial class SimulationEngine
         var headAligning = _stops.FirstOrDefault(s => s.State == StopState.Aligning && s.Reference == StopReference.Head);
         if (headAligning != null) { reason = $"Intestatura di testa al fermo {headAligning.Id}"; return InverterMode.Align; }
         if (_finalAssigned != null && Stopper.Package == null) { reason = "Avanzamento verso lo stopper finale"; return InverterMode.Run; }
+        var back = _stops.FirstOrDefault(s => s.State == StopState.Returning);
+        if (back != null) { reason = $"Ritorno indietro: intestatura di coda al fermo {back.Id}"; return InverterMode.Reverse; }
         var active = _stops.FirstOrDefault(s => s.State is StopState.Assigned or StopState.Positioning);
         if (active != null && active.Package != null)
         {
@@ -731,8 +774,10 @@ public sealed partial class SimulationEngine
                 active.State = StopState.Positioning;
                 Emit(SimEventType.StopPhase, EventSeverity.Info, $"{active.Id}: posizionamento di {active.Package.Id}", active.Id, active.Package.Id);
             }
-            z.PositionCommand = PositioningProfile.Command(active.TargetHeadM - active.Package.HeadM, z.Config.HighSpeed, z.Config.Deceleration, dt);
-            reason = $"Posizionamento al fermo {active.Id}";
+            z.PositionCommand = PositioningProfile.Command(active.TargetHeadM + active.OvershootM - active.Package.HeadM, z.Config.HighSpeed, z.Config.Deceleration, dt);
+            reason = active.Reference == StopReference.Tail
+                ? $"Posizionamento oltre il fermo {active.Id} (intestatura di coda)"
+                : $"Posizionamento al fermo {active.Id}";
             return InverterMode.Position;
         }
         if (_stops.Any(s => s.State == StopState.Aligning)) { reason = "Intestatura di coda in corso"; return InverterMode.Stop; }
@@ -750,12 +795,31 @@ public sealed partial class SimulationEngine
         {
             var p = s.Package;
             if (p != null) s.OccupiedTimeS += dt;
-            s.Raised = p != null && s.Reference == StopReference.Head
-                       && !_active.Any(q => q.OnRollers && q != p && q.TailM < s.PositionM - 1e-6 && q.HeadM > s.PositionM + 1e-6);
+            bool clear = !_active.Any(q => q.OnRollers && q != p && q.TailM < s.PositionM - 1e-6 && q.HeadM > s.PositionM + 1e-6);
+            s.Raised = p != null && clear && (s.Reference == StopReference.Head
+                       || (s.State is StopState.Returning or StopState.Aligning or StopState.Aligned && p.TailM >= s.PositionM - s.ToleranceM));
             if (p == null) continue;
+            if (s.State == StopState.Returning)
+            {
+                // Il fermo è sollevato dietro al pacco: il pacco torna indietro fino a battere di coda
+                double newHead = Math.Max(s.TargetHeadM, p.HeadM - s.ReturnSpeed * dt);
+                p.HeadM = newHead;
+                p.Velocity = 0;
+                _lastProgressTime = Time + dt;
+                if (newHead <= s.TargetHeadM + 1e-9)
+                {
+                    p.HeadM = s.TargetHeadM;
+                    s.State = StopState.Aligning;
+                    s.ElapsedS = 0;
+                    p.State = PackageState.Aligning;
+                    Emit(SimEventType.StopPhase, EventSeverity.Info,
+                        $"{p.Id} in battuta di coda al fermo {s.Id} (testa {p.HeadM * 1000:0} mm, coda {p.TailM * 1000:0} mm)", s.Id, p.Id);
+                }
+                continue;
+            }
             if (s.State == StopState.Positioning)
             {
-                double r = s.TargetHeadM - p.HeadM;
+                double r = s.TargetHeadM + s.OvershootM - p.HeadM;
                 bool arrived = r <= 2e-4 && r >= -s.ToleranceM;
                 bool overshoot = r < -s.ToleranceM;
                 if (!(arrived || (overshoot && p.IsStopped))) continue;
@@ -764,15 +828,22 @@ public sealed partial class SimulationEngine
                     PositioningErrors++;
                     Emit(SimEventType.PositioningError, EventSeverity.Error, $"{p.Id} oltre il fermo {s.Id} di {-r * 1000:0.0} mm", s.Id, p.Id);
                 }
-                else p.HeadM = s.TargetHeadM;
+                else p.HeadM = s.TargetHeadM + s.OvershootM;
                 p.Velocity = 0;
                 if (zone != null) { zone.ActualSpeed = 0; zone.PositionCommand = 0; }
-                if (s.Reference == StopReference.Head && !s.Raised)
+                if (!clear)
                 {
                     InterlockEvents++;
                     Alarm(SimEventType.Interlock, $"{s.Id}: fermo non sollevabile, un pacco occupa la posizione del fermo", s.Id, p.Id);
                 }
-                if (s.Reference == StopReference.Tail) p.HeldByTailStop = true;
+                if (s.Reference == StopReference.Tail)
+                {
+                    p.HeldByTailStop = true;
+                    s.State = StopState.Returning;
+                    Emit(SimEventType.StopPhase, EventSeverity.Info,
+                        $"{p.Id} oltre il fermo {s.Id} di {s.OvershootM * 1000:0} mm: fermo sollevato, ritorno indietro a {s.ReturnSpeed:0.##} m/s", s.Id, p.Id);
+                    continue;
+                }
                 s.State = StopState.Aligning;
                 s.ElapsedS = 0;
                 p.State = PackageState.Aligning;
@@ -803,10 +874,10 @@ public sealed partial class SimulationEngine
         foreach (var s in _stops) if (s.State == StopState.Aligned && s.Package != null) aligned.Add(s.Package);
         if (aligned.Count == 0) { _batchWaitSince = null; return null; }
         bool approaching = (_finalAssigned != null && Stopper.State != StopperState.Aligned)
-                           || _stops.Any(s => s.State is StopState.Assigned or StopState.Positioning or StopState.Aligning);
+                           || _stops.Any(s => s.State is StopState.Assigned or StopState.Positioning or StopState.Returning or StopState.Aligning);
         if (approaching) return null;
         _batchWaitSince ??= t;
-        int target = Math.Max(1, Math.Min(Transfer.Config.BatchSize, 1 + _stops.Count));
+        int target = DoubleBanking ? Math.Min(2, 1 + _stops.Count) : 1;
         if (aligned.Count >= target) return aligned;
         var zone = _zoneById[Topology.StopperZone!.Id];
         var cand = NextCandidate(zone);

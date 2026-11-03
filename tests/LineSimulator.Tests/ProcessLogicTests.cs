@@ -221,7 +221,7 @@ public class ProcessLogicTests
             x.Infeed.TypeSequence = new List<string> { "P6" };
             x.Infeed.PackageCount = 2;
             x.Rejector.RejectPackageNumbers = "";
-            x.IntermediateStops[0].Reference = StopReference.Tail;
+            x.Simulation.Heading = StopReference.Tail;   // scelta nella sezione Simulazioni
             x.IntermediateStops[0].PositionMm = 44100;
         });
         double? tailAtLift = null;

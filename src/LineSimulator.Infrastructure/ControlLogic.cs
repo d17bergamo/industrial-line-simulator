@@ -83,7 +83,8 @@ public static class ControlLogicGenerator
                 ? $"(RUN({z.Id}) | SIG({empty})) & !ZONE({z.Id})"
                 : $"RUN({z.Id}) | SIG({empty})";
             if (z.Kind == ZoneKind.Stopper && p.Transfer.BlockInfeedUntilHome) consentCond = $"({consentCond}) & TRANSFER_HOME";
-            if (z.Kind == ZoneKind.Stopper && p.IntermediateStops.Any(s => s.IsEnabled))
+            if (z.Kind == ZoneKind.Stopper && p.IntermediateStops.Any(s => s.IsEnabled)
+                && (p.Simulation.Banking == AccumulationMode.DoubleBanking || p.Simulation.Heading == StopReference.Tail))
                 consentCond = $"(RUN({z.Id}) | SIG({empty})) & SIG({z.Id}_FERMO_LIBERO)" + (p.Transfer.BlockInfeedUntilHome ? " & TRANSFER_HOME" : "");
             rules.Add(new ControlRule($"{z.Id}.CONSENSO", group, consentCond, $"IMPOSTA SEGNALE {consent}", z.Id,
                 single ? "La zona a pacco singolo accetta un nuovo pacco solo se libera." : "Consenso all'ingresso dalla zona a monte."));
@@ -204,12 +205,30 @@ public static class ControlLogicGenerator
         const string gt = "Accumulo e trasferitore";
         rules.Add(new ControlRule($"{p.Stopper.Id}.ALLINEAMENTO", gt, $"DEV({p.Stopper.Id},Aligning)", $"MARCIA di allineamento a {F(p.Stopper.AlignmentRollerSpeed)} m/s per {F(p.Stopper.AlignmentTimeS + p.Stopper.HeadingTimeS)} s", topo.StopperZone?.Id ?? "",
             "Intestatura di testa contro il fermo finale."));
+        bool tail = p.Simulation.Heading == StopReference.Tail;
+        bool dbl = p.Simulation.Banking == AccumulationMode.DoubleBanking;
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
+        if (stops.Count == 0) { tail = false; dbl = false; }
+        if (!dbl && !tail) stops.Clear();   // single banking di testa: fermi intermedi sempre abbassati
+        int batch = dbl ? Math.Min(2, 1 + stops.Count) : 1;
         foreach (var s in stops)
         {
-            rules.Add(new ControlRule($"{s.Id}.SOLLEVA", gt, $"(DEV({s.Id},Assigned) | DEV({s.Id},Positioning) | DEV({s.Id},Aligning) | DEV({s.Id},Aligned)) & !SIG({s.Id}_PACCO_SOPRA)",
-                $"SOLLEVA fermo scomparente ({(s.Reference == StopReference.Head ? "intestatura di testa" : "intestatura di coda")})", s.Id,
-                $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva solo se nessun pacco è sopra il fermo."));
+            if (tail)
+            {
+                rules.Add(new ControlRule($"{s.Id}.OLTRE", gt, $"DEV({s.Id},Positioning)",
+                    $"POSIZIONA il pacco con la coda {F(s.TailOvershootMm, "0")} mm oltre il fermo (encoder)", topo.StopperZone?.Id ?? "",
+                    "Intestatura di coda: il pacco supera il fermo abbassato."));
+                rules.Add(new ControlRule($"{s.Id}.SOLLEVA", gt, $"(DEV({s.Id},Returning) | DEV({s.Id},Aligning) | DEV({s.Id},Aligned)) & !SIG({s.Id}_PACCO_SOPRA)",
+                    "SOLLEVA fermo scomparente (intestatura di coda)", s.Id,
+                    $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva dietro la coda del pacco, solo se nessun pacco è sopra il fermo."));
+                rules.Add(new ControlRule($"{s.Id}.RITORNO", gt, $"DEV({s.Id},Returning)",
+                    $"MARCIA INDIETRO a {F(s.TailReturnSpeed)} m/s fino alla battuta di coda", topo.StopperZone?.Id ?? "",
+                    "Il pacco torna indietro contro il fermo sollevato."));
+            }
+            else
+                rules.Add(new ControlRule($"{s.Id}.SOLLEVA", gt, $"(DEV({s.Id},Assigned) | DEV({s.Id},Positioning) | DEV({s.Id},Aligning) | DEV({s.Id},Aligned)) & !SIG({s.Id}_PACCO_SOPRA)",
+                    "SOLLEVA fermo scomparente (intestatura di testa)", s.Id,
+                    $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva solo se nessun pacco è sopra il fermo."));
             signals.Add(new ControlSignal($"{s.Id}_PACCO_SOPRA", $"Un pacco occupa la posizione del fermo {s.Id} ({F(s.PositionMm, "0")} mm)."));
             rules.Add(new ControlRule($"{s.Id}.ABBASSA", gt, $"DEV({p.Transfer.Id},Lifting)", "ABBASSA fermo scomparente", s.Id, "Il trasferitore preleva i pacchi allineati."));
         }
@@ -218,8 +237,8 @@ public static class ControlLogicGenerator
         string aligned = string.Join(" & ", new[] { $"DEV({p.Stopper.Id},Aligned)" }.Concat(stops.Select(s => $"(DEV({s.Id},Aligned) | DEV({s.Id},Free))")));
         rules.Add(new ControlRule($"{p.Transfer.Id}.SOLLEVA", gt, aligned + $" & SIG({p.Transfer.Id}_GRUPPO_COMPLETO)",
             $"SOLLEVA trasferitore e trasla ({F(p.Transfer.LiftTimeS)} s + {F(p.Transfer.EffectiveTranslationTimeS)} s)", p.Transfer.Id,
-            $"Fino a {Math.Max(1, p.Transfer.BatchSize)} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
-        signals.Add(new ControlSignal($"{p.Transfer.Id}_GRUPPO_COMPLETO", $"Pacchi allineati = {Math.Max(1, p.Transfer.BatchSize)}, oppure il pacco successivo non può entrare, oppure attesa scaduta."));
+            $"{(dbl ? "Double" : "Single")} banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
+        signals.Add(new ControlSignal($"{p.Transfer.Id}_GRUPPO_COMPLETO", $"Pacchi allineati = {batch}, oppure il pacco successivo non può entrare, oppure attesa scaduta."));
         var scales = p.Scales.Where(s => s.IsEnabled).OrderBy(s => s.StartMm).ToList();
         if (scales.Count > 0)
         {

@@ -242,7 +242,10 @@ public sealed class TransferConfig : ComponentBase
     [UiProperty("Margine fotocellula di arresto davanti al trasferitore", "mm", "Interblocchi", Order = 23)]
     public double StopPhotocellMarginMm { get; set; } = 1000;
 
-    [UiProperty("Pacchi prelevati per ciclo (max)", "", "Funzionamento", Order = 21)]
+    /// <summary>
+    /// Non più usato dal motore: i pacchi per ciclo dipendono dal banking scelto nella sezione Simulazioni
+    /// (single = 1, double = 2). Mantenuto per leggere i progetti salvati.
+    /// </summary>
     public int BatchSize { get; set; } = 1;
 
     [UiProperty("Attesa massima per completare il gruppo", "s", "Funzionamento", Order = 22)]
