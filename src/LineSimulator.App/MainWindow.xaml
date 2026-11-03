@@ -120,7 +120,7 @@
             <Grid Background="{StaticResource PanelBg}" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock Text="Industrial Line Simulator" FontSize="34" FontWeight="SemiBold" Foreground="#26323D" HorizontalAlignment="Center"/>
-                    <TextBlock Text="{Binding Project.Name}" FontSize="15" Foreground="#5A6672" HorizontalAlignment="Center" Margin="0,4,0,24"/>
+                    <Border Height="24"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <Button Style="{StaticResource HomeTile}" Command="{Binding GoSectionCommand}" CommandParameter="Layout">
                         <StackPanel>
@@ -187,17 +187,29 @@
                     <RowDefinition Height="3*"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0">
-                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Struttura della linea"/>
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Struttura della linea (Ctrl + clic: selezione multipla)"/>
                     <TreeView x:Name="LineTree" ItemsSource="{Binding Tree}" SelectedItemChanged="LineTree_SelectedItemChanged" BorderThickness="0">
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                 <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TreeItem_PreviewMouseLeftButtonDown"/>
                             </Style>
                         </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate>
                             <HierarchicalDataTemplate DataType="{x:Type vm:TreeNodeViewModel}" ItemsSource="{Binding Children}">
-                                <TextBlock Text="{Binding Header}" Margin="2,1"/>
+                                <TextBlock Text="{Binding Header}" Margin="2,1" Padding="2,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsMultiSelected}" Value="True">
+                                                    <Setter Property="Background" Value="#CFE3F7"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </HierarchicalDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>

@@ -435,6 +435,15 @@ public sealed class LineScene
         {
             double sl = Math.Max(0.3, sec.LengthMm / 1000.0), gap = 0.04;
             int n = Math.Max(2, (int)Math.Round(sl / 2.5) + 1);
+            if (t.Kind == TransferKind.Chains)
+            {
+                // catene: quattro filari lungo la linea con i pignoni alle estremità
+                foreach (double yy in new[] { -0.36, -0.12, 0.12, 0.36 })
+                    f.AddBox(new Point3D(sx + (sl - gap) / 2, yy * _lineWidth, _zTop - 0.05), sl - gap, 0.06, 0.05);
+                f.AddCylinderY(sx + 0.08, _zTop - 0.05, -_lineWidth / 2 - 0.05, _lineWidth / 2 + 0.05, 0.07, 12);
+                f.AddCylinderY(sx + sl - gap - 0.08, _zTop - 0.05, -_lineWidth / 2 - 0.05, _lineWidth / 2 + 0.05, 0.07, 12);
+            }
+            else
             for (int i = 0; i < n; i++)
             {
                 double x = sx + 0.1 + (sl - 0.2 - gap) * i / (n - 1);
