@@ -17,14 +17,15 @@ namespace LineSimulator.App.Rendering;
 public sealed class LineScene
 {
     // Macchine SUND BIRSTA (legatrice KNCA, stringifascio KNOF, rigettatrice SMA): modelli semplificati in grigio neutro.
-    // Colori di riferimento delle macchine Sund Birsta (documento "Conoscenza della linea")
-    private static readonly Color MachBlue = Color.FromRgb(0x1F, 0x5F, 0xA8);
-    private static readonly Color MachBlueActive = Color.FromRgb(0x3C, 0x85, 0xD6);
-    private static readonly Color MachYellow = Color.FromRgb(0xF2, 0xC2, 0x1B);
-    private static readonly Color MachYellowActive = Color.FromRgb(0xE0, 0x8E, 0x0B);
-    private static readonly Color MachLightGrey = Color.FromRgb(0xCF, 0xD3, 0xD7);
-    private static readonly Color MachMidGrey = Color.FromRgb(0x8C, 0x92, 0x98);
-    private static readonly Color MachBlack = Color.FromRgb(0x22, 0x25, 0x28);
+    // Macchine di legatura/stringifascio/compattatore: grigio a riposo, verde in lavoro, rosso in guasto, arancione se selezionate.
+    private static readonly Color MachWorking = Color.FromRgb(0x2E, 0x9E, 0x50);
+    private static readonly Color MachBlue = Color.FromRgb(0x8C, 0x92, 0x98);          // telai (grigio normale)
+    private static readonly Color MachBlueActive = MachWorking;
+    private static readonly Color MachYellow = Color.FromRgb(0x8C, 0x92, 0x98);        // parti mobili (grigio normale)
+    private static readonly Color MachYellowActive = MachWorking;
+    private static readonly Color MachLightGrey = Color.FromRgb(0xB5, 0xBA, 0xBF);
+    private static readonly Color MachMidGrey = Color.FromRgb(0x6F, 0x76, 0x7C);
+    private static readonly Color MachBlack = Color.FromRgb(0x4A, 0x4F, 0x54);
     private static readonly Color GreyBody = Color.FromRgb(0x8C, 0x92, 0x98);
     private static readonly Color GreyMoving = Color.FromRgb(0xB5, 0xBA, 0xBF);
     private static readonly Color GreyOff = Color.FromRgb(0xC8, 0xCB, 0xCE);
@@ -506,7 +507,7 @@ public sealed class LineScene
     private void AddCompactor(SideCompactorConfig c)
     {
         double x = c.PositionMm / 1000.0, w = _lineWidth, len = Math.Max(0.3, c.JawLengthMm / 1000.0);
-        var color = Color.FromRgb(0x7D, 0x3C, 0x98);
+        var color = Color.FromRgb(0x8C, 0x92, 0x98);
         var left = MeshFactory.Box(new Point3D(x, w / 2 + 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var lb);
         left.Transform = _jawLeftT;
         var right = MeshFactory.Box(new Point3D(x, -w / 2 - 0.05, _zTop + 0.25), len, 0.12, 0.4, color, out var rb);
@@ -700,7 +701,7 @@ public sealed class LineScene
         _knofArmR.OffsetY = arm;
         if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
         {
-            var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed => MachYellowActive, _ => MachYellow };
+            var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
             _knofBrush.Color = kc;
             if (_knofBrushR != null) _knofBrushR.Color = kc;
         }
@@ -711,7 +712,7 @@ public sealed class LineScene
         _jawRightT.OffsetY = jaw;
         if (_compactorBrush != null && !IsHighlighted(p.Compactor))
         {
-            var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x7D, 0x3C, 0x98));
+            var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x8C, 0x92, 0x98));
             _compactorBrush.Color = cc;
             if (_compactorRightBrush != null) _compactorRightBrush.Color = cc;
         }
@@ -763,8 +764,7 @@ public sealed class LineScene
 
     private static Color ClampColor(ClampState s, Color idle) => s switch
     {
-        ClampState.Closing or ClampState.Opening => Color.FromRgb(0xF3, 0x9C, 0x12),
-        ClampState.Closed => Color.FromRgb(0xE6, 0x7E, 0x22),
+        ClampState.Closing or ClampState.Opening or ClampState.Closed => MachWorking,
         ClampState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),
         _ => idle
     };
