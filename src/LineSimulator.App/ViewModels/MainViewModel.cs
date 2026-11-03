@@ -418,6 +418,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
+        ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
         _filePath = path;
         _modified = false;
         _engine = null;
@@ -500,6 +501,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void ProjectChanged(bool structural, bool markModified = true)
     {
         if (markModified) _modified = true;
+        ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
         var selected = SelectedNode?.Model;
         Scene.Build(_project);
         Scene.Highlight(selected);
@@ -692,7 +694,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (SelectedNode?.Model is RollerSection rs && (item.Name is "RollerCount" or "RollerPitchMm" or "EndOverhangMm"))
             rs.RecalculateLength();
-        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
+        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
         ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
@@ -901,7 +903,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     public static bool CanMove(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or BundleClampConfig or SideCompactorConfig
-        or RejectorConfig or IntermediateStopConfig or StopperConfig or TransferConfig or WeighingScaleConfig;
+        or RejectorConfig or IntermediateStopConfig or TransferConfig or WeighingScaleConfig;
 
     /// <summary>Sposta il componente selezionato lungo la linea (dx in mm); per i dispositivi laterali y (m) ne decide il lato.</summary>
     public void MoveSelectedBy(double dxMm, double yM)
@@ -917,12 +919,14 @@ public sealed partial class MainViewModel : ObservableObject
             case SideCompactorConfig c: c.PositionMm += dxMm; break;
             case RejectorConfig r: r.PositionMm += dxMm; break;
             case IntermediateStopConfig fs: fs.PositionMm += dxMm; break;
-            case StopperConfig sp: sp.PositionMm += dxMm; break;
             case TransferConfig t: t.PositionMm += dxMm; break;
             case WeighingScaleConfig sc: sc.StartMm += dxMm; break;
         }
+        ProjectNormalizer.AlignStopperToLastRoller(_project);
         LayoutScene.Build(_project);
         LayoutScene.Highlight(m);
+        Scene.Build(_project);                  // anche lo spazio di simulazione segue lo spostamento
+        Scene.Highlight(m);
         foreach (var item in Properties) item.Refresh();
     }
 
@@ -939,7 +943,6 @@ public sealed partial class MainViewModel : ObservableObject
             case SideCompactorConfig c: c.PositionMm = Snap(c.PositionMm); break;
             case RejectorConfig r: r.PositionMm = Snap(r.PositionMm); break;
             case IntermediateStopConfig fs: fs.PositionMm = Snap(fs.PositionMm); break;
-            case StopperConfig sp: sp.PositionMm = Snap(sp.PositionMm); break;
             case TransferConfig t: t.PositionMm = Snap(t.PositionMm); break;
             case WeighingScaleConfig sc: sc.StartMm = Snap(sc.StartMm); break;
         }

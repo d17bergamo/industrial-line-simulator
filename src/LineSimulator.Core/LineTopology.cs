@@ -76,7 +76,8 @@ public sealed class LineTopology
         LineEndM = project.Sections.Count > 0 ? Units.MmToM(project.Sections.Max(s => s.EndMm)) : 0;
 
         // Classificazione zone
-        StopperZone = ZoneAt(Units.MmToM(project.Stopper.PositionMm) - 1e-6);
+        // il fermo finale può stare oltre l'ultimo rullo (distanza rullo-fermo): appartiene comunque all'ultima zona
+        StopperZone = ZoneAt(Math.Min(Units.MmToM(project.Stopper.PositionMm), LineEndM) - 1e-6);
         if (StopperZone != null) StopperZone.Kind = ZoneKind.Stopper;
         if (project.StrappingStation.IsEnabled && _byInverter.TryGetValue(project.StrappingStation.InverterId ?? string.Empty, out var sz)
             && sz != StopperZone)

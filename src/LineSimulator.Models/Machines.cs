@@ -147,8 +147,16 @@ public sealed class StrappingStationConfig
 /// <summary>Stopper di fine via a rulli con allineamento/intestatura.</summary>
 public sealed class StopperConfig : ComponentBase
 {
-    [UiProperty("Posizione battuta", "mm", "Geometria", Order = 1)]
+    /// <summary>
+    /// Posizione della battuta: calcolata (non si imposta a mano) come posizione dell'ultimo rullo dell'ultima via a rulli
+    /// più <see cref="DistanceFromLastRollerMm"/>. Il fermo finale sta sempre dopo l'ultimo rullo.
+    /// </summary>
+    [UiProperty("Posizione battuta (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 1)]
     public double PositionMm { get; set; }
+
+    /// <summary>Distanza tra l'ultimo rullo e il fermo finale: è l'unico dato di posizione che si imposta.</summary>
+    [UiProperty("Distanza ultimo rullo - fermo", "mm", "Geometria", Order = 0)]
+    public double DistanceFromLastRollerMm { get; set; } = 100;
 
     [UiProperty("Altezza grafica", "mm", "Geometria", Order = 2)]
     public double GraphicHeightMm { get; set; } = 300;

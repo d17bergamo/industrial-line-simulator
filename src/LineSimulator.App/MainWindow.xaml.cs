@@ -50,8 +50,8 @@ public partial class MainWindow : Window
         if (e.NewValue is TreeNodeViewModel node) _vm.SelectedNode = node;
     }
 
-    /// <summary>Selezione diretta di un componente nel modello 3D.</summary>
-    private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => PickAt(Viewport, _vm.Scene, e);
+    /// <summary>Selezione diretta di un componente nel modello 3D; trascinandolo si sposta (come in Imposta layout).</summary>
+    private void Viewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginMove(Viewport, _vm.Scene, e);
     private object? PickAt(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
         var vp = viewport.Viewport;
@@ -64,31 +64,38 @@ public partial class MainWindow : Window
         return null;
     }
 
-    // ------------------------------------------------------------ Imposta layout: selezione e spostamento col mouse
+    // ------------------------------------------------------------ Selezione e spostamento col mouse (layout e simulazione)
 
     private bool _moving;
     private double _lastXm;
+    private HelixToolkit.Wpf.HelixViewport3D? _moveViewport;
+    private Rendering.LineScene? _moveScene;
 
     /// <summary>Punto del piano dei rulli sotto il cursore (coordinate di scena, metri).</summary>
-    private Point3D? PlanePoint(Point pt, double z = 0)
-        => HelixToolkit.Wpf.Viewport3DHelper.UnProject(LayoutViewport.Viewport, pt, new Point3D(0, 0, z), new Vector3D(0, 0, 1));
+    private static Point3D? PlanePoint(HelixToolkit.Wpf.HelixViewport3D vp, Point pt, double z = 0)
+        => HelixToolkit.Wpf.Viewport3DHelper.UnProject(vp.Viewport, pt, new Point3D(0, 0, z), new Vector3D(0, 0, 1));
 
-    private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void BeginMove(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
-        var obj = PickAt(LayoutViewport, _vm.LayoutScene, e);
+        var obj = PickAt(viewport, scene, e);
         if (obj == null || !MainViewModel.CanMove(obj)) return;
-        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        var p = PlanePoint(viewport, e.GetPosition(viewport.Viewport));
         if (p == null) return;
+        if (_vm.IsPlaying) _vm.PauseCommand.Execute(null);        // si modifica a simulazione ferma: al rilascio riparte da zero
         _moving = true;
-        _vm.LayoutScene.Dragging = true;
+        _moveViewport = viewport;
+        _moveScene = scene;
+        scene.Dragging = true;
         _lastXm = p.Value.X;
-        LayoutViewport.CaptureMouse();
+        viewport.CaptureMouse();
     }
 
-    private void LayoutViewport_PreviewMouseMove(object sender, MouseEventArgs e)
+    private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginMove(LayoutViewport, _vm.LayoutScene, e);
+
+    private void MoveViewport_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_moving || e.LeftButton != MouseButtonState.Pressed) return;
-        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        if (!_moving || _moveViewport == null || e.LeftButton != MouseButtonState.Pressed) return;
+        var p = PlanePoint(_moveViewport, e.GetPosition(_moveViewport.Viewport));
         if (p == null) return;
         double dx = (p.Value.X - _lastXm) * 1000.0;
         if (Math.Abs(dx) < 1) return;
@@ -96,12 +103,14 @@ public partial class MainWindow : Window
         _vm.MoveSelectedBy(dx, p.Value.Y);
     }
 
-    private void LayoutViewport_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void MoveViewport_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (!_moving) return;
         _moving = false;
-        _vm.LayoutScene.Dragging = false;
-        LayoutViewport.ReleaseMouseCapture();
+        if (_moveScene != null) _moveScene.Dragging = false;
+        _moveViewport?.ReleaseMouseCapture();
+        _moveViewport = null;
+        _moveScene = null;
         _vm.CommitMove();
     }
 
@@ -132,7 +141,7 @@ public partial class MainWindow : Window
     {
         if (!e.Data.GetDataPresent(typeof(LibraryEntry))) { e.Effects = DragDropEffects.None; return; }
         var entry = (LibraryEntry)e.Data.GetData(typeof(LibraryEntry))!;
-        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        var p = PlanePoint(LayoutViewport, e.GetPosition(LayoutViewport.Viewport));
         if (p == null) { e.Effects = DragDropEffects.None; _vm.LayoutScene.HideGhost(); e.Handled = true; return; }
         e.Effects = DragDropEffects.Copy;
         // la linea parte da X = 0: l'anteprima non esce dal piano di progettazione
@@ -148,7 +157,7 @@ public partial class MainWindow : Window
         _vm.LayoutScene.HideGhost();
         if (!e.Data.GetDataPresent(typeof(LibraryEntry))) return;
         var entry = (LibraryEntry)e.Data.GetData(typeof(LibraryEntry))!;
-        var p = PlanePoint(e.GetPosition(LayoutViewport.Viewport));
+        var p = PlanePoint(LayoutViewport, e.GetPosition(LayoutViewport.Viewport));
         if (p == null) return;
         _vm.PlaceFromLibrary(entry, p.Value.X * 1000.0, p.Value.Y);
         e.Handled = true;
