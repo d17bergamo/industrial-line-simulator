@@ -248,6 +248,14 @@ public sealed class TransferConfig : ComponentBase
     /// </summary>
     public int BatchSize { get; set; } = 1;
 
+    /// <summary>Double banking senza fermo intermedio: distanza tra coda del primo pacco e testa del secondo, fermato per posizionamento (encoder).</summary>
+    [UiProperty("Distanza tra i pacchi in double banking (senza fermo)", "mm", "Funzionamento", Order = 24)]
+    public double DoubleBankingGapMm { get; set; } = 200;
+
+    /// <summary>Sbalzo massimo ammesso del pacco a monte oltre l'inizio del trasferitore (catene).</summary>
+    [UiProperty("Sbalzo ammesso del pacco oltre il trasferitore", "mm", "Funzionamento", Order = 25)]
+    public double MaxOverhangMm { get; set; } = 500;
+
     [UiProperty("Attesa massima per completare il gruppo", "s", "Funzionamento", Order = 22)]
     public double BatchWaitTimeoutS { get; set; } = 60;
 

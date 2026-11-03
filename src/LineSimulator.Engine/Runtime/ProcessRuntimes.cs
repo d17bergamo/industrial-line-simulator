@@ -267,9 +267,10 @@ public enum StopState
 /// <summary>Fermo intermedio: assegnazione del pacco, posizionamento, intestatura di testa o di coda.</summary>
 public sealed class StopRuntime
 {
-    public StopRuntime(IntermediateStopConfig config, StopReference reference)
+    public StopRuntime(IntermediateStopConfig config, StopReference reference, bool isVirtual = false)
     {
         Config = config;
+        IsVirtual = isVirtual;
         Reference = reference;
         PositionM = config.PositionMm / 1000.0;
         ToleranceM = Math.Max(0.0005, config.PositionToleranceMm / 1000.0);
@@ -279,7 +280,12 @@ public sealed class StopRuntime
 
     public IntermediateStopConfig Config { get; }
     public string Id => Config.Id;
-    public double PositionM { get; }
+    /// <summary>
+    /// Posizione "virtuale" senza fermo meccanico: double banking su linea senza fermo intermedio, il secondo pacco
+    /// si ferma per posizionamento (encoder) dietro al primo. La posizione si calcola all'assegnazione.
+    /// </summary>
+    public bool IsVirtual { get; }
+    public double PositionM { get; internal set; }
     public double ToleranceM { get; }
     /// <summary>Intestatura applicata (dalle impostazioni della simulazione).</summary>
     public StopReference Reference { get; }

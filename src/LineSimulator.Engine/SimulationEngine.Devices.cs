@@ -55,20 +55,26 @@ public sealed partial class SimulationEngine
         var stopCfg = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         EffectiveBanking = p.Simulation.Banking;
         EffectiveHeading = p.Simulation.Heading;
+        bool virtualSecond = false;
         if (stopCfg.Count == 0)
         {
-            if (EffectiveBanking == AccumulationMode.DoubleBanking)
-                _bankingNotes.Add((EventSeverity.Warning, "Double banking non possibile: nessun fermo intermedio scomparente abilitato sul trasferitore. Si simula in single banking."));
             if (EffectiveHeading == StopReference.Tail)
                 _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile: serve un fermo intermedio scomparente. Si simula con intestatura di testa sullo stopper finale."));
-            EffectiveBanking = AccumulationMode.SingleBanking;
             EffectiveHeading = StopReference.Head;
+            // Double banking senza fermo: il secondo pacco si ferma per posizionamento (encoder) dietro al primo
+            virtualSecond = EffectiveBanking == AccumulationMode.DoubleBanking;
         }
         _bankingNotes.Insert(0, (EventSeverity.Info,
-            $"Accumulo sul trasferitore: {(DoubleBanking ? "double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo sul fermo intermedio)" : "single banking (1 pacco per ciclo)")}, " +
+            $"Accumulo sul trasferitore: {(!DoubleBanking ? "single banking (1 pacco per ciclo)" : virtualSecond ? $"double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo fermato per posizionamento a {p.Transfer.DoubleBankingGapMm:0} mm dal primo, senza fermo intermedio)" : "double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo sul fermo intermedio)")}, " +
             $"intestatura di {(EffectiveHeading == StopReference.Head ? "testa" : "coda (oltre il fermo, il fermo si solleva e il pacco torna indietro)")}"));
         // Single banking di testa: i fermi intermedi restano abbassati e il pacco va fino allo stopper finale
-        if (DoubleBanking || EffectiveHeading == StopReference.Tail)
+        if (virtualSecond)
+            _stops.Add(new StopRuntime(new IntermediateStopConfig
+            {
+                Id = "POS2", Name = "Posizionamento secondo pacco (encoder)", AlignmentTimeS = 0,
+                PositionToleranceMm = 3, PositionMm = p.Stopper.PositionMm
+            }, StopReference.Head, isVirtual: true));
+        else if (DoubleBanking || EffectiveHeading == StopReference.Tail)
             foreach (var s in stopCfg) _stops.Add(new StopRuntime(s, EffectiveHeading));
         if (_stops.Count > 0 && Topology.StopperZone != null)
             _zoneById[Topology.StopperZone.Id].MultiStop = true;
@@ -703,7 +709,16 @@ public sealed partial class SimulationEngine
         return FitsAtStop(p, idx - 1) ? idx : -1;
     }
 
-    private double StopTargetHead(StopRuntime s, PackageRuntime p) => s.Reference == StopReference.Head ? s.PositionM : s.PositionM + p.LengthM;
+    private double StopTargetHead(StopRuntime s, PackageRuntime p)
+    {
+        if (s.IsVirtual)
+        {
+            // Nessun fermo: la testa si ferma alla distanza impostata dalla coda del primo pacco
+            var a = Stopper.Package ?? _finalAssigned;
+            return a == null ? s.PositionM : Stopper.PositionM - a.LengthM - Project.Transfer.DoubleBankingGapMm / 1000.0;
+        }
+        return s.Reference == StopReference.Head ? s.PositionM : s.PositionM + p.LengthM;
+    }
 
     /// <summary>
     /// Verifica geometrica: il pacco al fermo k deve stare sul trasferitore e nella zona, senza sovrapporsi
@@ -716,6 +731,12 @@ public sealed partial class SimulationEngine
         double head = StopTargetHead(s, p);
         double tail = head - p.LengthM;
         double reach = head + s.OvershootM;   // con intestatura di coda il pacco supera il fermo prima di tornare indietro
+        if (s.IsVirtual)
+        {
+            // Senza fermo: serve il primo pacco già destinato allo stopper; il secondo può sbalzare un poco oltre il trasferitore
+            if ((Stopper.Package ?? _finalAssigned) == null) return false;
+            return tail >= Math.Max(zi.StartM, Transfer.StartM - Math.Max(0, Project.Transfer.MaxOverhangMm) / 1000.0) - 1e-6;
+        }
         if (tail < Math.Max(zi.StartM, Transfer.StartM) - 1e-6) return false;
         if (reach > Stopper.PositionM + 1e-6) return false;
         if (!DoubleBanking) return true;
@@ -755,6 +776,13 @@ public sealed partial class SimulationEngine
         s.State = StopState.Assigned;
         s.TargetHeadM = StopTargetHead(s, p);
         s.Packages++;
+        if (s.IsVirtual)
+        {
+            s.PositionM = s.TargetHeadM;
+            Emit(SimEventType.StopPhase, EventSeverity.Info,
+                $"{p.Id} secondo pacco in double banking: fermato per posizionamento (encoder) con la testa a {s.TargetHeadM * 1000:0} mm, {Project.Transfer.DoubleBankingGapMm:0} mm dietro al primo", null, p.Id);
+            return;
+        }
         Emit(SimEventType.StopPhase, EventSeverity.Info,
             $"{p.Id} destinato al fermo {s.Id}, intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")} (testa a {s.TargetHeadM * 1000:0} mm, coda a {(s.TargetHeadM - p.LengthM) * 1000:0} mm)", s.Id, p.Id);
     }
@@ -799,7 +827,7 @@ public sealed partial class SimulationEngine
             var p = s.Package;
             if (p != null) s.OccupiedTimeS += dt;
             bool clear = !_active.Any(q => q.OnRollers && q != p && q.TailM < s.PositionM - 1e-6 && q.HeadM > s.PositionM + 1e-6);
-            s.Raised = p != null && clear && (s.Reference == StopReference.Head
+            s.Raised = !s.IsVirtual && p != null && clear && (s.Reference == StopReference.Head
                        || (s.State is StopState.Returning or StopState.Aligning or StopState.Aligned && p.TailM >= s.PositionM - s.ToleranceM));
             if (p == null) continue;
             if (s.State == StopState.Returning)
@@ -834,7 +862,7 @@ public sealed partial class SimulationEngine
                 else p.HeadM = s.TargetHeadM + s.OvershootM;
                 p.Velocity = 0;
                 if (zone != null) { zone.ActualSpeed = 0; zone.PositionCommand = 0; }
-                if (!clear)
+                if (!clear && !s.IsVirtual)
                 {
                     InterlockEvents++;
                     Alarm(SimEventType.Interlock, $"{s.Id}: fermo non sollevabile, un pacco occupa la posizione del fermo", s.Id, p.Id);

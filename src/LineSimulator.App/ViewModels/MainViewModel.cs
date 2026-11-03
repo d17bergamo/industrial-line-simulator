@@ -206,7 +206,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
     public Array BankingModes { get; } = Enum.GetValues(typeof(AccumulationMode));
-    public Array HeadingModes { get; } = Enum.GetValues(typeof(StopReference));
+    /// <summary>Intestature selezionabili: "Tail" (di coda) solo se la linea ha un fermo intermedio scomparente abilitato.</summary>
+    public StopReference[] HeadingModes => BankingOptions.TailHeadingAvailable(_project)
+        ? new[] { StopReference.Head, StopReference.Tail }
+        : new[] { StopReference.Head };
+    public bool TailHeadingAvailable => BankingOptions.TailHeadingAvailable(_project);
 
     /// <summary>Banking (single/double) scelto per la simulazione, non per il pacco.</summary>
     public AccumulationMode SimBanking
@@ -502,6 +506,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (markModified) _modified = true;
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
+        // Intestatura di coda solo con un fermo intermedio scomparente (sessione B)
+        if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo intermedio scomparente: impostata di testa";
+        Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading));
         var selected = SelectedNode?.Model;
         LayoutScene.Build(_project);
         LayoutScene.Highlight(selected);

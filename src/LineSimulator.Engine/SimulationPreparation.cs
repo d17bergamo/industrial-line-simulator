@@ -42,6 +42,8 @@ public static class SimulationPreparation
         FixStation(p, r);
         FixReferences(p, r);
         FixClampPositions(p, r, force: false);
+        if (BankingOptions.Normalize(p))
+            r.Changes.Add("Intestatura di coda non disponibile: la linea non ha un fermo intermedio scomparente abilitato. Impostata l'intestatura di testa.");
         SyncAutoSensors(p, r);
         CheckMandatoryStrapping(p, r);
         return r;

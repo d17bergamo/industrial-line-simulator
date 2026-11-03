@@ -118,19 +118,80 @@ public class BankingHeadingTests
     }
 
     [Fact]
-    public void WithoutIntermediateStop_DoubleAndTail_FallBackWithWarning()
+    public void WithoutIntermediateStop_TailIsNotAvailable_AndIsResetToHead()
+    {
+        var p = SampleProjects.CreateStandardLine();
+        Assert.False(BankingOptions.TailHeadingAvailable(p));
+        Assert.True(BankingOptions.TailHeadingAvailable(SampleProjects.CreateFullProcessLine()));
+        p.Simulation.Heading = StopReference.Tail;
+        var r = SimulationPreparation.Prepare(p);
+        Assert.Equal(StopReference.Head, p.Simulation.Heading);
+        Assert.Contains(r.Changes, c => c.Contains("Intestatura di coda non disponibile", StringComparison.Ordinal));
+        // Anche se il progetto arriva al motore con "coda", il motore usa la testa
+        var q = SampleProjects.CreateStandardLine();
+        q.Simulation.Heading = StopReference.Tail;
+        q.Infeed.PackageCount = 2;
+        var e = new SimulationEngine(q);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(StopReference.Head, e.EffectiveHeading);
+    }
+
+    private static LineProject StandardWith6m(AccumulationMode banking, int count)
+    {
+        var p = SampleProjects.CreateStandardLine();
+        p.PackageTypes.Add(new PackageType { Id = "P6", Name = "Pacco 6 m", LengthMm = 6000, WeightKg = 1500, StrapPositionsMm = new List<double> { 750, 3000, 5250 } });
+        p.Infeed.TypeSequence = new List<string> { "P6" };
+        p.Infeed.PackageCount = count;
+        p.Simulation.Banking = banking;
+        return p;
+    }
+
+    [Fact]
+    public void DoubleBanking_6m_WithoutIntermediateStop_TwoPackagesStopOnRollers_ThenTransferTakesBoth()
+    {
+        var (e, lifts) = Run(StandardWith6m(AccumulationMode.DoubleBanking, 4));
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(AccumulationMode.DoubleBanking, e.EffectiveBanking);
+        Assert.Equal(2, e.Transfer.Cycles);
+        Assert.Equal(2, lifts.Count);
+        Assert.All(lifts, l =>
+        {
+            Assert.Equal(2, l.Count);
+            var o = l.OrderByDescending(x => x.Head).ToList();
+            Assert.InRange(o[0].Head, 55.0 - 0.003, 55.0 + 1e-6);            // primo in battuta sullo stopper
+            Assert.InRange(o[1].Head, 48.8 - 0.004, 48.8 + 0.001);           // secondo 200 mm dietro (posizionamento)
+            Assert.True(o[1].Tail >= 43.0 - 0.5 - 1e-6);                     // sbalzo entro 500 mm
+        });
+        Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
+        Assert.Equal(0, e.Collisions);
+        Assert.Contains(e.Events, x => x.Message.Contains("secondo pacco in double banking", StringComparison.Ordinal));
+
+        // Confronto: in single banking servono 4 cicli del trasferitore
+        var (s, _) = Run(StandardWith6m(AccumulationMode.SingleBanking, 4));
+        Assert.True(s.CompletedNormally, Diag(s));
+        Assert.Equal(4, s.Transfer.Cycles);
+    }
+
+    [Fact]
+    public void DoubleBanking_6m_FullLine_WithIntermediateStop_TwoPackagesPerCycle()
+    {
+        var (e, lifts) = Run(Full(AccumulationMode.DoubleBanking, StopReference.Head, count: 6));
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(3, e.Transfer.Cycles);
+        Assert.All(lifts, l => Assert.Equal(2, l.Count));
+    }
+
+    [Fact]
+    public void DoubleBanking_12m_WithoutIntermediateStop_OnePackagePerCycle()
     {
         var p = SampleProjects.CreateStandardLine();
         p.Simulation.Banking = AccumulationMode.DoubleBanking;
-        p.Simulation.Heading = StopReference.Tail;
-        p.Infeed.PackageCount = 3;
-        var e = new SimulationEngine(p);
-        e.RunToCompletion();
+        p.Infeed.PackageCount = 2;
+        var (e, lifts) = Run(p);
         Assert.True(e.CompletedNormally, Diag(e));
-        Assert.Equal(AccumulationMode.SingleBanking, e.EffectiveBanking);
-        Assert.Equal(StopReference.Head, e.EffectiveHeading);
-        Assert.Contains(e.Events, x => x.Severity == EventSeverity.Warning && x.Message.StartsWith("Double banking non possibile", StringComparison.Ordinal));
-        Assert.Contains(e.Events, x => x.Severity == EventSeverity.Warning && x.Message.StartsWith("Intestatura di coda non possibile", StringComparison.Ordinal));
+        Assert.Equal(2, e.Transfer.Cycles);
+        Assert.All(lifts, l => Assert.Single(l));
     }
 
     [Fact]
