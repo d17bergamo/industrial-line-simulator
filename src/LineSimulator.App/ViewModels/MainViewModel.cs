@@ -235,6 +235,10 @@ public sealed partial class MainViewModel : ObservableObject
     public bool ShowLibrary { get => _showLibrary; set => Set(ref _showLibrary, value); }
     /// <summary>Pannello proprietà / struttura / stato (destra): mostrato o nascosto.</summary>
     public bool ShowInspector { get => _showInspector; set => Set(ref _showInspector, value); }
+    private bool _showPackageProps = true;
+    /// <summary>Colonna "Caratteristiche del pacco" nella schermata Pacchi: si chiude e si riapre.</summary>
+    public bool ShowPackageProps { get => _showPackageProps; set => Set(ref _showPackageProps, value); }
+    public ICommand TogglePackagePropsCommand => new RelayCommand(() => ShowPackageProps = !ShowPackageProps);
     public ICommand ToggleLibraryCommand => new RelayCommand(() => ShowLibrary = false);
     public ICommand ToggleInspectorCommand => new RelayCommand(() => ShowInspector = false);
     private bool _showCyclogram = true;

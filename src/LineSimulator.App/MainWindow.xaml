@@ -694,7 +694,8 @@
                 </Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="290" MinWidth="200"/>
+                        <ColumnDefinition Width="270" MinWidth="200"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <!-- Sinistra: elenco dei pacchi come schede -->
@@ -743,73 +744,102 @@
                             </ListBox>
                         </DockPanel>
                     </Border>
-                    <!-- Centro: scheda con pacco in 3D e legature, sotto le caratteristiche -->
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="16">
-                            <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Top" BorderBrush="#EEF0F3" BorderThickness="0,0,0,1" Padding="16,10">
-                                        <DockPanel>
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="🗑" Foreground="#B3261E" FontSize="16" Command="{Binding DeletePackageCommand}"
-                                                    ToolTip="Cestino: elimina la tipologia selezionata"/>
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Foreground="#B3261E" Margin="0,0,8,0"
-                                                    ToolTip="Toglie la legatura selezionata (o l'ultima)"/>
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
-                                                    ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="StrapCountChip" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="12"/>
-                                                </Border>
-                                            </StackPanel>
-                                        </DockPanel>
-                                    </Border>
-                                    <TextBlock DockPanel.Dock="Bottom" Margin="16,0,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
-                                               Text="Clic su una legatura (nel 3D o sul righello) per selezionarla, trascinala per spostarla a passi di 100 mm · tieni premuto il tasto sinistro o destro sullo sfondo per ruotare la vista"/>
-                                    <Border DockPanel.Dock="Bottom" BorderBrush="#EEF0F3" BorderThickness="0,1,0,0" Padding="16,6,16,0">
-                                        <StackPanel>
-                                            <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
-                                            <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 100 mm)"
-                                                    MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="#F7F9FB" Height="340" Margin="8,0" RotateGesture2="LeftClick"
-                                                       PreviewMouseLeftButtonDown="PackageViewport_MouseDown" PreviewMouseMove="PackageViewport_MouseMove"
-                                                       PreviewMouseLeftButtonUp="PackageViewport_MouseUp">
-                                        <h:DefaultLights/>
-                                    </h:HelixViewport3D>
+                    <!-- Colonna delle caratteristiche: si chiude e si riapre -->
+                    <Grid Grid.Column="1">
+                        <Border Width="340" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0" Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}">
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" Margin="14,12,8,4">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="«" FontSize="16" Command="{Binding TogglePackagePropsCommand}" ToolTip="Chiudi le caratteristiche"/>
+                                    <TextBlock Text="Caratteristiche" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </DockPanel>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" MaxWidth="760" HorizontalAlignment="Left">
-                                <ItemsControl.GroupStyle>
-                                    <GroupStyle>
-                                        <GroupStyle.ContainerStyle>
-                                            <Style TargetType="GroupItem">
-                                                <Setter Property="Margin" Value="0,0,0,14"/>
-                                                <Setter Property="Template">
-                                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="GroupItem">
-                                                            <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,12">
-                                                                <StackPanel>
-                                                                    <ContentPresenter/>
-                                                                    <ItemsPresenter/>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </ControlTemplate>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Style>
-                                        </GroupStyle.ContainerStyle>
-                                        <GroupStyle.HeaderTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673" Margin="0,0,0,6"/>
-                                            </DataTemplate>
-                                        </GroupStyle.HeaderTemplate>
-                                    </GroupStyle>
-                                </ItemsControl.GroupStyle>
-                            </ItemsControl>
-                        </StackPanel>
-                    </ScrollViewer>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" Margin="16,0,16,14">
+                                        <ItemsControl.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.ContainerStyle>
+                                                    <Style TargetType="GroupItem">
+                                                        <Setter Property="Margin" Value="0,10,0,6"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="GroupItem">
+                                                                    <StackPanel>
+                                                                        <ContentPresenter/>
+                                                                        <ItemsPresenter/>
+                                                                    </StackPanel>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </GroupStyle.ContainerStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673" Margin="0,0,0,4"/>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ItemsControl.GroupStyle>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </Border>
+                        <Border Width="52" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ShowPackageProps}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Margin="0,10,0,0">
+                                <Button Style="{StaticResource IconButton}" Content="»" FontSize="16" Command="{Binding TogglePackagePropsCommand}" ToolTip="Apri le caratteristiche del pacco" HorizontalAlignment="Center"/>
+                                <TextBlock Text="CARATTERISTICHE DEL PACCO" FontWeight="SemiBold" Foreground="#5B6673" Margin="0,14,0,0" HorizontalAlignment="Center">
+                                    <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <!-- Resto dello schermo: 3D del pacco sopra, righello 2D sotto -->
+                    <Grid Grid.Column="2" Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
+                            <DockPanel>
+                                <Border DockPanel.Dock="Top" BorderBrush="#EEF0F3" BorderThickness="0,0,0,1" Padding="16,10">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="🗑" Foreground="#B3261E" FontSize="16" Command="{Binding DeletePackageCommand}"
+                                                ToolTip="Cestino: elimina la tipologia selezionata"/>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Foreground="#B3261E" Margin="0,0,8,0"
+                                                ToolTip="Toglie la legatura selezionata (o l'ultima)"/>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
+                                                ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="StrapCountChip" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="12"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <TextBlock DockPanel.Dock="Bottom" Margin="16,2,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
+                                           Text="Tieni premuto il tasto sinistro o destro sullo sfondo per ruotare · clic su una legatura (nel 3D o sul righello) e trascinala per spostarla a passi di 100 mm"/>
+                                <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="#F7F9FB" Margin="8,0" RotateGesture2="LeftClick"
+                                                   PreviewMouseLeftButtonDown="PackageViewport_MouseDown" PreviewMouseMove="PackageViewport_MouseMove"
+                                                   PreviewMouseLeftButtonUp="PackageViewport_MouseUp">
+                                    <h:DefaultLights/>
+                                </h:HelixViewport3D>
+                            </DockPanel>
+                        </Border>
+                        <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,4">
+                            <StackPanel>
+                                <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO (TRASCINA I SEGNI)" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
+                                <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 100 mm)"
+                                        MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Grid>
             </DockPanel>
         </Grid>
