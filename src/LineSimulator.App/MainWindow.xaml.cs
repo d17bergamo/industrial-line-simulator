@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         var sel = _vm.SelectedPackageType;
         _packageScene.SelectedIndex = _vm.SelectedStrapIndex;
         _packageScene.Build(sel);
+        UpdatePackageDecor();
         if (sel == null || ReferenceEquals(sel, _lastPackage3D)) return;
         _lastPackage3D = sel;
         Dispatcher.BeginInvoke(new Action(() =>
@@ -64,6 +65,59 @@ public partial class MainWindow : Window
             PackageViewport.Camera.UpDirection = new Vector3D(0, 0, 1);
             PackageViewport.ZoomExtents(200);
         }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void PackageSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var q = PackageSearch.Text.Trim();
+        PackageSearchHint.Visibility = q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_vm.PackageTypes);
+        view.Filter = q.Length == 0 ? null : o => o is LineSimulator.Models.PackageType t
+            && ((t.Name ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || (t.Id ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void StrapRuler_SizeChanged(object sender, SizeChangedEventArgs e) => DrawStrapRuler();
+
+    private void UpdatePackageDecor()
+    {
+        var n = _vm.SelectedPackageType?.StrapPositionsMm.Count ?? 0;
+        StrapCountChip.Text = n == 1 ? "1 legatura" : $"{n} legature";
+        DrawStrapRuler();
+    }
+
+    private static Brush Hex(string s) => (Brush)new BrushConverter().ConvertFromString(s)!;
+
+    /// <summary>Righello sotto il pacco: tacche in mm dalla testa e le legature come segni (la selezionata in arancione).</summary>
+    private void DrawStrapRuler()
+    {
+        var c = StrapRuler;
+        c.Children.Clear();
+        var pk = _vm.SelectedPackageType;
+        if (pk == null || c.ActualWidth < 100) return;
+        double x0 = 30, w = c.ActualWidth - 60, len = Math.Max(1, pk.LengthMm);
+        double X(double mm) => x0 + mm / len * w;
+        var bar = new System.Windows.Shapes.Rectangle { Width = w, Height = 12, RadiusX = 3, RadiusY = 3, Fill = Hex("#E4E9EF"), Stroke = Hex("#C0C9D4") };
+        Canvas.SetLeft(bar, x0); Canvas.SetTop(bar, 10); c.Children.Add(bar);
+        double step = len > 8000 ? 1000 : 500;
+        for (double mm = 0; mm <= len + 0.1; mm += step)
+        {
+            var tick = new System.Windows.Shapes.Line { X1 = X(mm), X2 = X(mm), Y1 = 26, Y2 = 32, Stroke = Hex("#5B6673") };
+            c.Children.Add(tick);
+            var lbl = new TextBlock { Text = mm.ToString("0"), FontSize = 10.5, Foreground = Hex("#5B6673"), Width = 50, TextAlignment = TextAlignment.Center };
+            Canvas.SetLeft(lbl, X(mm) - 25); Canvas.SetTop(lbl, 33); c.Children.Add(lbl);
+        }
+        var pos = pk.StrapPositionsMm.OrderBy(v => v).ToList();
+        for (int i = 0; i < pos.Count; i++)
+        {
+            bool sel = i == _packageScene.SelectedIndex;
+            var m = new System.Windows.Shapes.Rectangle { Width = sel ? 8 : 6, Height = 26, RadiusX = 3, RadiusY = 3, Fill = Hex(sel ? "#E08A1E" : "#3C4856") };
+            Canvas.SetLeft(m, X(pos[i]) - (sel ? 4 : 3)); Canvas.SetTop(m, 3); c.Children.Add(m);
+            if (sel)
+            {
+                var l = new TextBlock { Text = pos[i].ToString("0") + " mm", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Hex("#B8690F"), Width = 80, TextAlignment = TextAlignment.Center };
+                Canvas.SetLeft(l, X(pos[i]) - 40); Canvas.SetTop(l, 46); c.Children.Add(l);
+            }
+        }
     }
 
     private void PackageViewport_MouseDown(object sender, MouseButtonEventArgs e)
@@ -89,6 +143,7 @@ public partial class MainWindow : Window
             Math.Max(LineSimulator.Core.StrapEditing.StepMm, pk.LengthMm - LineSimulator.Core.StrapEditing.StepMm));
         _packageScene.SelectedIndex = _strapDrag;
         _packageScene.Build(pk);
+        DrawStrapRuler();
     }
 
     private void PackageViewport_MouseUp(object sender, MouseButtonEventArgs e)
