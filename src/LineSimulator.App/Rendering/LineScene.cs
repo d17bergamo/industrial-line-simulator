@@ -288,6 +288,27 @@ public sealed class LineScene
         _group.Children.Add(rm);
         Register(rm, s, rb, rollColor);
         _sectionRollerBrushes.Add((s.EffectiveZoneId, s, rb, rollColor));
+
+        // Sponde laterali alte 500 mm solo sulla via rulli di legatura (quella che contiene le legatrici, altrimenti la prima)
+        if (IsStrappingSection(s))
+        {
+            var rails = new MeshFactory();
+            rails.AddBox(new Point3D(start + len / 2, w / 2 + 0.04, _zTop + 0.25), len, 0.04, 0.5);
+            rails.AddBox(new Point3D(start + len / 2, -w / 2 - 0.04, _zTop + 0.25), len, 0.04, 0.5);
+            var railColor = Color.FromRgb(0xC9, 0xD1, 0xDA);
+            var railModel = MeshFactory.Model(rails.ToMesh(), railColor, out var railBrush);
+            _group.Children.Add(railModel);
+            Register(railModel, s, railBrush, railColor);
+        }
+    }
+
+    /// <summary>Via rulli di legatura: quella che contiene almeno una legatrice, altrimenti la prima della linea.</summary>
+    private bool IsStrappingSection(RollerSection s)
+    {
+        if (_project == null) return false;
+        var withStrapper = _project.Sections.Where(x => _project.Strappers.Any(st => st.PositionMm >= x.StartMm - 1e-6 && st.PositionMm < x.EndMm)).ToList();
+        if (withStrapper.Count > 0) return withStrapper.Contains(s);
+        return ReferenceEquals(s, _project.Sections.OrderBy(x => x.StartMm).FirstOrDefault());
     }
 
     private readonly List<(string Inv, SolidColorBrush Brush, Color Color)> _sectionFrameBrushes = new();
