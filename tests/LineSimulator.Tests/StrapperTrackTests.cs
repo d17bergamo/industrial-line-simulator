@@ -171,11 +171,11 @@ public class StrapperTrackTests
         var p = SampleProjects.CreateThreeStrappers24m();
         var last = LayoutRules.TransferModule(p)!;
         double trf = p.Transfer.PositionMm, sc = p.Scales[0].StartMm, fm = p.IntermediateStops[0].PositionMm;
-        double dx = LineReflow.MoveSection(p, last, 500);
-        Assert.Equal(500, dx, 6);
-        Assert.Equal(trf + 500, p.Transfer.PositionMm, 6);
-        Assert.Equal(sc + 500, p.Scales[0].StartMm, 6);
-        Assert.Equal(fm + 500, p.IntermediateStops[0].PositionMm, 6);
+        double dx = LineReflow.MoveSection(p, last, 1250);
+        Assert.Equal(1250, dx, 6);
+        Assert.Equal(trf + 1250, p.Transfer.PositionMm, 6);
+        Assert.Equal(sc + 1250, p.Scales[0].StartMm, 6);
+        Assert.Equal(fm + 1250, p.IntermediateStops[0].PositionMm, 6);
         Assert.Equal(last.EndMm, p.Stopper.PositionMm, 6);
         Assert.Empty(LineReflow.Discontinuities(p));
         Assert.All(p.Sections, x => Assert.Equal(0, x.RollerPitchMm % 50, 6));
