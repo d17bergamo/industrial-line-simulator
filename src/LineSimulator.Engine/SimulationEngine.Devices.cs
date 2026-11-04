@@ -7,7 +7,7 @@ namespace LineSimulator.Engine;
 
 /// <summary>
 /// Sequenze dei dispositivi di processo: stazione di legatura (KNCA 7/800 + stringifascio KNOF + compattatore),
-/// rigettatrice SMA, fermi intermedi con intestatura di testa/coda, trasferitore multi-pacco, bilici di pesatura.
+/// rigettatrice SMA, fermi scomparenti con intestatura di testa/coda, trasferitore multi-pacco, bilici di pesatura.
 /// Ogni sequenza avanza solo quando condizioni, consensi e conferme sono soddisfatti.
 /// </summary>
 public sealed partial class SimulationEngine
@@ -23,9 +23,9 @@ public sealed partial class SimulationEngine
     public ClampRuntime? Compactor { get; private set; }
     public RejectorRuntime? Rejector { get; private set; }
     public IReadOnlyList<StopRuntime> IntermediateStops => _stops;
-    /// <summary>Banking applicato (dalle impostazioni della simulazione; single se non c'è un fermo intermedio).</summary>
+    /// <summary>Banking applicato (dalle impostazioni della simulazione; single se non c'è un fermo scomparente).</summary>
     public AccumulationMode EffectiveBanking { get; private set; } = AccumulationMode.SingleBanking;
-    /// <summary>Intestatura applicata (dalle impostazioni della simulazione; testa se non c'è un fermo intermedio).</summary>
+    /// <summary>Intestatura applicata (dalle impostazioni della simulazione; testa se non c'è un fermo scomparente).</summary>
     public StopReference EffectiveHeading { get; private set; } = StopReference.Head;
     private readonly List<(EventSeverity, string)> _bankingNotes = new();
     private bool DoubleBanking => EffectiveBanking == AccumulationMode.DoubleBanking;
@@ -59,15 +59,15 @@ public sealed partial class SimulationEngine
         if (stopCfg.Count == 0)
         {
             if (EffectiveHeading == StopReference.Tail)
-                _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile: serve un fermo intermedio scomparente. Si simula con intestatura di testa sullo stopper finale."));
+                _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile: serve un fermo scomparente. Si simula con intestatura di testa sullo stopper finale."));
             EffectiveHeading = StopReference.Head;
             // Double banking senza fermo: il secondo pacco si ferma per posizionamento (encoder) dietro al primo
             virtualSecond = EffectiveBanking == AccumulationMode.DoubleBanking;
         }
         _bankingNotes.Insert(0, (EventSeverity.Info,
-            $"Accumulo sul trasferitore: {(!DoubleBanking ? "single banking (1 pacco per ciclo)" : virtualSecond ? $"double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo fermato per posizionamento a {p.Transfer.DoubleBankingGapMm:0} mm dal primo, senza fermo intermedio)" : "double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo sul fermo intermedio)")}, " +
+            $"Accumulo sul trasferitore: {(!DoubleBanking ? "single banking (1 pacco per ciclo)" : virtualSecond ? $"double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo fermato per posizionamento a {p.Transfer.DoubleBankingGapMm:0} mm dal primo, senza fermo scomparente)" : "double banking (2 pacchi: il primo di testa sullo stopper finale, il secondo sul fermo scomparente)")}, " +
             $"intestatura di {(EffectiveHeading == StopReference.Head ? "testa" : "coda (oltre il fermo, il fermo si solleva e il pacco torna indietro)")}"));
-        // Single banking di testa: i fermi intermedi restano abbassati e il pacco va fino allo stopper finale
+        // Single banking di testa: i fermi scomparenti restano abbassati e il pacco va fino allo stopper finale
         if (virtualSecond)
             _stops.Add(new StopRuntime(new IntermediateStopConfig
             {
@@ -651,7 +651,7 @@ public sealed partial class SimulationEngine
         }
     }
 
-    // ================================================================== Fermi intermedi e accumulo multi-pacco
+    // ================================================================== Fermi scomparenti e accumulo multi-pacco
 
     private void UpdateMultiStopReservations(ZoneRuntime z)
     {
@@ -687,12 +687,12 @@ public sealed partial class SimulationEngine
         return null;
     }
 
-    /// <summary>Primo fermo libero nell'ordine stopper finale → fermi intermedi da valle a monte (-1 se nessuno).</summary>
+    /// <summary>Primo fermo libero nell'ordine stopper finale → fermi scomparenti da valle a monte (-1 se nessuno).</summary>
     private int FirstFreeStop()
     {
         if (!DoubleBanking)
         {
-            // Single banking: un solo pacco alla volta nella zona dello stopper; con intestatura di coda va al fermo intermedio
+            // Single banking: un solo pacco alla volta nella zona dello stopper; con intestatura di coda va al fermo scomparente
             if (_finalAssigned != null || Stopper.Package != null || _stops.Any(s => s.Package != null)) return -1;
             return _stops.Count > 0 ? 1 : 0;
         }
@@ -773,7 +773,7 @@ public sealed partial class SimulationEngine
         {
             if (!DoubleBanking && EffectiveHeading == StopReference.Tail && _reportedOnce.Add("tailfallback:" + p.Type.Id))
                 Emit(SimEventType.StopPhase, EventSeverity.Warning,
-                    $"{p.Id} ({p.Type.Id}, {p.LengthM * 1000:0} mm): intestatura di coda non possibile, il pacco non ci sta oltre il fermo intermedio; intestatura di testa sullo stopper finale", Project.Stopper.Id, p.Id);
+                    $"{p.Id} ({p.Type.Id}, {p.LengthM * 1000:0} mm): intestatura di coda non possibile, il pacco non ci sta oltre il fermo scomparente; intestatura di testa sullo stopper finale", Project.Stopper.Id, p.Id);
             _finalAssigned = p;
             Emit(SimEventType.StopPhase, EventSeverity.Info, $"{p.Id} destinato allo stopper finale (testa a {Stopper.PositionM * 1000:0} mm)", Project.Stopper.Id, p.Id);
             return;
@@ -794,7 +794,7 @@ public sealed partial class SimulationEngine
             $"{p.Id} destinato al fermo {s.Id}, intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")} (testa a {s.TargetHeadM * 1000:0} mm, coda a {(s.TargetHeadM - p.LengthM) * 1000:0} mm)", s.Id, p.Id);
     }
 
-    /// <summary>Comando della zona dello stopper con fermi intermedi.</summary>
+    /// <summary>Comando della zona dello stopper con fermi scomparenti.</summary>
     private InverterMode MultiStopCommand(ZoneRuntime z, double t, double dt, out string reason, out bool autoStop)
     {
         autoStop = false;

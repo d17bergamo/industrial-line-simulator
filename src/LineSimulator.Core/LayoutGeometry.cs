@@ -43,7 +43,7 @@ public static class LayoutGeometry
         if (p.Rejector.IsEnabled)
             list.Add(Make(p.Rejector.Id, p.Rejector.Name, "Rigettatrice", (p.Rejector.PositionMm + p.Rejector.LengthMm / 2) / 1000.0, p.Rejector.LengthMm / 1000.0, 0, zTop));
         foreach (var f in p.IntermediateStops)
-            list.Add(Make(f.Id, f.Name, "Fermo intermedio", f.PositionMm / 1000.0 + 0.05, 0.1, 0, zTop));
+            list.Add(Make(f.Id, f.Name, "Fermo scomparente", f.PositionMm / 1000.0 + 0.05, 0.1, 0, zTop));
         list.Add(Make(p.Stopper.Id, p.Stopper.Name, "Stopper", p.Stopper.PositionMm / 1000.0 + 0.06, 0.12, 0, zTop));
         list.Add(Make(p.Transfer.Id, p.Transfer.Name, "Trasferitore", (p.Transfer.PositionMm + p.Transfer.LengthMm / 2) / 1000.0, p.Transfer.LengthMm / 1000.0, 0, zTop));
         foreach (var b in p.Scales)

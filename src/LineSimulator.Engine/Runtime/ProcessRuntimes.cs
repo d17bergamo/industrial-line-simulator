@@ -264,7 +264,7 @@ public enum StopState
     Aligned
 }
 
-/// <summary>Fermo intermedio: assegnazione del pacco, posizionamento, intestatura di testa o di coda.</summary>
+/// <summary>Fermo scomparente: assegnazione del pacco, posizionamento, intestatura di testa o di coda.</summary>
 public sealed class StopRuntime
 {
     public StopRuntime(IntermediateStopConfig config, StopReference reference, bool isVirtual = false)
@@ -281,7 +281,7 @@ public sealed class StopRuntime
     public IntermediateStopConfig Config { get; }
     public string Id => Config.Id;
     /// <summary>
-    /// Posizione "virtuale" senza fermo meccanico: double banking su linea senza fermo intermedio, il secondo pacco
+    /// Posizione "virtuale" senza fermo meccanico: double banking su linea senza fermo scomparente, il secondo pacco
     /// si ferma per posizionamento (encoder) dietro al primo. La posizione si calcola all'assegnazione.
     /// </summary>
     public bool IsVirtual { get; }

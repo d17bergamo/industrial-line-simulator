@@ -34,19 +34,20 @@ public class StrapperTrackTests
     }
 
     [Fact]
-    public void LastStrapper_GetsAtLeast2mOfTrack_ByExtendingItsModule()
+    public void LastStrapper_GetsAtLeastTwoRollersOfTrack_ByExtendingItsModule()
     {
         var p = SampleProjects.CreateOneStrapper12m();
         var m1 = M(p, "M1"); var m2 = M(p, "M2");
         var st = p.Strappers[0];
         st.PositionMm = m1.EndMm - 500;
+        double pitch = m1.RollerPitchMm;
         double m2Start = m2.StartMm, trf = p.Transfer.PositionMm;
         double added = StrapperTrack.EnsureMinimumTrack(p);
-        Assert.Equal(1500, added, 1);
-        Assert.Equal(2000, m1.EndMm - st.PositionMm, 1);
+        Assert.Equal(2 * pitch - 500, added, 1);
+        Assert.Equal(2 * pitch, m1.EndMm - st.PositionMm, 1);
         Assert.Equal(m1.EndMm, m2.StartMm, 1);
-        Assert.Equal(m2Start + 1500, m2.StartMm, 1);
-        Assert.Equal(trf + 1500, p.Transfer.PositionMm, 1);
+        Assert.Equal(m2Start + added, m2.StartMm, 1);
+        Assert.Equal(trf + added, p.Transfer.PositionMm, 1);
         Assert.True(LayoutRules.TransferModuleMatches(p));
         Assert.Equal(0, StrapperTrack.EnsureMinimumTrack(p));
     }
@@ -74,18 +75,14 @@ public class StrapperTrackTests
     }
 
     [Fact]
-    public void FirstStrapper_IsAtLeast5mFromTheFirstPhotocell_AndAsCloseAsTheLongestPackageAllows()
+    public void FirstStrapper_IsAbout4mFromTheStartOfTheLine_InAllModels()
     {
         foreach (var (_, create) in SampleProjects.All)
         {
             var p = create();
             var fc0 = p.Photocells.First(x => x.IsEntryPhotocell);
-            double d = p.Strappers.Min(s => s.PositionMm) - fc0.PositionMm;
-            Assert.True(d >= 5000 - 1e-6);
-            double needed = p.PackageTypes.Max(t => t.LengthMm) - 500 + 100 - (p.Strappers.Count - 1) * 2500 - fc0.PositionMm;
-            Assert.True(d <= Math.Max(5000, needed) + 100);
+            Assert.Equal(4000, p.Strappers.Min(s => s.PositionMm) - fc0.PositionMm, 6);
         }
-        Assert.Equal(5000, SampleProjects.FirstStrapperPositionMm(1, 5));
     }
 
     [Fact]
@@ -100,23 +97,22 @@ public class StrapperTrackTests
     }
 
     [Fact]
-    public void StopRule_BetweenTwoScales_OrCenterOrUpstreamEndOfASingleOne()
+    public void RetractableStop_AtCenterOrEnd_MovesOnlyWithTheManualCheckbox()
     {
         var p = SampleProjects.CreateThreeStrappers24m();
-        var b1 = p.Scales[0]; var b2 = p.Scales[1];
         var fm = p.IntermediateStops[0];
-        Assert.Equal((b1.EndMm + b2.StartMm) / 2, fm.PositionMm, 1);
-        fm.PositionMm = b1.StartMm + 100;
+        Assert.Equal(DevicePlacement.Center, fm.Placement);
+        Assert.Equal(p.Transfer.PositionMm + p.Transfer.LengthMm / 2, fm.PositionMm, 1);
+        fm.PositionMm += 700;                       // senza spunta torna al centro
         LayoutRules.SnapIntermediateStops(p);
-        Assert.Equal((b1.EndMm + b2.StartMm) / 2, fm.PositionMm, 1);
-
-        var q = SampleProjects.CreateTwoStrappers12m();
-        q.IntermediateStops.Add(new IntermediateStopConfig { Id = "FM1", PositionMm = q.Scales[0].StartMm + 200 });
-        LayoutRules.SnapIntermediateStops(q);
-        Assert.Equal(q.Scales[0].StartMm, q.IntermediateStops[0].PositionMm, 1);       // estremo opposto al fermo fisso
-        q.IntermediateStops[0].PositionMm = q.Scales[0].StartMm + q.Scales[0].LengthMm * 0.45;
-        LayoutRules.SnapIntermediateStops(q);
-        Assert.Equal(q.Scales[0].StartMm + q.Scales[0].LengthMm / 2, q.IntermediateStops[0].PositionMm, 1);
+        Assert.Equal(p.Transfer.PositionMm + p.Transfer.LengthMm / 2, fm.PositionMm, 1);
+        fm.Placement = DevicePlacement.End;         // all'estremità (a monte, opposta al fermo fisso)
+        LayoutRules.SnapIntermediateStops(p);
+        Assert.Equal(p.Transfer.PositionMm, fm.PositionMm, 1);
+        fm.ManualPosition = true;                   // con la spunta resta dove l'utente lo mette
+        fm.PositionMm += 700;
+        LayoutRules.SnapIntermediateStops(p);
+        Assert.Equal(p.Transfer.PositionMm + 700, fm.PositionMm, 1);
     }
 
     [Fact]

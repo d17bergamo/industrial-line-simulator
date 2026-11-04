@@ -209,7 +209,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
     public Array BankingModes { get; } = Enum.GetValues(typeof(AccumulationMode));
-    /// <summary>Intestature selezionabili: "Tail" (di coda) solo se la linea ha un fermo intermedio scomparente abilitato.</summary>
+    /// <summary>Intestature selezionabili: "Tail" (di coda) solo se la linea ha un fermo scomparente abilitato.</summary>
     public StopReference[] HeadingModes => BankingOptions.TailHeadingAvailable(_project)
         ? new[] { StopReference.Head, StopReference.Tail }
         : new[] { StopReference.Head };
@@ -481,7 +481,7 @@ public sealed partial class MainViewModel : ObservableObject
         PackageNaming.MigrateLegacyIds(_project);                // identificativi pacco "P12 (Wire)"
         StrapperTrack.ClampStrappersToTrackStart(_project);      // legatrici ad almeno 1 m dall'inizio della via rulli
         LayoutRules.SnapIntermediateStops(_project);
-        StrapperTrack.EnsureMinimumTrack(_project);              // almeno 2 m di via rulli dopo l'ultima legatrice
+        StrapperTrack.EnsureMinimumTrack(_project);              // almeno due rulli di via dopo l'ultima legatrice
         RememberStrapperPositions();
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
         _filePath = path;
@@ -570,12 +570,12 @@ public sealed partial class MainViewModel : ObservableObject
         RollerGroups.Propagate(_project, applyPitch: false);
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo sta sempre alla fine dell'ultimo modulo
         double extraTrack = StrapperTrack.EnsureMinimumTrack(_project);
-        if (extraTrack > 0) Status = $"Via a rulli allungata di {extraTrack:0} mm: dopo l'ultima legatrice servono almeno 2 m di via rulli.";
+        if (extraTrack > 0) Status = $"Via a rulli allungata di {extraTrack:0} mm: dopo l'ultima legatrice servono almeno due rulli di via.";
         // Regole di layout (sessione B): via a rulli davanti al trasferitore lunga come il trasferitore; legatrici ad almeno 3 m dal trasferitore
         var layoutFixes = LayoutRules.Enforce(_project);
         if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
-        // Intestatura di coda solo con un fermo intermedio scomparente (sessione B)
-        if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo intermedio scomparente: impostata di testa";
+        // Intestatura di coda solo con un fermo scomparente (sessione B)
+        if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo scomparente: impostata di testa";
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading));
         RefreshCheck();
         var selected = SelectedNode?.Model;
@@ -661,7 +661,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var s in p.Strappers) strapGroup.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
         station.Children.Add(strapGroup);
         root.Children.Add(station);
-        root.Children.Add(Group("Fermi intermedi", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
+        root.Children.Add(Group("Fermi scomparenti", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel("Stopper", p.Stopper, "Stopper"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore", p.Transfer, "Transfer"));
         root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm), p.ScaleDefaults));
@@ -937,13 +937,27 @@ public sealed partial class MainViewModel : ObservableObject
         AfterAdd(r);
     }
 
+    /// <summary>
+    /// Chiede dove inserire fermo scomparente o bilico: al centro o all'estremità del trasferitore (sessione B).
+    /// Null = inserimento annullato.
+    /// </summary>
+    private static DevicePlacement? AskPlacement(string what)
+    {
+        var r = MessageBox.Show($"Dove inserire {what}?\n\nSì = al centro del trasferitore\nNo = all'estremità del trasferitore\n\n" +
+                                "Si potrà spostare a mano solo mettendo la spunta \"Spostamento manuale\".",
+                                "Inserimento sul trasferitore", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        return r switch { MessageBoxResult.Yes => DevicePlacement.Center, MessageBoxResult.No => DevicePlacement.End, _ => null };
+    }
+
     private void AddStop()
     {
-        double pos = _project.Stopper.PositionMm - (_project.PackageTypes.Count > 0 ? _project.PackageTypes.Min(t => t.LengthMm) : 6000)
-                     - _project.Simulation.MinSafetyDistanceMm - 100;
-        var s = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = Math.Round(pos) };
+        if (AskPlacement("il fermo scomparente") is not { } placement) return;
+        var s = new IntermediateStopConfig
+        {
+            Id = NextId("FM", AllComponents()), Name = "Fermo scomparente", Placement = placement,
+            PositionMm = StrappingAreaRules.StopPositionMm(_project, placement)
+        };
         _project.IntermediateStops.Add(s);
-        LayoutRules.SnapIntermediateStops(_project);        // solo in mezzo ai bilici (o al centro/estremo di un solo bilico)
         if (_project.Transfer.BatchSize < 1 + _project.IntermediateStops.Count(x => x.IsEnabled))
             _project.Transfer.BatchSize = 1 + _project.IntermediateStops.Count(x => x.IsEnabled);
         AfterAdd(s);
@@ -951,9 +965,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void AddScale()
     {
-        double start = _project.Scales.Count > 0 ? _project.Scales.Max(s => s.EndMm) + 100 : _project.Transfer.PositionMm;
-        var s = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", StartMm = start, LengthMm = 6000 };
+        if (AskPlacement("il bilico di pesa") is not { } placement) return;
+        var s = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", Placement = placement, StartMm = _project.Transfer.PositionMm, LengthMm = 6000 };
         _project.Scales.Add(s);
+        StrappingAreaRules.LayoutScales(_project);          // lunghezza = trasferitore / numero di bilici
         AfterAdd(s);
     }
 
@@ -1064,17 +1079,23 @@ public sealed partial class MainViewModel : ObservableObject
                 break;
             case "scale":
             {
-                var sc = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", LengthMm = 6000 };
+                if (AskPlacement("il bilico di pesa") is not { } scPlace) return;
+                var sc = new WeighingScaleConfig { Id = NextId("B", AllComponents()), Name = "Bilico", LengthMm = 6000, Placement = scPlace };
                 sc.StartMm = Math.Max(0, Snap(x - sc.LengthMm / 2));
                 _project.Scales.Add(sc);
+                StrappingAreaRules.LayoutScales(_project);
                 added = sc;
                 break;
             }
             case "stop":
             {
-                var fs = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = x };
+                if (AskPlacement("il fermo scomparente") is not { } fsPlace) return;
+                var fs = new IntermediateStopConfig
+                {
+                    Id = NextId("FM", AllComponents()), Name = "Fermo scomparente", Placement = fsPlace,
+                    PositionMm = StrappingAreaRules.StopPositionMm(_project, fsPlace)
+                };
                 _project.IntermediateStops.Add(fs);
-                LayoutRules.SnapIntermediateStops(_project);
                 added = fs;
                 break;
             }
@@ -1115,12 +1136,17 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), st.PositionMm + dxMm);   // almeno 1 m dall'inizio della via
                 st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
+                StrappingAreaRules.SpreadStrappers(_project, st);   // stesso lato: almeno 2 m, le altre macchine vengono spinte
                 break;
             }
             case BundleClampConfig k: k.PositionMm += dxMm; break;
             case SideCompactorConfig c: c.PositionMm += dxMm; break;
             case RejectorConfig r: r.PositionMm += dxMm; break;
-            case IntermediateStopConfig fs: fs.PositionMm += dxMm; break;
+            case IntermediateStopConfig fs:
+                if (fs.ManualPosition) fs.PositionMm += dxMm;   // senza spunta resta al centro o all'estremità del trasferitore
+                else Status = $"{fs.Id}: per spostarlo a mano metti la spunta \"Spostamento manuale\"";
+                break;
+            case WeighingScaleConfig msc when msc.ManualPosition: msc.StartMm += dxMm; break;
             case TransferConfig or WeighingScaleConfig:        // trasferitore, bilico e ultima via rulli si trascinano insieme
                 if (LayoutRules.TransferModule(_project) is { } trfMod) LineReflow.MoveSection(_project, trfMod, dxMm);
                 break;
@@ -1143,6 +1169,7 @@ public sealed partial class MainViewModel : ObservableObject
             case StrapperConfig st:
             {
                 st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), Snap(st.PositionMm));
+                StrappingAreaRules.SpreadStrappers(_project, st);
                 break;
             }
             case BundleClampConfig k: k.PositionMm = Snap(k.PositionMm); break;
@@ -1152,6 +1179,7 @@ public sealed partial class MainViewModel : ObservableObject
             case TransferConfig t:
                 if (LayoutRules.TransferModule(_project) is { } m1) LineReflow.MoveSection(_project, m1, Snap(t.PositionMm) - t.PositionMm);
                 break;
+            case WeighingScaleConfig msc when msc.ManualPosition: msc.StartMm = Snap(msc.StartMm); break;
             case WeighingScaleConfig sc:
                 if (LayoutRules.TransferModule(_project) is { } m2) LineReflow.MoveSection(_project, m2, Snap(sc.StartMm) - sc.StartMm);
                 break;

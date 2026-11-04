@@ -21,19 +21,30 @@ public static class SampleProjects
         ("1 legatrice - pacchi 6/9/12 m", CreateOneStrapper12m)
     };
 
-    /// <summary>Distanza della prima legatrice (in ordine di flusso) dalla prima fotocellula.</summary>
-    public const double FirstStrapperFromEntryMm = 5000;
+    /// <summary>Distanza della prima legatrice dall'inizio della linea (prima fotocellula): circa 4 m in tutti i modelli.</summary>
+    public const double FirstStrapperFromEntryMm = 4000;
 
     /// <summary>
-    /// Posizione della prima legatrice: 5 m dalla prima fotocellula. Il motore lega il pacco solo quando sta tutto sulla via
-    /// rulli di legatura, quindi la legatura di testa (a 500 mm dalla testa) richiede che l'ultima legatrice stia ad almeno
-    /// (pacco massimo − 500 mm) dall'inizio della via: se 5 m non bastano, la prima legatrice è portata al minimo ammesso.
+    /// Posizione della prima legatrice: 4 m dall'inizio. Il pacco viene legato anche se la coda è ancora a monte della linea
+    /// (fuori dalla simulazione, sul trasporto di alimentazione).
     /// </summary>
-    public static double FirstStrapperPositionMm(int strappers, int maxLengthM)
+    public static double FirstStrapperPositionMm(int strappers, int maxLengthM) => ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
+
+    /// <summary>
+    /// Lunghezza della via rulli di legatura: almeno due rulli dopo l'ultima legatrice; per i pacchi lunghi quanto basta
+    /// perché, con lo svincolo sotto lo stesso inverter, la legatura di coda si possa fare sotto la prima legatrice
+    /// (testa fino a prima legatrice + distanza della legatura di coda dalla testa).
+    /// </summary>
+    public static double StrappingModuleLengthMm(int strappers, int maxLengthM)
     {
-        double byRule = ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
-        double feasible = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm + 100 - (strappers - 1) * StrapperSpacingMm;
-        return Math.Max(byRule, Math.Ceiling(feasible / 100) * 100);
+        double pitch = RollerSection.DefaultPitchMm;
+        double first = FirstStrapperPositionMm(strappers, maxLengthM);
+        double last = first + (strappers - 1) * StrapperSpacingMm;
+        double byRule = last + StrapperTrack.MinRollersAfterLastStrapper * pitch;
+        double rearStrap = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm;
+        double release = StrappingAreaRules.ReleaseModuleRollers * pitch;
+        double forLongest = first + rearStrap + 250 - release;
+        return Math.Ceiling(Math.Max(byRule, forLongest) / pitch) * pitch;
     }
 
     /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>
@@ -58,16 +69,19 @@ public static class SampleProjects
         Build("3 legatrici - pacchi 6/9/12/18/24 m", strappers: 3, maxLengthM: 24, infeedLengthsM: new[] { 6, 9, 12, 18, 24 }, intermediateStop: true);
 
     /// <summary>
-    /// M1 via rulli di legatura (primo modulo, lunga 2 × pacco massimo + 1 m: il pacco più lungo attraversa tutte le macchine)
-    /// con le legatrici al centro a 2500 mm e un KNOF davanti a ciascuna; fotocellula di uscita legatura a fine modulo
-    /// → M2 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con stopper finale
-    /// → trasferitore sollevabile → due bilici di pesatura.
+    /// M1 via rulli di legatura (primo modulo) con la prima legatrice a 4 m dall'inizio, le altre a 2500 mm, un KNOF davanti a
+    /// ciascuna e almeno due rulli dopo l'ultima; fotocellula di uscita legatura a fine modulo
+    /// → M2 via rulli di svincolo da 4 rulli (il software decide se va sotto l'inverter della legatura)
+    /// → M3 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con stopper finale
+    /// → trasferitore sollevabile → bilici di pesatura (lunghezza automatica).
     /// </summary>
     private static LineProject Build(string name, int strappers, int maxLengthM, int[] infeedLengthsM, bool intermediateStop = false)
     {
         double lmax = maxLengthM * 1000.0;
         // lunghezze multiple di 2500 mm: con passo 1250 mm i rulli sono interi e il passo resta multiplo di 50 mm
-        double strapLen = Math.Ceiling((2 * lmax + 1000) / 2500) * 2500;      // via rulli di legatura
+        double strapLen = StrappingModuleLengthMm(strappers, maxLengthM);                         // via rulli di legatura
+        double relLen = StrappingAreaRules.ReleaseModuleRollers * RollerSection.DefaultPitchMm;    // svincolo: 4 rulli
+        double trfStart = strapLen + relLen;
         double trfLen = Math.Ceiling((lmax + 500) / 2500) * 2500;            // trasferitore = via rulli davanti al trasferitore
         double first = FirstStrapperPositionMm(strappers, maxLengthM);
 
@@ -75,19 +89,20 @@ public static class SampleProjects
         {
             Name = name,
             Description = $"Area di legatura con {strappers} {(strappers == 1 ? "legatrice" : "legatrici")} KNCA a {StrapperSpacingMm:0} mm, " +
-                          $"stringifascio KNOF per ogni legatrice, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
+                          $"prima legatrice a 4 m dall'inizio, stringifascio KNOF per ogni legatrice, svincolo da 4 rulli, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
         };
 
         p.Sections.Add(Mod("M1", "Modulo 1 - Legatura", 0, strapLen));
-        p.Sections.Add(Mod("M2", "Modulo 2 - Trasferitore", strapLen, trfLen));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Svincolo", strapLen, relLen));
+        p.Sections.Add(Mod("M3", "Modulo 3 - Trasferitore", trfStart, trfLen));
 
         p.Photocells.Add(Entry());
         var exit = Pc("FC1", "FC1 uscita legatura", strapLen, "M1", PhotocellAction.None);
         exit.Purpose = PhotocellPurpose.StrappingExit;
         exit.Action = PhotocellAction.None;        // a fine modulo non c'è spazio di frenata: solo segnale di uscita legatura
         p.Photocells.Add(exit);
-        p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", strapLen + trfLen - 1500, "M2", PhotocellAction.SlowDown));
-        p.Photocells.Add(Pc("FC3", "FC3 presenza stopper", strapLen + trfLen - 300, "", PhotocellAction.None));
+        p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", trfStart + trfLen - 1500, "M3", PhotocellAction.SlowDown));
+        p.Photocells.Add(Pc("FC3", "FC3 presenza stopper", trfStart + trfLen - 300, "", PhotocellAction.None));
 
         for (int i = 0; i < strappers; i++)
             p.Strappers.Add(Str($"L{i + 1}", $"Legatrice KNCA {i + 1}", first + i * StrapperSpacingMm));
@@ -102,26 +117,27 @@ public static class SampleProjects
 
         p.Stopper = new StopperConfig
         {
-            Id = "STP", Name = "Stopper finale", PositionMm = strapLen + trfLen - 100, DistanceFromLastRollerMm = 100,
+            Id = "STP", Name = "Stopper finale", PositionMm = trfStart + trfLen - 100, DistanceFromLastRollerMm = 100,
             AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
         };
         if (intermediateStop)
             p.IntermediateStops.Add(new IntermediateStopConfig
             {
-                Id = "FM1", Name = "Fermo intermedio scomparente", PositionMm = strapLen + trfLen / 2, AlignmentTimeS = 2.0
+                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center, PositionMm = trfStart + trfLen / 2, AlignmentTimeS = 2.0
             });
         p.Transfer = new TransferConfig
         {
-            Id = "TRF", Name = "Trasferitore sollevabile", Kind = TransferKind.Lifting, PositionMm = strapLen, LengthMm = trfLen,
+            Id = "TRF", Name = "Trasferitore sollevabile", Kind = TransferKind.Lifting, PositionMm = trfStart, LengthMm = trfLen,
             LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
             BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60
         };
+        // Bilici: lunghezza automatica (trasferitore / numero di bilici), vedi StrappingAreaRules.LayoutScales
         if (maxLengthM <= 12)    // modelli 6/9/12 m: un solo bilico lungo come il trasferitore
-            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen });
+            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", Placement = DevicePlacement.Center, StartMm = trfStart, LengthMm = trfLen });
         else
         {
-            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen / 2 });
-            p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = strapLen + trfLen / 2, LengthMm = trfLen / 2 });
+            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", Placement = DevicePlacement.Center, StartMm = trfStart, LengthMm = trfLen / 2 });
+            p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", Placement = DevicePlacement.End, StartMm = trfStart + trfLen / 2, LengthMm = trfLen / 2 });
         }
 
         // solo le tipologie selezionabili del modello (coerenti con il nome dell'esempio)
@@ -154,6 +170,9 @@ public static class SampleProjects
     {
         LayoutRules.AlignTransferModule(p);
         ProjectNormalizer.AlignStopperToLastRoller(p);
+        StrappingAreaRules.LayoutScales(p);
+        StrappingAreaRules.PlaceStops(p);
+        StrappingAreaRules.DecideReleaseInverters(p);     // svincolo con la via di legatura solo se serve ai pacchi lunghi
         ProjectNormalizer.EnsureProcessSensors(p);
         return p;
     }

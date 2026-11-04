@@ -31,13 +31,13 @@ public sealed class SimulationSettings
     public bool StopOnCollision { get; set; }
 
     /// <summary>
-    /// Single banking: un pacco alla volta sul trasferitore. Double banking: due pacchi (il primo sullo stopper finale, il secondo sul fermo intermedio).
+    /// Single banking: un pacco alla volta sul trasferitore. Double banking: due pacchi (il primo sullo stopper finale, il secondo sul fermo scomparente).
     /// Si sceglie solo nella sezione Simulazioni (non è una caratteristica del pacco né della configurazione).
     /// </summary>
     public AccumulationMode Banking { get; set; } = AccumulationMode.SingleBanking;
 
     /// <summary>
-    /// Intestatura di testa (contro il fermo) o di coda (il pacco oltrepassa il fermo intermedio, il fermo si solleva e il pacco torna indietro
+    /// Intestatura di testa (contro il fermo) o di coda (il pacco oltrepassa il fermo scomparente, il fermo si solleva e il pacco torna indietro
     /// fino a battere di coda). Si sceglie solo nella sezione Simulazioni.
     /// </summary>
     public StopReference Heading { get; set; } = StopReference.Head;

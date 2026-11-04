@@ -211,12 +211,12 @@ public static class ControlLogicGenerator
         bool dbl = p.Simulation.Banking == AccumulationMode.DoubleBanking;
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         if (stops.Count == 0) tail = false;
-        if (!dbl && !tail) stops.Clear();   // single banking di testa: fermi intermedi sempre abbassati
+        if (!dbl && !tail) stops.Clear();   // single banking di testa: fermi scomparenti sempre abbassati
         int batch = dbl ? 2 : 1;
         if (dbl && stops.Count == 0 && topo.StopperZone != null)
             rules.Add(new ControlRule($"{p.Transfer.Id}.SECONDO_PACCO", gt, $"DEV({p.Stopper.Id},Aligned) | DEV({p.Stopper.Id},Aligning)",
                 $"POSIZIONA il secondo pacco con la testa {F(p.Transfer.DoubleBankingGapMm, "0")} mm dietro la coda del primo (encoder)", topo.StopperZone.Id,
-                "Double banking senza fermo intermedio: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.MaxOverhangMm, "0") + " mm."));
+                "Double banking senza fermo scomparente: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.MaxOverhangMm, "0") + " mm."));
         foreach (var s in stops)
         {
             if (tail)

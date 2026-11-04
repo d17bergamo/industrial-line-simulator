@@ -9,7 +9,7 @@ public enum InverterMode
     Run,
     Position,
     Align,
-    /// <summary>Ritorno indietro del pacco contro il fermo intermedio (intestatura di coda).</summary>
+    /// <summary>Ritorno indietro del pacco contro il fermo scomparente (intestatura di coda).</summary>
     Reverse
 }
 
@@ -57,7 +57,7 @@ public sealed class ZoneRuntime
     /// <summary>Zona vuota secondo le fotocellule: corsa a vuoto ≥ lunghezza, nessuna fotocellula della zona o di ripartenza occupata.</summary>
     public bool SensorsEmpty => EmptyTravelM >= Info.LengthM - 1e-9 && !OwnPhotocells.Any(p => p.Output) && !(RestartPhotocell?.Output ?? false);
 
-    /// <summary>Zona dello stopper con fermi intermedi: può contenere più pacchi, uno per fermo.</summary>
+    /// <summary>Zona dello stopper con fermi scomparenti: può contenere più pacchi, uno per fermo.</summary>
     internal bool MultiStop;
     internal bool MultiCanAcceptNew;
     internal readonly List<PackageRuntime> Assigned = new();

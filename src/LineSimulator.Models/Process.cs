@@ -231,11 +231,21 @@ public enum StopReference
     Tail = 1
 }
 
-/// <summary>Fermo intermedio nella zona dello stopper (all'ingresso o al centro del trasferitore, o altrove).</summary>
+/// <summary>
+/// Fermo scomparente sul trasferitore: al centro o all'estremità a monte (scelta all'inserimento). La posizione segue il
+/// trasferitore; si sposta a mano solo con la spunta <see cref="ManualPosition"/>.
+/// </summary>
 public sealed class IntermediateStopConfig : ComponentBase
 {
     [UiProperty("Posizione riferimento", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
+
+    [UiProperty("Posizione sul trasferitore (centro / estremità)", "", "Geometria", Order = 0)]
+    public DevicePlacement Placement { get; set; } = DevicePlacement.Center;
+
+    /// <summary>Spunta: il fermo si sposta a mano (trascinamento o posizione); senza spunta resta al centro o all'estremità.</summary>
+    [UiProperty("Spostamento manuale", "", "Geometria", Order = 3)]
+    public bool ManualPosition { get; set; }
 
     [UiProperty("Altezza grafica", "mm", "Geometria", Order = 2)]
     public double GraphicHeightMm { get; set; } = 250;
@@ -264,9 +274,22 @@ public sealed class IntermediateStopConfig : ComponentBase
     public double TailReturnSpeed { get; set; } = 0.2;
 }
 
-/// <summary>Bilico di pesatura sul lato di deposito del trasferitore.</summary>
+/// <summary>
+/// Bilico di pesatura sul lato di deposito del trasferitore: un bancale che pesa il pacco (il pacco non si muove).
+/// Posizione e lunghezza sono automatiche (lunghezza del trasferitore divisa per il numero di bilici, al centro o
+/// all'estremità scelta all'inserimento); si sposta a mano solo con la spunta <see cref="ManualPosition"/>.
+/// </summary>
+[UiHiddenProperties(nameof(Model), nameof(StartConsent), nameof(StopCondition), nameof(ConfirmDelayS), nameof(ConfirmTimeoutS),
+    nameof(StartMm), nameof(LengthMm), nameof(PositionToleranceMm), nameof(ResolutionKg), nameof(CapacityKg))]
 public sealed class WeighingScaleConfig : SequenceDeviceConfig, IGroupChild
 {
+    [UiProperty("Posizione sul trasferitore (centro / estremità)", "", "Posizione", Order = 5)]
+    public DevicePlacement Placement { get; set; } = DevicePlacement.Center;
+
+    /// <summary>Spunta: il bilico si sposta a mano (trascinamento); senza spunta posizione e lunghezza sono automatiche.</summary>
+    [UiProperty("Spostamento manuale", "", "Posizione", Order = 6)]
+    public bool ManualPosition { get; set; }
+
     public WeighingScaleConfig()
     {
         IsEnabled = true;
@@ -355,7 +378,8 @@ public static class ProcessText
     }
 }
 
-/// <summary>Famiglia dei bilici di pesatura: tempi e tolleranze comuni ereditati dai bilici non personalizzati.</summary>
+/// <summary>Famiglia dei bilici di pesatura: tempi comuni ereditati dai bilici non personalizzati.</summary>
+[UiHiddenProperties(nameof(PositionToleranceMm))]
 public sealed class ScaleGroup : ComponentBase
 {
     public ScaleGroup() { Id = "BIL"; Name = "Bilici di pesatura"; }

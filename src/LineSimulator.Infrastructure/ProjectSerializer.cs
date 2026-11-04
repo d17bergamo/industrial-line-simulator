@@ -58,7 +58,7 @@ public static class ProjectSerializer
 
     /// <summary>
     /// Progetti salvati prima che banking e intestatura passassero alle impostazioni della simulazione:
-    /// "pacchi per ciclo" ≥ 2 con un fermo intermedio → double banking; fermo intermedio con riferimento di coda → intestatura di coda.
+    /// "pacchi per ciclo" ≥ 2 con un fermo scomparente → double banking; fermo scomparente con riferimento di coda → intestatura di coda.
     /// </summary>
     private static void MigrateBankingSettings(JsonObject node, LineProject p)
     {

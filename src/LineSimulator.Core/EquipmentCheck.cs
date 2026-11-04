@@ -109,7 +109,12 @@ public static class EquipmentCheck
         if (LayoutRules.StopsOutOfPlace(p).Any())
         {
             if (fix) LayoutRules.SnapIntermediateStops(p);
-            r.Add(new("STOP_POS", $"Il fermo intermedio deve stare in mezzo ai bilici (o al centro / all'estremo a monte di un solo bilico): {(fix ? "spostato" : "da spostare")}.", fix, true));
+            r.Add(new("STOP_POS", $"Il fermo scomparente senza spunta \"Spostamento manuale\" deve stare al centro o all'estremità del trasferitore, come scelto: {(fix ? "spostato" : "da spostare")}.", fix, true));
+        }
+        if (StrappingAreaRules.SameSideConflicts(p).Any())
+        {
+            if (fix) StrappingAreaRules.SpreadStrappers(p);
+            r.Add(new("STR_SIDE", $"Legatrici o reggettatrici sullo stesso lato a meno di 2 m: {(fix ? "distanziate" : "da distanziare")}.", fix, true));
         }
         if (r.Count == 0) r.Add(new("OK", "Equipaggiamenti a posto: nessuna anomalia.", false, false));
         return r;

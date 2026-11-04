@@ -45,7 +45,10 @@ public static class StrappingPlanner
             return null;
         }
         double L = Units.MmToM(type.LengthMm);
-        double headMin = zone.StartM + L, headMax = zone.EndM;
+        // Se la via di legatura è la prima della linea il pacco può essere legato anche con la coda ancora a monte
+        // (fuori dalla simulazione, sul trasporto di alimentazione): basta che la testa sia sulla via di legatura.
+        bool firstZone = zone.StartM <= topo.LineStartM + 1e-6;
+        double headMin = firstZone ? zone.StartM : zone.StartM + L, headMax = zone.EndM;
         // Il pacco deve trovarsi sotto stringifascio e compattatore a ogni fermata: H − L ≤ X ≤ H
         if (project.StrappingStation.IsEnabled && project.BundleClamp.IsEnabled)
         {

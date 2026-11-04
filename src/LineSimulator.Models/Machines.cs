@@ -258,7 +258,7 @@ public sealed class TransferConfig : ComponentBase
     /// </summary>
     public int BatchSize { get; set; } = 1;
 
-    /// <summary>Double banking senza fermo intermedio: distanza tra coda del primo pacco e testa del secondo, fermato per posizionamento (encoder).</summary>
+    /// <summary>Double banking senza fermo scomparente: distanza tra coda del primo pacco e testa del secondo, fermato per posizionamento (encoder).</summary>
     [UiProperty("Distanza tra i pacchi in double banking (senza fermo)", "mm", "Funzionamento", Order = 24)]
     public double DoubleBankingGapMm { get; set; } = 200;
 

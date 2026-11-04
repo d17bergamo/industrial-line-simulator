@@ -70,7 +70,7 @@ public static class FunctionalSpecExporter
             rows.Add(new[] { p.Rejector.Id, p.Rejector.Name, N(p.Rejector.PositionMm, "0"), $"espulsione {N(p.Rejector.EjectTimeS)} s, ritorno {N(p.Rejector.ReturnTimeS)} s", "abilitata" });
         rows.Add(new[] { p.Stopper.Id, "Fermo finale (stopper)", N(p.Stopper.PositionMm, "0"), $"allineamento {N(p.Stopper.AlignmentTimeS + p.Stopper.HeadingTimeS)} s a {N(p.Stopper.AlignmentRollerSpeed)} m/s", "" });
         foreach (var s in p.IntermediateStops.Where(x => x.IsEnabled))
-            rows.Add(new[] { s.Id, "Fermo intermedio scomparente", N(s.PositionMm, "0"), $"intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")}, {N(s.AlignmentTimeS)} s", "" });
+            rows.Add(new[] { s.Id, "Fermo scomparente", N(s.PositionMm, "0"), $"intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")}, {N(s.AlignmentTimeS)} s", "" });
         rows.Add(new[] { p.Transfer.Id, "Trasferitore sollevabile", $"{N(p.Transfer.PositionMm, "0")} – {N(p.Transfer.EndMm, "0")}",
             $"sollevamento {N(p.Transfer.LiftTimeS)} s, traslazione {N(p.Transfer.EffectiveTranslationTimeS)} s, abbassamento {N(p.Transfer.LowerTimeS)} s, deposito {N(p.Transfer.DepositTimeS)} s; fino a {Math.Max(1, p.Transfer.BatchSize)} pacchi per ciclo", "" });
         foreach (var b in p.Scales.Where(x => x.IsEnabled))
@@ -129,7 +129,7 @@ public static class FunctionalSpecExporter
         bool dblMode = p.Simulation.Banking == AccumulationMode.DoubleBanking;
         bool virtualSecond = dblMode && stops.Count == 0;
         body.Append(Para($"Impostazione della simulazione: {(dblMode ? "double banking" : "single banking")}, intestatura di {(tailMode ? "coda" : "testa")}." +
-            (tailMode ? " Intestatura di coda: il pacco supera il fermo intermedio abbassato di un'extra corsa, il fermo si solleva dietro la coda e il pacco torna indietro fino alla battuta." : "")));
+            (tailMode ? " Intestatura di coda: il pacco supera il fermo scomparente abbassato di un'extra corsa, il fermo si solleva dietro la coda e il pacco torna indietro fino alla battuta." : "")));
         string HeadText(IntermediateStopConfig s) => tailMode ? $"{s.Id}, intestatura di coda" : $"{s.Id}, intestatura di testa";
         double HeadAt(IntermediateStopConfig s, PackageType t) => tailMode ? s.PositionMm + t.LengthMm : s.PositionMm;
         double Reach(IntermediateStopConfig s, PackageType t) => HeadAt(s, t) + (tailMode ? s.TailOvershootMm : 0);
@@ -139,14 +139,14 @@ public static class FunctionalSpecExporter
             {
                 bool fits = p.Stopper.PositionMm - 2 * t.LengthMm - p.Transfer.DoubleBankingGapMm >= p.Transfer.PositionMm - p.Transfer.MaxOverhangMm - 1;
                 body.Append(Bullet(fits
-                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking senza fermo intermedio. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo è fermato per posizionamento (encoder) {N(p.Transfer.DoubleBankingGapMm, "0")} mm dietro al primo. Il trasferitore preleva i due pacchi insieme."
+                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking senza fermo scomparente. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo è fermato per posizionamento (encoder) {N(p.Transfer.DoubleBankingGapMm, "0")} mm dietro al primo. Il trasferitore preleva i due pacchi insieme."
                     : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (due pacchi non stanno sul trasferitore). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
             }
             else if (dblMode)
             {
                 bool dbl = stops.Any(s => HeadAt(s, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(s, t) <= p.Stopper.PositionMm - t.LengthMm - safety + 1);
                 body.Append(Bullet(dbl
-                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo intermedio scomparente ({string.Join(", ", stops.Select(HeadText))}). Il trasferitore preleva i due pacchi insieme."
+                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo scomparente ({string.Join(", ", stops.Select(HeadText))}). Il trasferitore preleva i due pacchi insieme."
                     : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (double banking non possibile per lunghezza). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
             }
             else if (tailMode)

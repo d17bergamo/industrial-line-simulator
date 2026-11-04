@@ -148,7 +148,7 @@ public class LineModelsTests
         p.Strappers[0].PositionMm = p.Transfer.PositionMm - 2000;
         Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_TRF_MIN");
         var fixes = LayoutRules.Enforce(p);
-        Assert.Single(fixes);
+        Assert.Contains(fixes, f => f.Contains("almeno 3 m dal trasferitore", StringComparison.Ordinal));
         Assert.Equal(p.Transfer.PositionMm - 3000, p.Strappers[0].PositionMm, 6);
         Assert.DoesNotContain(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_TRF_MIN");
     }

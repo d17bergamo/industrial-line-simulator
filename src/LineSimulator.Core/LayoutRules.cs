@@ -63,41 +63,17 @@ public static class LayoutRules
         return true;
     }
 
-    /// <summary>
-    /// Posizioni ammesse per il fermo intermedio scomparente: con due bilici solo in mezzo ai due; con un solo bilico al centro
-    /// oppure all'estremo opposto al fermo fisso (cioè a monte). Senza bilici nessun vincolo (lista vuota).
-    /// </summary>
-    public static IReadOnlyList<double> AllowedStopPositionsMm(LineProject p)
+    /// <summary>Posizioni ammesse per i fermi scomparenti non manuali: centro o estremità a monte del trasferitore.</summary>
+    public static IReadOnlyList<double> AllowedStopPositionsMm(LineProject p) => new[]
     {
-        var sc = p.Scales.OrderBy(x => x.StartMm).ToList();
-        if (sc.Count == 0) return Array.Empty<double>();
-        if (sc.Count == 1) return new[] { sc[0].StartMm, sc[0].StartMm + sc[0].LengthMm / 2 };
-        return new[] { (sc[0].StartMm + sc[0].LengthMm + sc[1].StartMm) / 2 };
-    }
+        StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), StrappingAreaRules.StopPositionMm(p, DevicePlacement.End)
+    };
 
-    /// <summary>Fermi intermedi che non stanno su una posizione ammessa.</summary>
-    public static IEnumerable<IntermediateStopConfig> StopsOutOfPlace(LineProject p)
-    {
-        var allowed = AllowedStopPositionsMm(p);
-        if (allowed.Count == 0) return Enumerable.Empty<IntermediateStopConfig>();
-        return p.IntermediateStops.Where(f => allowed.All(a => Math.Abs(a - f.PositionMm) >= 0.5));
-    }
+    /// <summary>Fermi scomparenti (senza spunta "spostamento manuale") fuori dal centro / estremità scelti.</summary>
+    public static IEnumerable<IntermediateStopConfig> StopsOutOfPlace(LineProject p) => StrappingAreaRules.StopsOutOfPlace(p);
 
-    /// <summary>Porta i fermi intermedi sulla posizione ammessa più vicina.</summary>
-    public static List<string> SnapIntermediateStops(LineProject p)
-    {
-        var done = new List<string>();
-        var allowed = AllowedStopPositionsMm(p);
-        if (allowed.Count == 0) return done;
-        foreach (var f in p.IntermediateStops)
-        {
-            double best = allowed.OrderBy(a => Math.Abs(a - f.PositionMm)).First();
-            if (Math.Abs(best - f.PositionMm) < 0.5) continue;
-            done.Add($"{f.Id}: {f.PositionMm:0} → {best:0} mm (fermo solo tra i bilici o al centro/estremo del bilico)");
-            f.PositionMm = best;
-        }
-        return done;
-    }
+    /// <summary>Porta i fermi scomparenti non manuali al centro o all'estremità scelti.</summary>
+    public static List<string> SnapIntermediateStops(LineProject p) => StrappingAreaRules.PlaceStops(p);
 
     /// <summary>La fotocellula di uscita legatura sta mezzo passo dopo l'ultimo rullo della via di legatura, cioè alla sua fine.</summary>
     public static IEnumerable<PhotocellConfig> ExitPhotocellsOutOfPlace(LineProject p)
@@ -130,7 +106,7 @@ public static class LayoutRules
         done.AddRange(ClampStrappers(p));
         if (StrapperTrack.ClampStrappersToTrackStart(p))
             done.Add("Legatrice riportata ad almeno 1 m dall'inizio della via rulli");
-        done.AddRange(SnapIntermediateStops(p));
+        done.AddRange(StrappingAreaRules.Enforce(p));     // macchine sullo stesso lato a 2 m, bilici e fermi sul trasferitore
         if (StrapperTrack.KeepEncoderBehindFirstStrapper(p))
             done.Add("Encoder e fotocellula di legatura spostati: restano ad almeno 1 m prima della prima legatrice");
         if (AlignStrappingExit(p))

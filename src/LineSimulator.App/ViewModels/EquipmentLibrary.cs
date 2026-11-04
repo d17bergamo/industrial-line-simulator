@@ -33,7 +33,7 @@ public static class EquipmentLibrary
             "M3,20 L27,20 M3,14 L27,14 M3,14 L3,20 M27,14 L27,20 M9,14 L9,20 M15,14 L15,20 M21,14 L21,20", 12.0, 1.4, 0.3),
         new("scale", CatOthers, "Bilico di pesatura", "Piattaforma di pesatura lungo la linea",
             "M3,20 L27,20 L27,25 L3,25 Z M6,20 L6,14 L24,14 L24,20", 6.5, 1.2, 0.8),
-        new("stop", CatOthers, "Fermo intermedio", "Fermo sollevabile per intestatura intermedia",
+        new("stop", CatOthers, "Fermo scomparente", "Fermo scomparente: si solleva per intestare il pacco sul trasferitore",
             "M3,24 L27,24 M12,24 L12,10 L18,10 L18,24", 0.1, 0.6, 0.25),
         new("photocell", CatOthers, "Fotocellula", "Barriera con trasmettitore e ricevitore",
             "M5,26 L5,6 M25,26 L25,6 M5,12 L25,12", 0.06, 1.8, 1.1)

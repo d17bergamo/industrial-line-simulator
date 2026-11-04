@@ -3,13 +3,13 @@ using LineSimulator.Models;
 namespace LineSimulator.Core;
 
 /// <summary>
-/// Via a rulli attorno alle legatrici: almeno 1 m dall'inizio della via a monte e almeno 2 m a valle dell'ultima legatrice
-/// (anche con una sola). La via si allunga solo se l'ultima legatrice arriva a meno di 2 m dalla sua fine.
+/// Via a rulli attorno alle legatrici: almeno 1 m dall'inizio della via a monte e almeno due rulli a valle dell'ultima
+/// legatrice (anche con una sola). La via si allunga solo se l'ultima legatrice arriva a meno di due rulli dalla sua fine.
 /// </summary>
 public static class StrapperTrack
 {
-    /// <summary>Lunghezza minima di via a rulli tra l'ultima legatrice e la fine della sua via.</summary>
-    public const double MinTrackAfterLastStrapperMm = 2000;
+    /// <summary>Rulli minimi di via di legatura dopo l'ultima legatrice (regola: più corta di così non può essere).</summary>
+    public const int MinRollersAfterLastStrapper = 2;
 
     /// <summary>L'ultima legatrice abilitata lungo la linea, null se non ce ne sono.</summary>
     public static StrapperConfig? LastStrapper(LineProject p) =>
@@ -29,8 +29,9 @@ public static class StrapperTrack
         if (last == null) return 0;
         var sec = SectionAt(p, last.PositionMm);
         if (sec == null) return 0;
-        double deficit = MinTrackAfterLastStrapperMm - (sec.EndMm - last.PositionMm);
-        if (deficit <= 0.5) return 0;
+        double deficit = MinRollersAfterLastStrapper * sec.RollerPitchMm - (sec.EndMm - last.PositionMm);
+        // tolleranza: allungando la via il passo viene ricalcolato di poco (le giunzioni hanno la precedenza)
+        if (deficit <= Math.Max(0.5, 0.1 * sec.RollerPitchMm)) return 0;
         double oldEnd = sec.EndMm;
         LineReflow.Fit(sec, sec.StartMm, oldEnd + deficit);
         LineReflow.AfterResize(p, sec, oldEnd);

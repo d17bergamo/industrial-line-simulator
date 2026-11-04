@@ -133,7 +133,7 @@ public sealed class LineScene
         if (!_showDimensions || _project == null) return;
         double refX = LayoutGeometry.EntryReferenceM(_project);          // origine delle quote: fotocellula di ingresso
         var info = LayoutGeometry.Describe(_project)
-            .Where(i => i.Kind is not ("Fotocellula" or "Fermo intermedio"))
+            .Where(i => i.Kind is not ("Fotocellula" or "Fermo scomparente"))
             .OrderBy(i => i.CenterXm).ToList();
         double w = _lineWidth, z = 0.03, laneY0 = -(w / 2 + 1.2);
         int lanes = 4;
@@ -595,7 +595,7 @@ public sealed class LineScene
         Register(tm, r, tb, tColor);
     }
 
-    /// <summary>Fermo intermedio: blocco che si solleva sopra il piano rulli quando armato.</summary>
+    /// <summary>Fermo scomparente: blocco che si solleva sopra il piano rulli quando armato.</summary>
     private void AddIntermediateStop(IntermediateStopConfig s)
     {
         double x = s.PositionMm / 1000.0, h = Math.Max(0.05, s.GraphicHeightMm / 1000.0);
@@ -788,7 +788,7 @@ public sealed class LineScene
                 _ => Blend(GreyMoving, GreyBody, 0.5)
             };
 
-        // Fermi intermedi: sollevati e colorati secondo lo stato
+        // Fermi scomparenti: sollevati e colorati secondo lo stato
         for (int i = 0; i < _stopVisuals.Count; i++)
         {
             var (brush, tt, cfg) = _stopVisuals[i];

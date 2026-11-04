@@ -520,7 +520,7 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 bool release = z.Info.Kind == ZoneKind.Stopper
                     ? !res.OnRollers && (!Transfer.Config.BlockInfeedUntilHome || Transfer.State == TransferState.Home)
-                    : !res.OnRollers || res.TailM >= z.Info.EndM - 1e-9;
+                    : !res.OnRollers || res.TailM >= z.Info.EndM - 1e-9 || ReleasedFromStrappingZone(z, res);
                 if (release)
                 {
                     z.ReservedBy = null;
@@ -535,7 +535,7 @@ public sealed partial class SimulationEngine : ILogicContext
             }
             if (z.ReservedBy == null)
             {
-                var p = _active.FirstOrDefault(x => x.OnRollers && x.HeadM > z.Info.StartM + 1e-9 && x.TailM < z.Info.EndM - 1e-9);
+                var p = _active.FirstOrDefault(x => x.OnRollers && !_releasedFromStation.Contains(x) && x.HeadM > z.Info.StartM + 1e-9 && x.TailM < z.Info.EndM - 1e-9);
                 if (p != null)
                 {
                     z.ReservedBy = p;
@@ -547,7 +547,7 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 foreach (var other in _active)
                 {
-                    if (other == z.ReservedBy || !other.OnRollers) continue;
+                    if (other == z.ReservedBy || !other.OnRollers || _releasedFromStation.Contains(other)) continue;
                     if (other.HeadM > z.Info.StartM + 1e-9 && other.TailM < z.Info.EndM - 1e-9 && _reportedOnce.Add($"overfill:{z.Id}:{other.Id}"))
                     {
                         ZoneOverfills++;
@@ -557,6 +557,23 @@ public sealed partial class SimulationEngine : ILogicContext
                 }
             }
         }
+    }
+
+    /// <summary>Pacchi già legati che hanno lasciato la via di legatura ma sono ancora nello svincolo sotto lo stesso inverter.</summary>
+    private readonly HashSet<PackageRuntime> _releasedFromStation = new();
+
+    /// <summary>
+    /// Via di legatura e svincolo sotto un unico inverter: il pacco legato libera la stazione quando la sua coda supera la
+    /// fotocellula di uscita della via di legatura (prima della fine della zona). Il pacco successivo può allora essere
+    /// posizionato: fermando l'inverter si ferma anche il precedente sullo svincolo (stesso azionamento).
+    /// </summary>
+    private bool ReleasedFromStrappingZone(ZoneRuntime z, PackageRuntime res)
+    {
+        if (Station == null || z != Station.Zone || Station.Package != res || Station.State != StationState.Releasing) return false;
+        double exit = StrappingExitM;
+        if (exit >= z.Info.EndM - 1e-6 || res.TailM <= exit + 1e-9) return false;
+        _releasedFromStation.Add(res);
+        return true;
     }
 
     private void StationAccept(PackageRuntime p, double t)
@@ -867,7 +884,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 vNew = 0;
             }
 
-            // Battuta su fermo intermedio con intestatura di testa (solo il pacco assegnato, fermo sollevato)
+            // Battuta su fermo scomparente con intestatura di testa (solo il pacco assegnato, fermo sollevato)
             foreach (var s in _stops)
             {
                 if (s.Package != p || s.Reference != StopReference.Head || !s.Raised) continue;

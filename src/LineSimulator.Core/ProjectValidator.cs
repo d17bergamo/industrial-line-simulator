@@ -197,15 +197,21 @@ public static class ProjectValidator
         if (st.PositioningSpeed <= 0 || st.PositioningSpeed > zone.Inverter.HighSpeed + 1e-9)
             r.Error("STATION_SPEED", "Velocità di posizionamento deve essere > 0 e ≤ velocità alta dell'inverter.");
         double maxLen = p.PackageTypes.Count > 0 ? p.PackageTypes.Max(t => t.LengthMm) : 0;
-        if (Units.MToMm(zone.LengthM) < maxLen)
+        // Prima via della linea: il pacco può essere legato con la coda ancora a monte (fuori dalla simulazione)
+        bool firstZone = zone.StartM <= topo.LineStartM + 1e-6;
+        if (!firstZone && Units.MToMm(zone.LengthM) < maxLen)
             r.Error("STATION_LEN", $"Zona di legatura ({F(Units.MToMm(zone.LengthM))} mm) più corta del pacco più lungo ({F(maxLen)} mm).");
 
-        var en = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).ToList();
+        // Ingombri: solo tra macchine sullo stesso lato (macchine contrapposte nessun vincolo)
+        foreach (var side in p.Strappers.Where(s => s.IsEnabled).GroupBy(s => s.Side))
+        {
+        var en = side.OrderBy(s => s.PositionMm).ToList();
         for (int i = 1; i < en.Count; i++)
         {
             double clear = (en[i].PositionMm - en[i].FootprintLengthMm / 2) - (en[i - 1].PositionMm + en[i - 1].FootprintLengthMm / 2);
             if (clear < 0)
                 r.Error("STR_INTERF", $"Ingombri delle legatrici {en[i - 1].Id} e {en[i].Id} interferiscono ({F(-clear)} mm).", en[i].Id);
+        }
         }
         foreach (var s in p.Strappers)
         {
@@ -215,6 +221,8 @@ public static class ProjectValidator
             if (s.PreparationTimeS < 0 || s.StrappingTimeS <= 0 || s.ReturnTimeS < 0)
                 r.Error("STR_TIME", "Tempi legatrice non validi (legatura > 0, altri ≥ 0).", s.Id);
         }
+        foreach (var (a, b) in StrappingAreaRules.SameSideConflicts(p))
+            r.Error("STR_SIDE_DIST", $"{a.Id} e {b.Id} sono sullo stesso lato a {F(Math.Round(b.PositionMm - a.PositionMm))} mm: servono almeno 2 m (su lati opposti nessun vincolo).", b.Id);
         foreach (var s in LayoutRules.StrappersTooCloseToTransfer(p))
             r.Error("STR_TRF_MIN", $"La legatrice deve stare ad almeno 3 m dal trasferitore sollevabile (massimo {F(Math.Round(LayoutRules.MaxStrapperPositionMm(p)))} mm).", s.Id);
     }
@@ -350,7 +358,7 @@ public static class ProjectValidator
         if (d.SimulatedFaultAtCycle > 0) r.Info("DEV_FAULT_SIM", $"Guasto simulato attivo al ciclo {d.SimulatedFaultAtCycle}.", d.Id);
     }
 
-    /// <summary>Fotocellula di ingresso, dispositivi di processo, fermi intermedi, trasferitore multi-pacco, bilici.</summary>
+    /// <summary>Fotocellula di ingresso, dispositivi di processo, fermi scomparenti, trasferitore multi-pacco, bilici.</summary>
     private static void ValidateProcessDevices(LineProject p, LineTopology topo, ValidationReport r)
     {
         // Fotocellula di ingresso obbligatoria
@@ -440,17 +448,17 @@ public static class ProjectValidator
             CheckDeviceCommon(p, sma, r, sma.EjectTimeS);
         }
 
-        // Fermi intermedi e trasferitore multi-pacco
+        // Fermi scomparenti e trasferitore multi-pacco
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).ToList();
         foreach (var s in stops)
         {
             double x = Units.MmToM(s.PositionMm);
             var sz = topo.StopperZone;
             if (sz == null || x < sz.StartM || x > sz.EndM)
-                r.Error("STOP_ZONE", "Il fermo intermedio deve trovarsi nella zona dello stopper.", s.Id);
-            if (s.PositionMm >= p.Stopper.PositionMm) r.Error("STOP_POS", "Il fermo intermedio deve essere a monte dello stopper finale.", s.Id);
+                r.Error("STOP_ZONE", "Il fermo scomparente deve trovarsi nella zona dello stopper.", s.Id);
+            if (s.PositionMm >= p.Stopper.PositionMm) r.Error("STOP_POS", "Il fermo scomparente deve essere a monte dello stopper finale.", s.Id);
             if (s.PositionMm < p.Transfer.PositionMm || s.PositionMm > p.Transfer.EndMm)
-                r.Warn("STOP_TRF", "Il fermo intermedio è fuori dal campo del trasferitore.", s.Id);
+                r.Warn("STOP_TRF", "Il fermo scomparente è fuori dal campo del trasferitore.", s.Id);
             if (s.AlignmentTimeS < 0) r.Error("STOP_TIME", "Tempo di intestatura negativo.", s.Id);
         }
         foreach (var g in stops.GroupBy(s => Math.Round(s.PositionMm)).Where(g => g.Count() > 1))
@@ -459,7 +467,7 @@ public static class ProjectValidator
         if (tr.DoubleBankingGapMm < 0) r.Error("TRF_GAP", "Distanza tra i pacchi in double banking negativa.", tr.Id);
         if (tr.MaxOverhangMm < 0) r.Error("TRF_OVERHANG", "Sbalzo ammesso negativo.", tr.Id);
         if (stops.Count == 0 && p.Simulation.Heading == StopReference.Tail)
-            r.Warn("HEADING_TAIL", "Intestatura di coda scelta ma nessun fermo intermedio scomparente abilitato: si simula con intestatura di testa.", tr.Id);
+            r.Warn("HEADING_TAIL", "Intestatura di coda scelta ma nessun fermo scomparente abilitato: si simula con intestatura di testa.", tr.Id);
         if (tr.BatchWaitTimeoutS < 0) r.Error("TRF_BATCH", "Attesa gruppo negativa.", tr.Id);
         if (stops.Count > 0 && p.PackageTypes.Count > 0 && p.Simulation.Banking == AccumulationMode.DoubleBanking)
         {

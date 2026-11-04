@@ -21,6 +21,25 @@ public sealed class UiPropertyAttribute : Attribute
     public int Order { get; set; }
 }
 
+/// <summary>
+/// Proprietà (anche ereditate) da non mostrare nel pannello proprietà per questa classe.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class UiHiddenPropertiesAttribute : Attribute
+{
+    public UiHiddenPropertiesAttribute(params string[] names) => Names = names;
+    public IReadOnlyList<string> Names { get; }
+}
+
+/// <summary>Posizione di un dispositivo sul trasferitore sollevabile, scelta all'inserimento.</summary>
+public enum DevicePlacement
+{
+    /// <summary>Al centro del trasferitore.</summary>
+    Center = 0,
+    /// <summary>All'estremità del trasferitore (il fermo scomparente all'estremo a monte, opposto al fermo fisso).</summary>
+    End = 1
+}
+
 /// <summary>Base comune di tutti i componenti della linea.</summary>
 public abstract class ComponentBase
 {

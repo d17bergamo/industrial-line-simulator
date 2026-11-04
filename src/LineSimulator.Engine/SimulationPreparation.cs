@@ -40,10 +40,12 @@ public static class SimulationPreparation
         if (p.Sections.Count == 0) return r;
         FixIds(p, r);
         FixStation(p, r);
+        // Svincolo: stesso inverter della via di legatura solo se durante la legatura la testa del pacco deve entrarci
+        r.Changes.AddRange(StrappingAreaRules.DecideReleaseInverters(p));
         FixReferences(p, r);
         FixClampPositions(p, r, force: false);
         if (BankingOptions.Normalize(p))
-            r.Changes.Add("Intestatura di coda non disponibile: la linea non ha un fermo intermedio scomparente abilitato. Impostata l'intestatura di testa.");
+            r.Changes.Add("Intestatura di coda non disponibile: la linea non ha un fermo scomparente abilitato. Impostata l'intestatura di testa.");
         SyncAutoSensors(p, r);
         CheckMandatoryStrapping(p, r);
         return r;
@@ -61,7 +63,7 @@ public static class SimulationPreparation
             new("M", "Moduli", p.Sections.Cast<ComponentBase>().ToList(), c => ((RollerSection)c).StartMm, true),
             new("L", "Legatrici", p.Strappers.Cast<ComponentBase>().ToList(), c => ((StrapperConfig)c).PositionMm, true),
             new("FC", "Fotocellule", generic, c => ((PhotocellConfig)c).PositionMm, true),
-            new("FM", "Fermi intermedi", p.IntermediateStops.Cast<ComponentBase>().ToList(), c => ((IntermediateStopConfig)c).PositionMm, true),
+            new("FM", "Fermi scomparenti", p.IntermediateStops.Cast<ComponentBase>().ToList(), c => ((IntermediateStopConfig)c).PositionMm, true),
             new("B", "Bilici", p.Scales.Cast<ComponentBase>().ToList(), c => ((WeighingScaleConfig)c).StartMm, true),
             new("T", "Tipologie pacco", p.PackageTypes.Cast<ComponentBase>().ToList(), _ => 0, false),
             new("R", "Regole", p.Rules.Cast<ComponentBase>().ToList(), _ => 0, false)
@@ -122,7 +124,7 @@ public static class SimulationPreparation
         if (map.Count > 0) RemapReferences(p, map);
     }
 
-    private static readonly Regex GenericName = new(@"^(|Legatrice( KNCA| SMA)?( \S+)?|Reggettatrice( SMA)?( \S+)?|Modulo( \S+)?|Nuova fotocellula|Fermo intermedio( \S+)?|Bilico( \S+)?)( \(copia\))*$", RegexOptions.CultureInvariant);
+    private static readonly Regex GenericName = new(@"^(|Legatrice( KNCA| SMA)?( \S+)?|Reggettatrice( SMA)?( \S+)?|Modulo( \S+)?|Nuova fotocellula|Fermo scomparente( \S+)?|Bilico( \S+)?)( \(copia\))*$", RegexOptions.CultureInvariant);
 
     private static void RenameName(ComponentBase c, string oldId, string newId)
     {
@@ -133,7 +135,7 @@ public static class SimulationPreparation
             StrapperConfig s => (s.MachineType == StrapperMachineType.SMA ? "Reggettatrice SMA " : "Legatrice KNCA ") + num,
             RollerSection => "Modulo " + num,
             PhotocellConfig => "Fotocellula " + newId,
-            IntermediateStopConfig => "Fermo intermedio " + num,
+            IntermediateStopConfig => "Fermo scomparente " + num,
             WeighingScaleConfig => "Bilico " + num,
             _ => c.Name
         };

@@ -162,7 +162,7 @@
                             <MenuItem Header="Modulo via a rulli" Command="{Binding AddSectionCommand}"/>
                             <MenuItem Header="Fotocellula" Command="{Binding AddPhotocellCommand}"/>
                             <MenuItem Header="Legatrice" Command="{Binding AddStrapperCommand}"/>
-                            <MenuItem Header="Fermo intermedio" Command="{Binding AddStopCommand}"/>
+                            <MenuItem Header="Fermo scomparente" Command="{Binding AddStopCommand}"/>
                             <MenuItem Header="Bilico" Command="{Binding AddScaleCommand}"/>
                             <Separator/>
                             <MenuItem Header="Tipologia di pacco" Command="{Binding AddPackageTypeCommand}"/>
@@ -176,7 +176,7 @@
                         <TextBlock Text="Banking:" VerticalAlignment="Center" Margin="12,0,6,0"/>
                         <ComboBox Width="130" ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Single banking: un pacco per sezione. Double banking: due pacchi."/>
                         <TextBlock Text="Intestatura:" VerticalAlignment="Center" Margin="12,0,6,0"/>
-                        <ComboBox Width="90" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Head = di testa, Tail = di coda (solo con un fermo intermedio scomparente: il pacco lo supera, il fermo si solleva e il pacco torna indietro)"/>
+                        <ComboBox Width="90" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Head = di testa, Tail = di coda (solo con un fermo scomparente: il pacco lo supera, il fermo si solleva e il pacco torna indietro)"/>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.TonnesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.CycleTimeMeanS, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>

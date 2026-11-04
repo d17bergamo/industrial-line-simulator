@@ -166,9 +166,11 @@ public sealed class PropertyItemViewModel : ObservableObject
     /// <summary>Crea le voci per tutte le proprietà con <see cref="UiPropertyAttribute"/> dell'oggetto.</summary>
     public static List<PropertyItemViewModel> For(object target, Action<PropertyItemViewModel> changed, Func<string, IReadOnlyList<string>?> idOptions)
     {
+        // Proprietà nascoste per questa classe (es. bilico: niente geometria, interblocchi, modello, pesatura)
+        var hidden = target.GetType().GetCustomAttribute<UiHiddenPropertiesAttribute>()?.Names ?? Array.Empty<string>();
         return target.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => (p, a: p.GetCustomAttribute<UiPropertyAttribute>()))
-            .Where(x => x.a != null)
+            .Where(x => x.a != null && !hidden.Contains(x.p.Name))
             .OrderBy(x => x.a!.Order)
             .Select(x => new PropertyItemViewModel(target, x.p, x.a!, changed, idOptions(x.p.Name)))
             .ToList();
