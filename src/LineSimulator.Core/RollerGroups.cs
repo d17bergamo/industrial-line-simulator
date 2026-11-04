@@ -42,12 +42,19 @@ public static class RollerGroups
                 changed = true;
             if (applyPitch && Math.Abs(s.RollerPitchMm - g.RollerPitchMm) > 1e-6)
             {
-                s.RollerPitchMm = g.RollerPitchMm;
+                s.RollerPitchMm = LineReflow.RoundPitch(g.RollerPitchMm);
                 LineReflow.Fit(s, s.StartMm, s.EndMm);
                 changed = true;
             }
         }
         return changed;
+    }
+
+    /// <summary>Quota piano rulli: il valore del padre è quello del layout (una sola quota per tutta la linea).</summary>
+    public static void SyncElevation(LineProject p, bool fromGroup)
+    {
+        if (fromGroup) p.Layout.RollerTopElevationMm = p.SectionDefaults.RollerTopElevationMm;
+        else p.SectionDefaults.RollerTopElevationMm = p.Layout.RollerTopElevationMm;
     }
 
     /// <summary>

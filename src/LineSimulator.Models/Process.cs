@@ -265,7 +265,7 @@ public sealed class IntermediateStopConfig : ComponentBase
 }
 
 /// <summary>Bilico di pesatura sul lato di deposito del trasferitore.</summary>
-public sealed class WeighingScaleConfig : SequenceDeviceConfig
+public sealed class WeighingScaleConfig : SequenceDeviceConfig, IGroupChild
 {
     public WeighingScaleConfig()
     {
@@ -277,7 +277,11 @@ public sealed class WeighingScaleConfig : SequenceDeviceConfig
     [UiProperty("Inizio bilico (in linea)", "mm", "Geometria", Order = 10)]
     public double StartMm { get; set; }
 
-    [UiProperty("Lunghezza bilico", "mm", "Geometria", Order = 11)]
+    /// <summary>True = i parametri di questo bilico sono personalizzati e non seguono la famiglia.</summary>
+    [UiProperty("Personalizza questo bilico (sblocca)", "", "Gruppo", Order = 0)]
+    public bool OverrideGroup { get; set; }
+
+    [UiProperty("Lunghezza bilico (multipli di 100 mm)", "mm", "Geometria", Order = 11)]
     public double LengthMm { get; set; } = 6500;
 
     /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
@@ -349,4 +353,22 @@ public static class ProcessText
         }
         return result;
     }
+}
+
+/// <summary>Famiglia dei bilici di pesatura: tempi e tolleranze comuni ereditati dai bilici non personalizzati.</summary>
+public sealed class ScaleGroup : ComponentBase
+{
+    public ScaleGroup() { Id = "BIL"; Name = "Bilici di pesatura"; }
+
+    [UiProperty("Tolleranza di verifica posizione sul bilico", "mm", "Posizionamento", Order = 25)]
+    public double PositionToleranceMm { get; set; } = 10;
+
+    [UiProperty("Tempo di stabilizzazione", "s", "Tempi", Order = 30)]
+    public double StabilizationTimeS { get; set; } = 3.0;
+
+    [UiProperty("Tempo di acquisizione peso", "s", "Tempi", Order = 31)]
+    public double AcquisitionTimeS { get; set; } = 1.0;
+
+    [UiProperty("Tempo di scarico dal bilico", "s", "Tempi", Order = 32)]
+    public double ReleaseTimeS { get; set; } = 4.0;
 }

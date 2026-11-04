@@ -6,7 +6,7 @@ namespace LineSimulator.Models;
 /// Modulo di via a rulli: ogni modulo ha il proprio inverter, quindi contiene sia la geometria
 /// sia i parametri di azionamento (velocità in m/s, rampe in m/s²). Un modulo = una zona di comando.
 /// </summary>
-public sealed class RollerSection : ComponentBase
+public sealed class RollerSection : ComponentBase, IGroupChild
 {
     [UiProperty("Inizio modulo (posizione in linea)", "mm", "Geometria", Order = 1)]
     public double StartMm { get; set; }
@@ -19,7 +19,7 @@ public sealed class RollerSection : ComponentBase
     public double LengthMm { get; set; } = 7500;
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
-    public double WidthMm { get; set; } = 1200;
+    public double WidthMm { get; set; } = 700;
 
     [UiProperty("Numero rulli", "", "Geometria", Order = 4)]
     public int RollerCount { get; set; } = 6;
@@ -127,9 +127,12 @@ public sealed class RollerGroup : ComponentBase
     public RollerGroup() { Id = "RLG"; Name = "Moduli via a rulli"; }
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
-    public double WidthMm { get; set; } = 1200;
+    public double WidthMm { get; set; } = 700;
 
-    [UiProperty("Passo rulli", "mm", "Geometria", Order = 5)]
+    [UiProperty("Quota piano rulli", "mm", "Geometria", Order = 1)]
+    public double RollerTopElevationMm { get; set; } = 800;
+
+    [UiProperty("Passo rulli (multipli di 50 mm)", "mm", "Geometria", Order = 5)]
     public double RollerPitchMm { get; set; } = RollerSection.DefaultPitchMm;
 
     [UiProperty("Diametro rulli (grafico)", "mm", "Geometria", Order = 6)]
@@ -236,10 +239,14 @@ public enum PhotocellActivation
     WhenFree = 1
 }
 
-public sealed class PhotocellConfig : ComponentBase
+public sealed class PhotocellConfig : ComponentBase, IGroupChild
 {
     [UiProperty("Posizione in linea", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
+
+    /// <summary>True = i parametri di questa fotocellula sono personalizzati e non seguono la famiglia.</summary>
+    [UiProperty("Personalizza questa fotocellula (sblocca)", "", "Gruppo", Order = 0)]
+    public bool OverrideGroup { get; set; }
 
     [UiProperty("Tipologia", "", "Sensore", Order = 2)]
     public PhotocellType Type { get; set; } = PhotocellType.ThroughBeam;
@@ -278,4 +285,28 @@ public sealed class PhotocellConfig : ComponentBase
 
     [UiProperty("Azione conseguente", "", "Logica", Order = 12)]
     public PhotocellAction Action { get; set; } = PhotocellAction.None;
+}
+
+/// <summary>Famiglia delle fotocellule: parametri comuni ereditati dalle fotocellule non personalizzate.</summary>
+public sealed class PhotocellGroup : ComponentBase
+{
+    public PhotocellGroup() { Id = "FCG"; Name = "Fotocellule"; }
+
+    [UiProperty("Tipologia", "", "Sensore", Order = 2)]
+    public PhotocellType Type { get; set; } = PhotocellType.ThroughBeam;
+
+    [UiProperty("Direzione di rilevamento", "", "Sensore", Order = 3)]
+    public DetectionDirection Direction { get; set; } = DetectionDirection.Transversal;
+
+    [UiProperty("Distanza di rilevamento (grafica)", "mm", "Sensore", Order = 4)]
+    public double DetectionRangeMm { get; set; } = 1500;
+
+    [UiProperty("Tempo di risposta", "ms", "Sensore", Order = 5)]
+    public double ResponseTimeMs { get; set; } = 20;
+
+    [UiProperty("Logica di rilevamento", "", "Logica", Order = 13)]
+    public PhotocellDetectionMode DetectionMode { get; set; } = PhotocellDetectionMode.Presence;
+
+    [UiProperty("Condizione di attivazione", "", "Logica", Order = 11)]
+    public PhotocellActivation Activation { get; set; } = PhotocellActivation.WhenOccupied;
 }

@@ -7,7 +7,7 @@ namespace LineSimulator.Models;
 /// Lega nel piano trasversale alla sua posizione in linea. Ciclo: la macchina si abbassa, lega e si rialza
 /// (tempo di legatura); prima di ogni ciclo deve essere armata (carica del filo / riarmo).
 /// </summary>
-public sealed class StrapperConfig : ComponentBase
+public sealed class StrapperConfig : ComponentBase, IGroupChild
 {
     public const double KncaStrappingTimeS = 11.5, KncaArmingTimeS = 3.0, SmaStrappingTimeS = 10.0, SmaArmingTimeS = 5.0;
 
@@ -41,6 +41,10 @@ public sealed class StrapperConfig : ComponentBase
 
     [UiProperty("Posizione piano di legatura", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
+
+    /// <summary>True = i parametri di questa legatrice sono personalizzati e non seguono la famiglia.</summary>
+    [UiProperty("Personalizza questa legatrice (sblocca)", "", "Gruppo", Order = 0)]
+    public bool OverrideGroup { get; set; }
 
     [UiProperty("Ingombro lungo la linea", "mm", "Geometria", Order = 2)]
     public double FootprintLengthMm { get; set; } = 1200;
@@ -151,11 +155,11 @@ public sealed class StopperConfig : ComponentBase
     /// Posizione della battuta: calcolata (non si imposta a mano) come posizione dell'ultimo rullo dell'ultima via a rulli
     /// più <see cref="DistanceFromLastRollerMm"/>. Il fermo finale sta sempre dopo l'ultimo rullo.
     /// </summary>
-    [UiProperty("Posizione battuta (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 1)]
+    [UiProperty("Posizione battuta (fine ultimo modulo)", "mm", "Geometria", ReadOnly = true, Order = 1)]
     public double PositionMm { get; set; }
 
-    /// <summary>Distanza tra l'ultimo rullo e il fermo finale: è l'unico dato di posizione che si imposta.</summary>
-    [UiProperty("Distanza ultimo rullo - fermo", "mm", "Geometria", Order = 0)]
+    /// <summary>Distanza tra l'ultimo rullo e il fermo finale: il fermo sta sempre alla fine dell'ultimo modulo, quindi vale la sporgenza (metà passo).</summary>
+    [UiProperty("Distanza ultimo rullo - fermo (= sporgenza modulo)", "mm", "Geometria", ReadOnly = true, Order = 0)]
     public double DistanceFromLastRollerMm { get; set; } = 100;
 
     [UiProperty("Altezza grafica", "mm", "Geometria", Order = 2)]
@@ -277,4 +281,34 @@ public sealed class TransferConfig : ComponentBase
 
     [JsonIgnore]
     public double EndMm => PositionMm + LengthMm;
+}
+
+/// <summary>Famiglia delle legatrici: tempi e ingombro comuni ereditati dalle legatrici non personalizzate.</summary>
+public sealed class StrapperGroup : ComponentBase
+{
+    public StrapperGroup() { Id = "LEG"; Name = "Legatrici"; }
+
+    [UiProperty("Ingombro lungo la linea (multipli di 100 mm)", "mm", "Geometria", Order = 2)]
+    public double FootprintLengthMm { get; set; } = 1200;
+
+    [UiProperty("Carica filo (KNCA) / riarmo (SMA)", "s", "Tempi", Order = 9)]
+    public double ArmingTimeS { get; set; } = StrapperConfig.KncaArmingTimeS;
+
+    [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]
+    public double PreparationTimeS { get; set; }
+
+    [UiProperty("Ciclo di legatura (abbassa, lega, rialza)", "s", "Tempi", Order = 11)]
+    public double StrappingTimeS { get; set; } = StrapperConfig.KncaStrappingTimeS;
+
+    [UiProperty("Tempo di ritorno aggiuntivo", "s", "Tempi", Order = 12)]
+    public double ReturnTimeS { get; set; }
+
+    [UiProperty("Può lavorare in combinazione", "", "Funzionamento", Order = 21)]
+    public bool AllowCombinedWork { get; set; } = true;
+
+    [UiProperty("Allarme se attesa consenso stringifascio oltre", "s", "Interblocchi", Order = 30)]
+    public double ConsentTimeoutS { get; set; } = 30;
+
+    [UiProperty("Tempo di ripristino dopo guasto", "s", "Diagnostica", Order = 41)]
+    public double FaultResetTimeS { get; set; } = 30;
 }

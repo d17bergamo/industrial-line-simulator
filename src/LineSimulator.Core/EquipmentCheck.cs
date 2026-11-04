@@ -41,7 +41,7 @@ public static class EquipmentCheck
             }
             // 3. Posizione: dentro la lunghezza del pacco più corto dall'inizio linea e a monte di tutte le altre
             double others = p.Photocells.Where(x => !ReferenceEquals(x, entry)).Select(x => x.PositionMm).DefaultIfEmpty(double.MaxValue).Min();
-            bool outside = entry.PositionMm < start || (minLen > 0 && entry.PositionMm - start > minLen);
+            bool outside = Math.Abs(entry.PositionMm - start) > 0.5;
             bool notFirst = entry.PositionMm >= others;
             if (outside || notFirst)
             {
@@ -59,15 +59,14 @@ public static class EquipmentCheck
                 r.Add(new("ENTRY_NAME", $"Prima fotocellula {(fix ? "rinominata" : "da rinominare")} in \"{EntryName}\".", fix, true));
             }
         }
-        // 5. Fermo finale dopo l'ultimo rullo
-        var last = ProjectNormalizer.LastRollerPositionMm(p);
-        if (last != null)
+        // 5. Fermo finale = fine dell'ultimo modulo
+        if (p.Sections.Count > 0)
         {
-            double expect = last.Value + Math.Max(0, p.Stopper.DistanceFromLastRollerMm);
+            double expect = p.Sections.Max(x => x.EndMm);
             if (Math.Abs(p.Stopper.PositionMm - expect) > 0.5)
             {
                 if (fix) ProjectNormalizer.AlignStopperToLastRoller(p);
-                r.Add(new("STOPPER", $"Il fermo finale non era dopo l'ultimo rullo: {(fix ? "portato" : "da portare")} a {expect:0} mm.", fix, true));
+                r.Add(new("STOPPER", $"Il fermo finale deve stare alla fine dell'ultimo modulo: {(fix ? "portato" : "da portare")} a {expect:0} mm.", fix, true));
             }
         }
         // 6. Vie a rulli senza vuoti o sovrapposizioni
@@ -81,6 +80,27 @@ public static class EquipmentCheck
             if (s.PositionMm < start || s.PositionMm > end) r.Add(new("STRAPPER_POS", $"{s.Name} è fuori dalla linea.", false, true));
         if (p.Transfer.PositionMm < start || p.Transfer.PositionMm > end) r.Add(new("TRANSFER_POS", "Il trasferitore parte fuori dalla linea.", false, true));
 
+        // 8. Regole di layout
+        if (StrapperTrack.MinStrapperPositionMm(p) is var minPos && p.Strappers.Any(x => x.PositionMm < minPos - 1e-6))
+        {
+            if (fix) StrapperTrack.ClampStrappersToTrackStart(p);
+            r.Add(new("STRAPPER_START", $"Una legatrice era a meno di 1 m dall'inizio della via rulli: {(fix ? "portata" : "da portare")} ad almeno {minPos:0} mm.", fix, true));
+        }
+        if (LayoutRules.StrappersTooCloseToTransfer(p).Any())
+        {
+            if (fix) LayoutRules.ClampStrappers(p);
+            r.Add(new("STRAPPER_TRF", $"Una legatrice era a meno di 3 m dal trasferitore: {(fix ? "portata" : "da portare")} a {LayoutRules.MaxStrapperPositionMm(p):0} mm.", fix, true));
+        }
+        if (!LayoutRules.TransferModuleMatches(p))
+        {
+            if (fix) LayoutRules.AlignTransferModule(p);
+            r.Add(new("TRF_MODULE", $"L'ultimo modulo deve avere la stessa lunghezza e lo stesso inizio del trasferitore ({p.Transfer.LengthMm:0} mm): {(fix ? "allineato" : "da allineare")}.", fix, true));
+        }
+        if (LayoutRules.StopsOutOfPlace(p).Any())
+        {
+            if (fix) LayoutRules.SnapIntermediateStops(p);
+            r.Add(new("STOP_POS", $"Il fermo intermedio deve stare in mezzo ai bilici (o al centro / all'estremo a monte di un solo bilico): {(fix ? "spostato" : "da spostare")}.", fix, true));
+        }
         if (r.Count == 0) r.Add(new("OK", "Equipaggiamenti a posto: nessuna anomalia.", false, false));
         return r;
     }

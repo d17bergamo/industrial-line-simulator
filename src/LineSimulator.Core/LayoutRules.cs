@@ -75,6 +75,14 @@ public static class LayoutRules
         return new[] { (sc[0].StartMm + sc[0].LengthMm + sc[1].StartMm) / 2 };
     }
 
+    /// <summary>Fermi intermedi che non stanno su una posizione ammessa.</summary>
+    public static IEnumerable<IntermediateStopConfig> StopsOutOfPlace(LineProject p)
+    {
+        var allowed = AllowedStopPositionsMm(p);
+        if (allowed.Count == 0) return Enumerable.Empty<IntermediateStopConfig>();
+        return p.IntermediateStops.Where(f => allowed.All(a => Math.Abs(a - f.PositionMm) >= 0.5));
+    }
+
     /// <summary>Porta i fermi intermedi sulla posizione ammessa più vicina.</summary>
     public static List<string> SnapIntermediateStops(LineProject p)
     {

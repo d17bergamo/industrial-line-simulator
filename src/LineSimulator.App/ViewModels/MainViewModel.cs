@@ -33,6 +33,9 @@ public enum AppSection
 }
 
 /// <summary>Riga dello stato delle apparecchiature durante la simulazione.</summary>
+/// <summary>Riga dell'elenco del controllo equipaggiamenti.</summary>
+public sealed record CheckRow(string Icon, string Message, bool IsProblem);
+
 public sealed class EquipmentStatusRow : ObservableObject
 {
     private string _state = string.Empty;
@@ -465,6 +468,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
+        GroupInheritance.MarkAllCustomized(_project);            // fotocellule, legatrici e bilici con valori propri restano personalizzati
+        RollerGroups.SyncElevation(_project, fromGroup: false);
+        ProjectNormalizer.AlignEntryPhotocell(_project);         // la prima fotocellula sta sullo zero della via rulli
         RollerGroups.MarkCustomized(_project);                   // progetti precedenti: i moduli diversi dal padre restano personalizzati
         LineReflow.ApplyDefaultRollerGeometry(_project);         // passo 1250 mm e diametro 268 mm al posto dei vecchi default
         LineReflow.EnforceOverhang(_project);                    // sporgenza terminale = metà passo rulli
@@ -555,7 +561,10 @@ public sealed partial class MainViewModel : ObservableObject
     private void ProjectChanged(bool structural, bool markModified = true)
     {
         if (markModified) _modified = true;
-        ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
+        ProjectNormalizer.AlignEntryPhotocell(_project);
+        GroupInheritance.PropagateAll(_project);                // le famiglie passano le proprietà ai figli non personalizzati
+        RollerGroups.Propagate(_project, applyPitch: false);
+        ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo sta sempre alla fine dell'ultimo modulo
         double extraTrack = StrapperTrack.EnsureMinimumTrack(_project);
         if (extraTrack > 0) Status = $"Via a rulli allungata di {extraTrack:0} mm: dopo l'ultima legatrice servono almeno 2 m di via rulli.";
         // Regole di layout (sessione B): via a rulli davanti al trasferitore lunga come il trasferitore; legatrici ad almeno 3 m dal trasferitore
@@ -564,6 +573,7 @@ public sealed partial class MainViewModel : ObservableObject
         // Intestatura di coda solo con un fermo intermedio scomparente (sessione B)
         if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo intermedio scomparente: impostata di testa";
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading));
+        RefreshCheck();
         var selected = SelectedNode?.Model;
         LayoutScene.Build(_project);
         LayoutScene.Highlight(selected);
@@ -633,19 +643,24 @@ public sealed partial class MainViewModel : ObservableObject
         Tree.Clear();
         var p = _project;
         var root = new TreeNodeViewModel("Progetto: " + p.Name, p, "Project");
-        root.Children.Add(new TreeNodeViewModel("Layout 3D", p.Layout, "Layout"));
         root.Children.Add(Group("Moduli via a rulli", "Section", p.Sections.OrderBy(s => s.StartMm), p.SectionDefaults));
-        root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm)));
+        root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm), p.PhotocellDefaults));
         root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
         var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
-        station.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio KNOF", p.BundleClamp), p.BundleClamp, "BundleClamp"));
-        station.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
-        foreach (var s in p.Strappers) station.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
+        var knof = new TreeNodeViewModel("Famiglia stringifascio KNOF", null, "KnofGroup");
+        knof.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio KNOF", p.BundleClamp), p.BundleClamp, "BundleClamp"));
+        station.Children.Add(knof);
+        var compactor = new TreeNodeViewModel("Famiglia compattatori laterali", null, "CompactorGroup");
+        compactor.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
+        station.Children.Add(compactor);
+        var strapGroup = new TreeNodeViewModel("Legatrici", p.StrapperDefaults, "StrapperGroup");
+        foreach (var s in p.Strappers) strapGroup.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
+        station.Children.Add(strapGroup);
         root.Children.Add(station);
         root.Children.Add(Group("Fermi intermedi", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel("Stopper", p.Stopper, "Stopper"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore", p.Transfer, "Transfer"));
-        root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm)));
+        root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm), p.ScaleDefaults));
         root.Children.Add(Group("Tipologie pacco", "PackageType", p.PackageTypes));
         root.Children.Add(new TreeNodeViewModel("Ingresso pacchi", p.Infeed, "Infeed"));
         root.Children.Add(Group("Regole logiche", "Rule", p.Rules));
@@ -762,7 +777,10 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 RollerSection s => (!s.OverrideGroup && RollerGroups.InheritedProperties.Contains(item.Name))
                                    || (IsLocked(s) && item.Name == nameof(RollerSection.StartMm)),
-                PhotocellConfig pc => pc.IsEntryPhotocell && item.Name == nameof(PhotocellConfig.PositionMm),
+                PhotocellConfig pc => (pc.IsEntryPhotocell && item.Name == nameof(PhotocellConfig.PositionMm))
+                                      || (!pc.OverrideGroup && GroupInheritance.InheritedNames(_project.PhotocellDefaults).Contains(item.Name)),
+                StrapperConfig st => !st.OverrideGroup && GroupInheritance.InheritedNames(_project.StrapperDefaults).Contains(item.Name),
+                WeighingScaleConfig sc => !sc.OverrideGroup && GroupInheritance.InheritedNames(_project.ScaleDefaults).Contains(item.Name),
                 _ => false
             };
             item.Locked = lockIt;
@@ -790,11 +808,33 @@ public sealed partial class MainViewModel : ObservableObject
             rs.RecalculateLength();
             LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle restano unite
         }
+        // arrotondamenti: passo rulli a 50 mm, lunghezza delle macchine a 100 mm
+        if (item.Name == nameof(RollerSection.RollerPitchMm))
+            foreach (var m in SelectedModels().Where(x => x is RollerSection or RollerGroup))
+            {
+                if (m is RollerSection r1) r1.RollerPitchMm = LineReflow.RoundPitch(r1.RollerPitchMm);
+                else if (m is RollerGroup g1) g1.RollerPitchMm = LineReflow.RoundPitch(g1.RollerPitchMm);
+            }
+        if (item.Name is "LengthMm" or "FootprintLengthMm" && SelectedNode?.Model is TransferConfig or WeighingScaleConfig or StrapperConfig or StrapperGroup)
+            foreach (var m in SelectedModels())
+            {
+                var lp = m.GetType().GetProperty(item.Name);
+                if (lp?.GetValue(m) is double len && lp.CanWrite) lp.SetValue(m, Math.Max(100, Math.Round(len / 100) * 100));
+            }
         // padre → figli: cambiando le proprietà del padre cambiano quelle di tutti i moduli non personalizzati
         bool groupChanged = false;
         if (SelectedNode?.Model is RollerGroup)
             groupChanged = RollerGroups.Propagate(_project, applyPitch: item.Name == nameof(RollerGroup.RollerPitchMm));
-        else if (SelectedNode?.Model is RollerSection && item.Name == nameof(RollerSection.OverrideGroup))
+        if (SelectedNode?.Model is RollerGroup && item.Name == nameof(RollerGroup.RollerTopElevationMm))
+            RollerGroups.SyncElevation(_project, fromGroup: true);
+        if (SelectedNode?.Model is PhotocellGroup or StrapperGroup or ScaleGroup)
+            groupChanged |= GroupInheritance.PropagateAll(_project);
+        else if (SelectedNode?.Model is IGroupChild && item.Name == "OverrideGroup")
+        {
+            groupChanged |= GroupInheritance.PropagateAll(_project);
+            ApplyPropertyLocks();
+        }
+        if (SelectedNode?.Model is RollerSection && item.Name == nameof(RollerSection.OverrideGroup))
         {
             groupChanged = RollerGroups.Propagate(_project, applyPitch: true);   // togliendo la spunta il modulo torna al padre
             ApplyPropertyLocks();
@@ -806,16 +846,28 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Aggiunta / eliminazione componenti
 
-    /// <summary>Controllo automatico degli equipaggiamenti con regole; applica le correzioni sicure (es. rinomina la prima fotocellula).</summary>
+    /// <summary>Elenco del controllo equipaggiamenti (scheda \"Controllo\" della colonna di destra).</summary>
+    public ObservableCollection<CheckRow> CheckItems { get; } = new();
+    private int _checkProblems;
+    public int CheckProblems { get => _checkProblems; private set { if (Set(ref _checkProblems, value)) Raise(nameof(CheckSummary)); } }
+    public string CheckSummary => CheckProblems == 0 ? "Tutto a posto" : $"{CheckProblems} da sistemare";
+
+    private void RefreshCheck()
+    {
+        CheckItems.Clear();
+        var items = EquipmentCheck.Run(_project, fix: false);
+        foreach (var i in items) CheckItems.Add(new CheckRow(i.IsProblem ? "⚠" : "✔", i.Message, i.IsProblem));
+        CheckProblems = items.Count(i => i.IsProblem);
+    }
+
+    /// <summary>Applica le correzioni automatiche all'elenco del controllo equipaggiamenti.</summary>
     private void CheckEquipment()
     {
         if (IsPlaying) Pause();
         var items = EquipmentCheck.Run(_project);
         int fixedCount = items.Count(i => i.Fixed);
-        if (fixedCount > 0) ProjectChanged(structural: true);
-        Status = fixedCount > 0 ? $"Controllo equipaggiamenti: {fixedCount} correzioni applicate." : "Controllo equipaggiamenti: nessuna correzione necessaria.";
-        var text = string.Join("\n", items.Select(i => (i.Fixed ? "✔ corretto: " : i.IsProblem ? "⚠ da sistemare: " : "✔ ") + i.Message));
-        MessageBox.Show(text, "Controllo equipaggiamenti", MessageBoxButton.OK, items.Any(i => i.IsProblem && !i.Fixed) ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        if (fixedCount > 0) ProjectChanged(structural: true); else RefreshCheck();
+        Status = fixedCount > 0 ? $"Controllo equipaggiamenti: {fixedCount} correzioni applicate." : "Controllo equipaggiamenti: nessuna correzione automatica possibile.";
     }
 
     private string NextId(string prefix, IEnumerable<ComponentBase> existing)
@@ -1065,8 +1117,9 @@ public sealed partial class MainViewModel : ObservableObject
             case SideCompactorConfig c: c.PositionMm += dxMm; break;
             case RejectorConfig r: r.PositionMm += dxMm; break;
             case IntermediateStopConfig fs: fs.PositionMm += dxMm; break;
-            case TransferConfig t: t.PositionMm += dxMm; break;
-            case WeighingScaleConfig sc: sc.StartMm += dxMm; break;
+            case TransferConfig or WeighingScaleConfig:        // trasferitore, bilico e ultima via rulli si trascinano insieme
+                if (LayoutRules.TransferModule(_project) is { } trfMod) LineReflow.MoveSection(_project, trfMod, dxMm);
+                break;
         }
         ProjectNormalizer.AlignStopperToLastRoller(_project);
         LayoutScene.Build(_project);
@@ -1091,8 +1144,12 @@ public sealed partial class MainViewModel : ObservableObject
             case SideCompactorConfig c: c.PositionMm = Snap(c.PositionMm); break;
             case RejectorConfig r: r.PositionMm = Snap(r.PositionMm); break;
             case IntermediateStopConfig fs: fs.PositionMm = Snap(fs.PositionMm); break;
-            case TransferConfig t: t.PositionMm = Snap(t.PositionMm); break;
-            case WeighingScaleConfig sc: sc.StartMm = Snap(sc.StartMm); break;
+            case TransferConfig t:
+                if (LayoutRules.TransferModule(_project) is { } m1) LineReflow.MoveSection(_project, m1, Snap(t.PositionMm) - t.PositionMm);
+                break;
+            case WeighingScaleConfig sc:
+                if (LayoutRules.TransferModule(_project) is { } m2) LineReflow.MoveSection(_project, m2, Snap(sc.StartMm) - sc.StartMm);
+                break;
         }
         ProjectChanged(structural: true);
         BuildProperties();
