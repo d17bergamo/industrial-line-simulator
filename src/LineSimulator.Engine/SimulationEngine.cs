@@ -215,7 +215,8 @@ public sealed partial class SimulationEngine : ILogicContext
         UpdateRejectorEnable(t0);
         EvaluateLogic();
         ComputeZoneCommands(t0, dt);
-        foreach (var z in _zones) z.UpdateDrive(dt, Stopper.Config.AlignmentRollerSpeed);
+        var caps = HandoverSpeedCaps();
+        foreach (var z in _zones) z.UpdateDrive(dt, Stopper.Config.AlignmentRollerSpeed, caps.TryGetValue(z, out var cap) ? cap : double.PositiveInfinity);
         MovePackages(t0, dt);
 
         _step++;
@@ -438,9 +439,11 @@ public sealed partial class SimulationEngine : ILogicContext
 
         var type = _typeSequence[_nextIndex % _typeSequence.Count];
         double start = Topology.LineStartM;
+        // Il nuovo pacco attende sul trasporto di alimentazione, almeno alla distanza di sicurezza dalla coda del precedente
+        if (last != null && last.OnRollers && last.TailM < start + _minSafety) start = last.TailM - _minSafety;
         var pkg = new PackageRuntime(_nextIndex + 1, type)
         {
-            HeadM = start,               // creato a monte della linea: testa all'inizio della via rulli di legatura
+            HeadM = start,               // creato a monte della linea: testa all'inizio della via rulli di legatura (o più indietro)
             EntryTimeS = t,
             StrapsTotal = type.StrapPositionsMm.Count,
             InfeedReleased = false
@@ -820,6 +823,34 @@ public sealed partial class SimulationEngine : ILogicContext
 
     // ------------------------------------------------------------------ 7. Moto pacchi
 
+    /// <summary>
+    /// Passaggio tra moduli: se un pacco sta a cavallo tra un modulo a monte e uno a valle e sul modulo a valle non ci sono
+    /// altri pacchi, il modulo a valle non corre più veloce di quello a monte (sincronismo durante il passaggio). Così il
+    /// pacco trattenuto dal modulo a monte (es. svincolo fermo durante la legatura) non slitta quando lo lascia.
+    /// </summary>
+    private Dictionary<ZoneRuntime, double> HandoverSpeedCaps()
+    {
+        var caps = new Dictionary<ZoneRuntime, double>();
+        foreach (var p in _active)
+        {
+            if (!p.OnRollers) continue;
+            ZoneRuntime? prev = null;
+            foreach (var s in _sections)
+            {
+                if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
+                if (prev != null && s.Zone != prev)
+                {
+                    var down = s.Zone;
+                    bool others = _active.Any(q => q != p && q.OnRollers && q.HeadM > down.Info.StartM + 1e-9 && q.TailM < down.Info.EndM - 1e-9);
+                    if (!others)
+                        caps[down] = Math.Min(caps.TryGetValue(down, out var c) ? c : double.PositiveInfinity, prev.ActualSpeed);
+                }
+                prev = s.Zone;
+            }
+        }
+        return caps;
+    }
+
     /// <summary>Velocità di trascinamento: minimo tra le velocità delle sezioni sotto il pacco.</summary>
     private double DriveSpeed(PackageRuntime p)
     {
@@ -851,11 +882,14 @@ public sealed partial class SimulationEngine : ILogicContext
             if (!p.OnRollers) continue;
             double vOld = p.Velocity;
             double vTarget = DriveSpeed(p);
+            // Pacco ancora in parte sul trasporto di alimentazione (a monte della linea): accelera con la rampa della prima via
+            if (p.TailM < Topology.LineStartM - 1e-6 && _sections.Count > 0)
+                vTarget = Math.Min(vTarget, vOld + Math.Max(0.01, _sections[0].Zone.Config.Acceleration) * dt);
             double vNew = Math.Clamp(vTarget, vOld - dvMax, vOld + dvMax);
             // In battuta (stopper o fermo) i rulli slittano volutamente sotto il pacco: non è un'anomalia.
             bool restrained = p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop;
             bool slipping = !restrained && Math.Abs(vTarget - vNew) > 1e-9;
-            if (slipping && !p.IsSlipping && Math.Abs(vTarget - vOld) > 0.01)
+            if (slipping && !p.IsSlipping && Math.Abs(vTarget - vOld) > 0.05)   // sotto 0,05 m/s è l'arresto a fine posizionamento
             {
                 SlipEvents++;
                 Emit(SimEventType.Slip, EventSeverity.Warning,

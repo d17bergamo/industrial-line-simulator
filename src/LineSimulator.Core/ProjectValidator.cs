@@ -221,6 +221,10 @@ public static class ProjectValidator
             if (s.PreparationTimeS < 0 || s.StrappingTimeS <= 0 || s.ReturnTimeS < 0)
                 r.Error("STR_TIME", "Tempi legatrice non validi (legatura > 0, altri ≥ 0).", s.Id);
         }
+        foreach (var pc in StrappingAreaRules.ReferencePhotocellsBeforeEntry(p))
+            r.Warn("REF_PC_ENTRY", $"La fotocellula di riferimento deve stare almeno 100 mm dopo FC0 (minimo {F(Math.Round(StrappingAreaRules.MinReferencePhotocellMm(p)))} mm).", pc.Id);
+        if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
+            r.Warn("EXIT_TRF_DIST", $"La fine della via di legatura (fotocellula di uscita) è a {F(Math.Round(StrappingAreaRules.ExitToTransferMm(p)))} mm dal trasferitore: servono almeno 1000 mm (allungare o inserire lo svincolo).", p.Transfer.Id);
         foreach (var (a, b) in StrappingAreaRules.SameSideConflicts(p))
             r.Error("STR_SIDE_DIST", $"{a.Id} e {b.Id} sono sullo stesso lato a {F(Math.Round(b.PositionMm - a.PositionMm))} mm: servono almeno 2 m (su lati opposti nessun vincolo).", b.Id);
         foreach (var s in LayoutRules.StrappersTooCloseToTransfer(p))
@@ -456,7 +460,7 @@ public static class ProjectValidator
             var sz = topo.StopperZone;
             if (sz == null || x < sz.StartM || x > sz.EndM)
                 r.Error("STOP_ZONE", "Il fermo scomparente deve trovarsi nella zona dello stopper.", s.Id);
-            if (s.PositionMm >= p.Stopper.PositionMm) r.Error("STOP_POS", "Il fermo scomparente deve essere a monte dello stopper finale.", s.Id);
+            if (s.PositionMm >= p.Stopper.PositionMm) r.Error("STOP_POS", "Il fermo scomparente deve essere a monte dello fermo finale.", s.Id);
             if (s.PositionMm < p.Transfer.PositionMm || s.PositionMm > p.Transfer.EndMm)
                 r.Warn("STOP_TRF", "Il fermo scomparente è fuori dal campo del trasferitore.", s.Id);
             if (s.AlignmentTimeS < 0) r.Error("STOP_TIME", "Tempo di intestatura negativo.", s.Id);

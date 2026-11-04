@@ -91,7 +91,7 @@ public sealed class ZoneRuntime
         return !IsSinglePackage || ReservedBy == null || (p != null && ReservedBy == p);
     }
 
-    internal void UpdateDrive(double dt, double alignSpeed)
+    internal void UpdateDrive(double dt, double alignSpeed, double handoverCap = double.PositiveInfinity)
     {
         ReferenceSpeed = Mode switch
         {
@@ -101,6 +101,8 @@ public sealed class ZoneRuntime
             InverterMode.Align => Math.Max(0, alignSpeed),
             _ => 0
         };
+        // Sincronismo con il modulo a monte durante il passaggio di un pacco (solo in marcia)
+        if (Mode == InverterMode.Run && ReferenceSpeed > handoverCap) ReferenceSpeed = Math.Max(0, handoverCap);
         if (ActualSpeed < ReferenceSpeed)
             ActualSpeed = Math.Min(ReferenceSpeed, ActualSpeed + Config.Acceleration * dt);
         else if (ActualSpeed > ReferenceSpeed)

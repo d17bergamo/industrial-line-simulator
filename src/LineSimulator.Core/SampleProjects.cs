@@ -72,7 +72,7 @@ public static class SampleProjects
     /// M1 via rulli di legatura (primo modulo) con la prima legatrice a 4 m dall'inizio, le altre a 2500 mm, un KNOF davanti a
     /// ciascuna e almeno due rulli dopo l'ultima; fotocellula di uscita legatura a fine modulo
     /// → M2 via rulli di svincolo da 4 rulli (il software decide se va sotto l'inverter della legatura)
-    /// → M3 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con stopper finale
+    /// → M3 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con fermo finale
     /// → trasferitore sollevabile → bilici di pesatura (lunghezza automatica).
     /// </summary>
     private static LineProject Build(string name, int strappers, int maxLengthM, int[] infeedLengthsM, bool intermediateStop = false)
@@ -102,7 +102,7 @@ public static class SampleProjects
         exit.Action = PhotocellAction.None;        // a fine modulo non c'è spazio di frenata: solo segnale di uscita legatura
         p.Photocells.Add(exit);
         p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", trfStart + trfLen - 1500, "M3", PhotocellAction.SlowDown));
-        p.Photocells.Add(Pc("FC3", "FC3 presenza stopper", trfStart + trfLen - 300, "", PhotocellAction.None));
+        // nessuna fotocellula di presenza sul fermo finale: il pacco in battuta lo segnala il fermo e lo vede FC2
 
         for (int i = 0; i < strappers; i++)
             p.Strappers.Add(Str($"L{i + 1}", $"Legatrice KNCA {i + 1}", first + i * StrapperSpacingMm));
@@ -117,8 +117,10 @@ public static class SampleProjects
 
         p.Stopper = new StopperConfig
         {
-            Id = "STP", Name = "Stopper finale", PositionMm = trfStart + trfLen - 100, DistanceFromLastRollerMm = 100,
-            AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
+            // fermo finale alla fine dell'ultimo modulo: a metà passo dall'ultimo rullo
+            Id = "STP", Name = "Fermo finale", PositionMm = trfStart + trfLen, DistanceFromLastRollerMm = RollerSection.DefaultPitchMm / 2,
+            AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, IsRaised = true,
+            MaxImpactSpeed = 0.3            // = velocità minima dei moduli (0,3 m/s), a cui arriva il pacco dopo il rallentamento
         };
         if (intermediateStop)
             p.IntermediateStops.Add(new IntermediateStopConfig

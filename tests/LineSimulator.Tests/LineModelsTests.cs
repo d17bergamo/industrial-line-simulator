@@ -89,7 +89,7 @@ public class LineModelsTests
                 if (!created.ContainsKey(k.Sequence))
                 {
                     created[k.Sequence] = t;
-                    Assert.InRange(k.HeadM, p.Sections.Min(s => s.StartMm) / 1000.0 - 1e-9, 0.01);   // nasce a monte della via rulli di legatura
+                    Assert.True(k.HeadM <= p.Sections.Min(s => s.StartMm) / 1000.0 + 0.01);   // nasce a monte della via rulli di legatura (dietro al precedente)
                     if (k.Sequence > 1)
                         Assert.True(t >= clearedEntry[k.Sequence - 1] + p.Infeed.NewPackageDelayS - 0.05,
                             $"{k.Id} creato a {t:0.00} s, la coda del precedente ha liberato l'ingresso a {clearedEntry[k.Sequence - 1]:0.00} s");
@@ -149,7 +149,9 @@ public class LineModelsTests
         Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_TRF_MIN");
         var fixes = LayoutRules.Enforce(p);
         Assert.Contains(fixes, f => f.Contains("almeno 3 m dal trasferitore", StringComparison.Ordinal));
-        Assert.Equal(p.Transfer.PositionMm - 3000, p.Strappers[0].PositionMm, 6);
+        Assert.True(p.Transfer.PositionMm - p.Strappers[0].PositionMm >= 3000 - 1e-6);
+        // la legatrice è finita sullo svincolo: la via di legatura ora finisce dopo di lei, e lo svincolo viene reinserito a 1 m dal trasferitore
+        Assert.True(StrappingAreaRules.ExitToTransferMm(p) >= 1000 - 1e-6);
         Assert.DoesNotContain(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_TRF_MIN");
     }
 

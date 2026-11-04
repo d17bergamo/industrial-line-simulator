@@ -92,7 +92,7 @@ public sealed class PackageRuntime
     public bool WeighingValid { get; internal set; } = true;
     public string? ScaleId { get; internal set; }
 
-    // Fermi (accumulo multi-pacco): -1 nessuno, 0 stopper finale, k = fermo scomparente k-1
+    // Fermi (accumulo multi-pacco): -1 nessuno, 0 fermo finale, k = fermo scomparente k-1
     public int AssignedStop { get; internal set; } = -1;
     internal bool InIntermediateStopContact;
     internal bool HeldByTailStop;

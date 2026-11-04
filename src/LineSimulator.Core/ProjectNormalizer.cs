@@ -133,6 +133,7 @@ public static class ProjectNormalizer
             var host = topo.ZoneAt(Units.MmToM(first.PositionMm));
             double pitch = host?.Sections.FirstOrDefault()?.RollerPitchMm ?? 300;
             double enc = Math.Round(first.PositionMm - first.FootprintLengthMm / 2 - pitch);
+            enc = Math.Max(enc, StrappingAreaRules.MinReferencePhotocellMm(p) + ReferencePhotocellOffsetMm);   // fotocellula mai a monte di FC0
             if (!p.StrappingEncoder.IsEnabled)
             {
                 p.StrappingEncoder.IsEnabled = true;

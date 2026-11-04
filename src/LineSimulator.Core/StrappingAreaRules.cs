@@ -206,10 +206,113 @@ public static class StrappingAreaRules
         return changed;
     }
 
+    // ------------------------------------------------------------------ Fotocellule di riferimento e di uscita legatura
+
+    /// <summary>Distanza minima della fotocellula di riferimento (prima della prima legatrice) dopo FC0.</summary>
+    public const double MinReferenceAfterEntryMm = 100;
+
+    /// <summary>Distanza minima tra la fotocellula di uscita legatura (fine via di legatura) e l'inizio del trasferitore.</summary>
+    public const double MinExitToTransferMm = 1000;
+
+    /// <summary>Posizione minima ammessa per la fotocellula di riferimento: 100 mm dopo FC0 (o dopo l'inizio della linea).</summary>
+    public static double MinReferencePhotocellMm(LineProject p)
+    {
+        var fc0 = p.Photocells.FirstOrDefault(x => x.IsEntryPhotocell);
+        double start = fc0?.PositionMm ?? (p.Sections.Count > 0 ? p.Sections.Min(s => s.StartMm) : 0);
+        return start + MinReferenceAfterEntryMm;
+    }
+
+    /// <summary>Fotocellule di riferimento più a monte del minimo (FC0 + 100 mm).</summary>
+    public static IEnumerable<PhotocellConfig> ReferencePhotocellsBeforeEntry(LineProject p)
+    {
+        double min = MinReferencePhotocellMm(p);
+        return p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingReference && x.PositionMm < min - 0.5);
+    }
+
+    /// <summary>
+    /// Regola 1: la fotocellula di riferimento non va mai più a monte di FC0: se è prima di FC0 + 100 mm viene riportata lì e
+    /// l'encoder resta 300 mm dopo di essa. Restituisce le correzioni.
+    /// </summary>
+    public static List<string> KeepReferenceAfterEntry(LineProject p)
+    {
+        var done = new List<string>();
+        double min = MinReferencePhotocellMm(p);
+        foreach (var pc in ReferencePhotocellsBeforeEntry(p).ToList())
+        {
+            done.Add($"{pc.Id}: {pc.PositionMm:0} → {min:0} mm (la fotocellula di riferimento non può stare a monte di FC0)");
+            pc.PositionMm = min;
+            double enc = min + ProjectNormalizer.ReferencePhotocellOffsetMm;
+            if (p.StrappingEncoder.IsEnabled && p.StrappingEncoder.PositionMm < enc - 0.5)
+            {
+                done.Add($"{p.StrappingEncoder.Id}: encoder {p.StrappingEncoder.PositionMm:0} → {enc:0} mm (300 mm dopo la fotocellula di riferimento)");
+                p.StrappingEncoder.PositionMm = enc;
+            }
+        }
+        return done;
+    }
+
+    /// <summary>Distanza tra la fine della via di legatura (fotocellula di uscita legatura) e l'inizio del trasferitore.</summary>
+    public static double ExitToTransferMm(LineProject p)
+    {
+        var strap = StrappingModule(p);
+        var last = LayoutRules.TransferModule(p);
+        if (strap == null || last == null || strap == last || p.Transfer.LengthMm <= 0 || p.Transfer.PositionMm < strap.StartMm)
+            return double.PositiveInfinity;          // nessun trasferitore a valle della via di legatura
+        return p.Transfer.PositionMm - strap.EndMm;
+    }
+
+    /// <summary>
+    /// Regola 2: la fotocellula di uscita legatura resta alla fine della via di legatura e deve stare ad almeno 1 m dal
+    /// trasferitore. Se è più vicina non si toccano fotocellula, legatrici e via di legatura: si allunga lo svincolo con rulli
+    /// interi (o se ne inserisce uno se manca); trasferitore, bilici e fermi avanzano insieme. Restituisce le correzioni.
+    /// </summary>
+    public static List<string> KeepExitAwayFromTransfer(LineProject p)
+    {
+        var done = new List<string>();
+        var strap = StrappingModule(p);
+        var last = LayoutRules.TransferModule(p);
+        if (strap == null || last == null || strap == last) return done;
+        double deficit = MinExitToTransferMm - ExitToTransferMm(p);
+        if (deficit <= 0.5) return done;
+        var release = ReleaseModules(p).LastOrDefault();
+        if (release != null)
+        {
+            double pitch = release.RollerPitchMm;
+            int n = (int)Math.Ceiling(deficit / pitch - 1e-9);
+            double oldEnd = release.EndMm;
+            LineReflow.Fit(release, release.StartMm, oldEnd + n * pitch);
+            LineReflow.AfterResize(p, release, oldEnd);
+            done.Add($"Svincolo {release.Id} allungato di {n} {(n == 1 ? "rullo" : "rulli")}: la fotocellula di uscita legatura deve stare ad almeno 1 m dal trasferitore");
+        }
+        else
+        {
+            double pitch = strap.RollerPitchMm > 0 ? strap.RollerPitchMm : RollerSection.DefaultPitchMm;
+            int n = Math.Max(2, (int)Math.Ceiling(deficit / pitch - 1e-9));     // una via ha almeno 2 rulli
+            double at = strap.EndMm;
+            var exits = p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingExit && Math.Abs(x.PositionMm - at) < 1).ToList();
+            LineReflow.OpenGap(p, at, n * pitch);
+            foreach (var x in exits) x.PositionMm = at;                         // la fotocellula resta alla fine della via di legatura
+            int k = 1;
+            while (p.Sections.Any(s => s.Id == "M" + k)) k++;
+            var m = new RollerSection
+            {
+                Id = "M" + k, Name = "Modulo svincolo", RollerPitchMm = pitch, RollerDiameterMm = strap.RollerDiameterMm,
+                WidthMm = strap.WidthMm, DefaultSpeed = strap.DefaultSpeed
+            };
+            LineReflow.Fit(m, at, at + n * pitch);
+            p.Sections.Add(m);
+            done.Add($"Inserito lo svincolo {m.Id} da {n} rulli: la fotocellula di uscita legatura deve stare ad almeno 1 m dal trasferitore");
+        }
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        return done;
+    }
+
     /// <summary>Applica le regole dell'area di legatura (chiamato da <see cref="LayoutRules.Enforce"/>).</summary>
     public static List<string> Enforce(LineProject p)
     {
         var done = new List<string>();
+        done.AddRange(KeepReferenceAfterEntry(p));
+        done.AddRange(KeepExitAwayFromTransfer(p));
         done.AddRange(SpreadStrappers(p));
         if (LayoutScales(p)) done.Add("Bilici sistemati sul trasferitore (lunghezza = trasferitore / numero di bilici)");
         done.AddRange(PlaceStops(p));

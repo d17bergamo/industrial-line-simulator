@@ -111,6 +111,16 @@ public static class EquipmentCheck
             if (fix) LayoutRules.SnapIntermediateStops(p);
             r.Add(new("STOP_POS", $"Il fermo scomparente senza spunta \"Spostamento manuale\" deve stare al centro o all'estremità del trasferitore, come scelto: {(fix ? "spostato" : "da spostare")}.", fix, true));
         }
+        if (StrappingAreaRules.ReferencePhotocellsBeforeEntry(p).Any())
+        {
+            if (fix) StrappingAreaRules.KeepReferenceAfterEntry(p);
+            r.Add(new("REF_PC_ENTRY", $"La fotocellula di riferimento prima della prima legatrice non può stare a monte di FC0: deve stare almeno 100 mm dopo FC0, con l'encoder 300 mm dopo di lei: {(fix ? "spostate" : "da spostare")}.", fix, true));
+        }
+        if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
+        {
+            var fixes = fix ? StrappingAreaRules.KeepExitAwayFromTransfer(p) : new List<string>();
+            r.Add(new("EXIT_TRF_DIST", $"La fotocellula di uscita legatura (fine via di legatura) deve stare ad almeno 1 m dall'inizio del trasferitore: {(fix ? string.Join("; ", fixes) : "da allungare lo svincolo (o inserirne uno)")}.", fix, true));
+        }
         if (StrappingAreaRules.SameSideConflicts(p).Any())
         {
             if (fix) StrappingAreaRules.SpreadStrappers(p);

@@ -31,7 +31,7 @@ public sealed class SimulationSettings
     public bool StopOnCollision { get; set; }
 
     /// <summary>
-    /// Single banking: un pacco alla volta sul trasferitore. Double banking: due pacchi (il primo sullo stopper finale, il secondo sul fermo scomparente).
+    /// Single banking: un pacco alla volta sul trasferitore. Double banking: due pacchi (il primo sullo fermo finale, il secondo sul fermo scomparente).
     /// Si sceglie solo nella sezione Simulazioni (non è una caratteristica del pacco né della configurazione).
     /// </summary>
     public AccumulationMode Banking { get; set; } = AccumulationMode.SingleBanking;

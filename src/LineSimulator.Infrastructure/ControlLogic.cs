@@ -239,7 +239,7 @@ public static class ControlLogicGenerator
             rules.Add(new ControlRule($"{s.Id}.ABBASSA", gt, $"DEV({p.Transfer.Id},Lifting)", "ABBASSA fermo scomparente", s.Id, "Il trasferitore preleva i pacchi allineati."));
         }
         if (stops.Count > 0 && topo.StopperZone != null)
-            signals.Add(new ControlSignal($"{topo.StopperZone.Id}_FERMO_LIBERO", "Esiste un fermo libero (stopper finale, poi fermi da valle a monte) in cui il pacco successivo sta senza sovrapporsi al pacco a valle (distanza di sicurezza inclusa) e senza uscire dal trasferitore."));
+            signals.Add(new ControlSignal($"{topo.StopperZone.Id}_FERMO_LIBERO", "Esiste un fermo libero (fermo finale, poi fermi da valle a monte) in cui il pacco successivo sta senza sovrapporsi al pacco a valle (distanza di sicurezza inclusa) e senza uscire dal trasferitore."));
         string aligned = string.Join(" & ", new[] { $"DEV({p.Stopper.Id},Aligned)" }.Concat(stops.Select(s => $"(DEV({s.Id},Aligned) | DEV({s.Id},Free))")));
         rules.Add(new ControlRule($"{p.Transfer.Id}.SOLLEVA", gt, aligned + $" & SIG({p.Transfer.Id}_GRUPPO_COMPLETO)",
             $"SOLLEVA trasferitore e trasla ({F(p.Transfer.LiftTimeS)} s + {F(p.Transfer.EffectiveTranslationTimeS)} s)", p.Transfer.Id,
