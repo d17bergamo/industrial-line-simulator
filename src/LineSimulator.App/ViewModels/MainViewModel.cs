@@ -1222,14 +1222,27 @@ public sealed partial class MainViewModel : ObservableObject
         PackagePreviewVersion++;
         PackageProperties.Clear();
         if (_selectedPackageType == null) return;
+        _packageLengthMm = _selectedPackageType.LengthMm;
+        // il nome è doppio con l'identificativo: nella schermata Pacchi si vede e si modifica solo l'identificativo
         foreach (var item in PropertyItemViewModel.For(_selectedPackageType, OnPackageEdited, IdOptions))
-            PackageProperties.Add(item);
+            if (item.Name != "Name") PackageProperties.Add(item);
     }
+
+    private double _packageLengthMm;
 
     private void OnPackageEdited(PropertyItemViewModel item)
     {
         var sel = _selectedPackageType;
         if (sel != null && item.Name == nameof(PackageType.StrapPositionsMm)) { StrapEditing.SnapAll(sel); item.Refresh(); }
+        if (sel != null && item.Name == nameof(PackageType.LengthMm))
+        {
+            // accorciando o allungando il pacco le legature lo seguono in proporzione, senza cambiare il loro numero
+            if (_packageLengthMm > 0 && sel.LengthMm > 0 && Math.Abs(sel.LengthMm - _packageLengthMm) > 0.5)
+                StrapEditing.ScaleToLength(sel, _packageLengthMm);
+            _packageLengthMm = sel.LengthMm;
+            SelectedStrapIndex = -1;
+        }
+        if (sel != null && item.Name == "Id") sel.Name = sel.Id;
         bool renamed = item.Name is "Id" or "Name";
         ProjectChanged(structural: false);
         if (renamed)

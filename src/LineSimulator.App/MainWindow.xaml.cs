@@ -94,7 +94,7 @@ public partial class MainWindow : Window
         c.Children.Clear();
         var pk = _vm.SelectedPackageType;
         if (pk == null || c.ActualWidth < 100) return;
-        double x0 = 30, w = c.ActualWidth - 60, len = Math.Max(1, pk.LengthMm);
+        double x0 = RulerMargin, w = c.ActualWidth - 2 * RulerMargin, len = Math.Max(1, pk.LengthMm);
         double X(double mm) => x0 + mm / len * w;
         var bar = new System.Windows.Shapes.Rectangle { Width = w, Height = 12, RadiusX = 3, RadiusY = 3, Fill = Hex("#E4E9EF"), Stroke = Hex("#C0C9D4") };
         Canvas.SetLeft(bar, x0); Canvas.SetTop(bar, 10); c.Children.Add(bar);
@@ -138,10 +138,17 @@ public partial class MainWindow : Window
         if (pk == null || _strapDrag < 0 || e.LeftButton != MouseButtonState.Pressed) return;
         var p = PlanePoint(PackageViewport, e.GetPosition(PackageViewport.Viewport), _packageScene.HeightM);
         if (p == null) return;
-        double s = LineSimulator.Core.StrapEditing.Snap((pk.LengthMm / 2.0) - p.Value.X * 1000.0);
-        pk.StrapPositionsMm[_strapDrag] = Math.Clamp(s, LineSimulator.Core.StrapEditing.StepMm,
+        MoveStrapTo(pk, _strapDrag, (pk.LengthMm / 2.0) - p.Value.X * 1000.0);
+    }
+
+    /// <summary>Porta la legatura a una distanza dalla testa (arrotondata a 100 mm, dentro il pacco) e ridisegna 3D e righello.</summary>
+    private void MoveStrapTo(LineSimulator.Models.PackageType pk, int index, double mmFromHead)
+    {
+        if (index < 0 || index >= pk.StrapPositionsMm.Count) return;
+        double s = LineSimulator.Core.StrapEditing.Snap(mmFromHead);
+        pk.StrapPositionsMm[index] = Math.Clamp(s, LineSimulator.Core.StrapEditing.StepMm,
             Math.Max(LineSimulator.Core.StrapEditing.StepMm, pk.LengthMm - LineSimulator.Core.StrapEditing.StepMm));
-        _packageScene.SelectedIndex = _strapDrag;
+        _packageScene.SelectedIndex = index;
         _packageScene.Build(pk);
         DrawStrapRuler();
     }
@@ -149,8 +156,13 @@ public partial class MainWindow : Window
     private void PackageViewport_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_strapDrag < 0) return;
-        _strapDrag = -1;
         PackageViewport.ReleaseMouseCapture();
+        EndStrapDrag();
+    }
+
+    private void EndStrapDrag()
+    {
+        _strapDrag = -1;
         var pk = _vm.SelectedPackageType;
         if (pk != null)
         {
@@ -159,6 +171,42 @@ public partial class MainWindow : Window
             _vm.SelectedStrapIndex = sel is double v ? pk.StrapPositionsMm.IndexOf(v) : -1;
         }
         _vm.OnStrapsEditedInPreview();
+    }
+
+    // Spostamento delle legature anche dal righello
+    private const double RulerMargin = 30;
+
+    private void StrapRuler_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var pk = _vm.SelectedPackageType;
+        if (pk == null || StrapRuler.ActualWidth < 100) return;
+        pk.StrapPositionsMm = pk.StrapPositionsMm.OrderBy(v => v).ToList();
+        double w = StrapRuler.ActualWidth - 2 * RulerMargin, len = Math.Max(1, pk.LengthMm), x = e.GetPosition(StrapRuler).X;
+        int best = -1; double bestD = 14;
+        for (int i = 0; i < pk.StrapPositionsMm.Count; i++)
+        {
+            double d = Math.Abs(RulerMargin + pk.StrapPositionsMm[i] / len * w - x);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        _vm.SelectedStrapIndex = best;
+        _strapDrag = best;
+        if (best >= 0) { StrapRuler.CaptureMouse(); e.Handled = true; }
+    }
+
+    private void StrapRuler_MouseMove(object sender, MouseEventArgs e)
+    {
+        var pk = _vm.SelectedPackageType;
+        if (pk == null || _strapDrag < 0 || e.LeftButton != MouseButtonState.Pressed) return;
+        double w = StrapRuler.ActualWidth - 2 * RulerMargin;
+        if (w <= 0) return;
+        MoveStrapTo(pk, _strapDrag, (e.GetPosition(StrapRuler).X - RulerMargin) / w * Math.Max(1, pk.LengthMm));
+    }
+
+    private void StrapRuler_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_strapDrag < 0) return;
+        StrapRuler.ReleaseMouseCapture();
+        EndStrapDrag();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

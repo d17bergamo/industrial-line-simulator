@@ -733,7 +733,7 @@
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel>
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Id}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Foreground="#5B6673" FontSize="12" TextTrimming="CharacterEllipsis">
                                                 <Run Text="{Binding LengthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicWidthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicHeightMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" · "/><Run Text="{Binding StrapPositionsMm.Count, Mode=OneWay}"/><Run Text=" legature"/>
                                             </TextBlock>
@@ -757,7 +757,7 @@
                                             <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
                                                     ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding SelectedPackageType.Name}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                 <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
                                                     <TextBlock x:Name="StrapCountChip" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="12"/>
                                                 </Border>
@@ -765,11 +765,12 @@
                                         </DockPanel>
                                     </Border>
                                     <TextBlock DockPanel.Dock="Bottom" Margin="16,0,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
-                                               Text="Clic su una legatura per selezionarla, trascinala per spostarla a passi di 100 mm · tieni premuto il tasto sinistro o destro sullo sfondo per ruotare la vista"/>
+                                               Text="Clic su una legatura (nel 3D o sul righello) per selezionarla, trascinala per spostarla a passi di 100 mm · tieni premuto il tasto sinistro o destro sullo sfondo per ruotare la vista"/>
                                     <Border DockPanel.Dock="Bottom" BorderBrush="#EEF0F3" BorderThickness="0,1,0,0" Padding="16,6,16,0">
                                         <StackPanel>
                                             <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
-                                            <Canvas x:Name="StrapRuler" Height="62" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True"/>
+                                            <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 100 mm)"
+                                                    MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
                                         </StackPanel>
                                     </Border>
                                     <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="#F7F9FB" Height="340" Margin="8,0" RotateGesture2="LeftClick"
@@ -779,15 +780,12 @@
                                     </h:HelixViewport3D>
                                 </DockPanel>
                             </Border>
-                            <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                            <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" MaxWidth="760" HorizontalAlignment="Left">
                                 <ItemsControl.GroupStyle>
                                     <GroupStyle>
                                         <GroupStyle.ContainerStyle>
                                             <Style TargetType="GroupItem">
-                                                <Setter Property="Margin" Value="0,0,14,14"/>
+                                                <Setter Property="Margin" Value="0,0,0,14"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="GroupItem">
