@@ -241,12 +241,14 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void ToggleLibrary_Click(object sender, RoutedEventArgs e)
+    private void AddMenu_Click(object sender, RoutedEventArgs e)
     {
-        bool show = LibraryColumn.Width.Value < 1;
-        LibraryColumn.Width = new GridLength(show ? 290 : 0);
-        LibrarySplitterColumn.Width = new GridLength(show ? 5 : 0);
-        LibraryPanel.Visibility = LibrarySplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        var btn = (FrameworkElement)sender;
+        if (btn.ContextMenu == null) return;
+        btn.ContextMenu.DataContext = _vm;
+        btn.ContextMenu.PlacementTarget = btn;
+        btn.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        btn.ContextMenu.IsOpen = true;
     }
 
     private void SetView(Vector3D direction, Vector3D up)
