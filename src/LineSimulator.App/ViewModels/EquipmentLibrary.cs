@@ -19,7 +19,7 @@ public static class EquipmentLibrary
 
     public static IReadOnlyList<LibraryEntry> Entries { get; } = new List<LibraryEntry>
     {
-        new("roller", CatRollers, "Modulo via a rulli", "Modulo con inverter proprio, passo e numero rulli parametrici",
+        new("roller", CatRollers, "Modulo via a rulli", "Modulo con parametri propri, passo e numero rulli parametrici",
             "M2,16 L30,16 M2,22 L30,22 M6,16 L6,22 M12,16 L12,22 M18,16 L18,22 M24,16 L24,22", 6.0, 1.2, 0.8),
         new("knca", CatStrappers, "SUND BIRSTA KNCA 7/800", "Legatrice ad arco (modello semplificato)",
             "M6,24 L6,6 L24,6 L24,24 M3,24 L27,24", 1.2, 2.1, 2.1),

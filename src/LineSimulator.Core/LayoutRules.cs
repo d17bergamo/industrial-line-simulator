@@ -63,6 +63,34 @@ public static class LayoutRules
         return true;
     }
 
+    /// <summary>
+    /// Posizioni ammesse per il fermo intermedio scomparente: con due bilici solo in mezzo ai due; con un solo bilico al centro
+    /// oppure all'estremo opposto al fermo fisso (cioè a monte). Senza bilici nessun vincolo (lista vuota).
+    /// </summary>
+    public static IReadOnlyList<double> AllowedStopPositionsMm(LineProject p)
+    {
+        var sc = p.Scales.OrderBy(x => x.StartMm).ToList();
+        if (sc.Count == 0) return Array.Empty<double>();
+        if (sc.Count == 1) return new[] { sc[0].StartMm, sc[0].StartMm + sc[0].LengthMm / 2 };
+        return new[] { (sc[0].StartMm + sc[0].LengthMm + sc[1].StartMm) / 2 };
+    }
+
+    /// <summary>Porta i fermi intermedi sulla posizione ammessa più vicina.</summary>
+    public static List<string> SnapIntermediateStops(LineProject p)
+    {
+        var done = new List<string>();
+        var allowed = AllowedStopPositionsMm(p);
+        if (allowed.Count == 0) return done;
+        foreach (var f in p.IntermediateStops)
+        {
+            double best = allowed.OrderBy(a => Math.Abs(a - f.PositionMm)).First();
+            if (Math.Abs(best - f.PositionMm) < 0.5) continue;
+            done.Add($"{f.Id}: {f.PositionMm:0} → {best:0} mm (fermo solo tra i bilici o al centro/estremo del bilico)");
+            f.PositionMm = best;
+        }
+        return done;
+    }
+
     /// <summary>Applica tutte le regole (usato dall'app a ogni modifica). Restituisce una descrizione delle correzioni.</summary>
     public static List<string> Enforce(LineProject p)
     {
@@ -70,6 +98,9 @@ public static class LayoutRules
         if (AlignTransferModule(p))
             done.Add($"Via a rulli davanti al trasferitore portata alla lunghezza del trasferitore ({p.Transfer.LengthMm:0} mm)");
         done.AddRange(ClampStrappers(p));
+        if (StrapperTrack.ClampStrappersToTrackStart(p))
+            done.Add("Legatrice riportata ad almeno 1 m dall'inizio della via rulli");
+        done.AddRange(SnapIntermediateStops(p));
         return done;
     }
 

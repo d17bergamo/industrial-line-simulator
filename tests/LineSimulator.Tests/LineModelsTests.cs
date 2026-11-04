@@ -23,7 +23,7 @@ public class LineModelsTests
         {
             var p = SampleProjects.All[i].Factory();
             Assert.Equal(expected[i].Strappers, p.Strappers.Count);
-            Assert.Equal(expected[i].Lengths.Select(m => $"P{m}"), p.Infeed.TypeSequence);
+            Assert.Equal(expected[i].Lengths.Select(m => $"P{m} (Wire)"), p.Infeed.TypeSequence);
             Assert.Equal(new[] { 6000.0, 9000, 12000, 18000, 24000 }, p.PackageTypes.Select(t => t.LengthMm));   // sempre tutte le tipologie
         }
     }
@@ -164,7 +164,7 @@ public class LineModelsTests
         var m = LayoutRules.TransferModule(p)!;
         Assert.Equal(15000, m.LengthMm, 6);
         Assert.Equal(p.Transfer.PositionMm, m.StartMm, 6);
-        Assert.Equal(m.EndMm - 200 + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
+        Assert.Equal(m.EndMm - m.EndOverhangMm + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
     }
 
     [Fact]

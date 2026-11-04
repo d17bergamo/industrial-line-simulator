@@ -52,7 +52,14 @@ public sealed class PropertyItemViewModel : ObservableObject
     public string Name => _prop.Name;
     public string DisplayName => string.IsNullOrEmpty(Meta.Unit) ? Meta.DisplayName : $"{Meta.DisplayName} [{Meta.Unit}]";
     public string Category => Meta.Category;
-    public bool IsReadOnly => Meta.ReadOnly || !_prop.CanWrite;
+    private bool _locked;
+    /// <summary>Bloccata da una regola (valore ereditato dal padre, posizione fissa): visibile ma non modificabile.</summary>
+    public bool Locked
+    {
+        get => _locked;
+        set { if (_locked == value) return; _locked = value; Raise(nameof(IsReadOnly)); Raise(nameof(IsEditable)); }
+    }
+    public bool IsReadOnly => Meta.ReadOnly || !_prop.CanWrite || _locked;
     public bool IsEditable => !IsReadOnly;
     public EditorKind Kind { get; }
     public IReadOnlyList<string>? Options { get; }

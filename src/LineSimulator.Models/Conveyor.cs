@@ -33,22 +33,10 @@ public sealed class RollerSection : ComponentBase
     /// <summary>Passo e diametro rulli di default in tutti i modelli.</summary>
     public const double DefaultPitchMm = 1250, DefaultDiameterMm = 268;
 
-    private double _endOverhangMm = -1;
-
-    /// <summary>Distanza fissa tra l'asse del primo/ultimo rullo e l'estremità del modulo.</summary>
-    public const double StandardOverhangMm = 200;
-
-    /// <summary>Sporgenza della struttura oltre l'asse del primo/ultimo rullo, per lato. Se non impostata deriva dalla lunghezza esistente.</summary>
-    [UiProperty("Sporgenza terminale (fissa a 200 mm per lato)", "mm", "Geometria", ReadOnly = true, Order = 7)]
-    public double EndOverhangMm
-    {
-        get
-        {
-            if (_endOverhangMm < 0) _endOverhangMm = Math.Max(0, (LengthMm - InteraxialLengthMm) / 2);
-            return _endOverhangMm;
-        }
-        set => _endOverhangMm = Math.Max(0, value);
-    }
+    /// <summary>Sporgenza della struttura oltre l'asse del primo/ultimo rullo, per lato: sempre metà del passo rulli.</summary>
+    [JsonIgnore]
+    [UiProperty("Sporgenza terminale (metà passo rulli)", "mm", "Geometria", ReadOnly = true, Order = 7)]
+    public double EndOverhangMm => RollerPitchMm / 2;
 
     /// <summary>Distanza tra gli assi del primo e dell'ultimo rullo: L = passo × (N − 1).</summary>
     [JsonIgnore]
@@ -58,17 +46,27 @@ public sealed class RollerSection : ComponentBase
     /// <summary>Ricalcola la lunghezza fisica: interasse + sporgenza a entrambe le estremità.</summary>
     public void RecalculateLength() => LengthMm = InteraxialLengthMm + 2 * EndOverhangMm;
 
-    [UiProperty("Velocità bassa", "m/s", "Inverter", Order = 20)]
-    public double LowSpeed { get; set; } = 0.15;
+    /// <summary>Parametri di default delle vie a rulli (m/s, m/s²).</summary>
+    public const double DefaultMinSpeed = 0.3, DefaultNominalSpeed = 1.0, DefaultMaxSpeed = 1.5, DefaultAccel = 1.0;
 
-    [UiProperty("Velocità alta", "m/s", "Inverter", Order = 21)]
-    public double HighSpeed { get; set; } = 0.6;
+    [UiProperty("Velocità minima", "m/s", "Inverter", Order = 20)]
+    public double LowSpeed { get; set; } = DefaultMinSpeed;
+
+    [UiProperty("Velocità nominale", "m/s", "Inverter", Order = 21)]
+    public double HighSpeed { get; set; } = DefaultNominalSpeed;
+
+    [UiProperty("Velocità massima", "m/s", "Inverter", Order = 27)]
+    public double MaxSpeed { get; set; } = DefaultMaxSpeed;
 
     [UiProperty("Accelerazione", "m/s²", "Inverter", Order = 22)]
-    public double Acceleration { get; set; } = 0.5;
+    public double Acceleration { get; set; } = DefaultAccel;
 
     [UiProperty("Decelerazione", "m/s²", "Inverter", Order = 23)]
-    public double Deceleration { get; set; } = 0.6;
+    public double Deceleration { get; set; } = DefaultAccel;
+
+    /// <summary>True = i parametri di questo modulo sono personalizzati e non seguono più il gruppo (padre).</summary>
+    [UiProperty("Personalizza questo modulo (sblocca)", "", "Gruppo", Order = 0)]
+    public bool OverrideGroup { get; set; }
 
     [UiProperty("Velocità di default in marcia", "", "Inverter", Order = 24)]
     public SpeedLevel DefaultSpeed { get; set; } = SpeedLevel.High;
@@ -119,6 +117,44 @@ public sealed class RollerSection : ComponentBase
         Id = Id, Name = Name, LowSpeed = LowSpeed, HighSpeed = HighSpeed, Acceleration = Acceleration,
         Deceleration = Deceleration, DefaultSpeed = DefaultSpeed, IsEnabled = IsEnabled, AutoStopWhenEmpty = AutoStopWhenEmpty
     };
+}
+
+/// <summary>
+/// Padre dei moduli via rulli: i suoi parametri valgono per tutti i moduli che non hanno la spunta "personalizza".
+/// </summary>
+public sealed class RollerGroup : ComponentBase
+{
+    public RollerGroup() { Id = "RLG"; Name = "Moduli via a rulli"; }
+
+    [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
+    public double WidthMm { get; set; } = 1200;
+
+    [UiProperty("Passo rulli", "mm", "Geometria", Order = 5)]
+    public double RollerPitchMm { get; set; } = RollerSection.DefaultPitchMm;
+
+    [UiProperty("Diametro rulli (grafico)", "mm", "Geometria", Order = 6)]
+    public double RollerDiameterMm { get; set; } = RollerSection.DefaultDiameterMm;
+
+    [UiProperty("Velocità minima", "m/s", "Azionamento", Order = 20)]
+    public double LowSpeed { get; set; } = RollerSection.DefaultMinSpeed;
+
+    [UiProperty("Velocità nominale", "m/s", "Azionamento", Order = 21)]
+    public double HighSpeed { get; set; } = RollerSection.DefaultNominalSpeed;
+
+    [UiProperty("Velocità massima", "m/s", "Azionamento", Order = 22)]
+    public double MaxSpeed { get; set; } = RollerSection.DefaultMaxSpeed;
+
+    [UiProperty("Accelerazione", "m/s²", "Azionamento", Order = 23)]
+    public double Acceleration { get; set; } = RollerSection.DefaultAccel;
+
+    [UiProperty("Decelerazione", "m/s²", "Azionamento", Order = 24)]
+    public double Deceleration { get; set; } = RollerSection.DefaultAccel;
+
+    [UiProperty("Velocità di default in marcia", "", "Azionamento", Order = 25)]
+    public SpeedLevel DefaultSpeed { get; set; } = SpeedLevel.High;
+
+    [UiProperty("Arresto automatico senza pacchi", "", "Azionamento", Order = 26)]
+    public bool AutoStopWhenEmpty { get; set; } = true;
 }
 
 /// <summary>

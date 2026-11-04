@@ -79,6 +79,8 @@ public sealed class LineProject
     public LayoutSettings Layout { get; set; } = new();
     /// <summary>Moduli di via a rulli (ognuno con il proprio inverter).</summary>
     public List<RollerSection> Sections { get; set; } = new();
+    /// <summary>Proprietà comuni (padre) dei moduli via rulli: i moduli non personalizzati le ereditano.</summary>
+    public RollerGroup SectionDefaults { get; set; } = new();
     public List<PhotocellConfig> Photocells { get; set; } = new();
     public List<StrapperConfig> Strappers { get; set; } = new();
     public StrappingStationConfig StrappingStation { get; set; } = new();

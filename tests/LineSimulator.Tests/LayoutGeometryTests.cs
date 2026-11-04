@@ -15,20 +15,20 @@ public class LayoutGeometryTests
     [Fact]
     public void ChangingPitchOrCount_UpdatesInteraxialAndPhysicalLength_KeepingOverhang()
     {
-        var s = new RollerSection { RollerPitchMm = 200, RollerCount = 11, LengthMm = 2300 }; // sporgenza 150 per lato
-        Assert.Equal(150, s.EndOverhangMm);
+        var s = new RollerSection { RollerPitchMm = 200, RollerCount = 11, LengthMm = 2200 }; // sporgenza = metà passo
+        Assert.Equal(100, s.EndOverhangMm);
         s.RollerPitchMm = 250;
         s.RecalculateLength();
         Assert.Equal(2500, s.InteraxialLengthMm);
-        Assert.Equal(2800, s.LengthMm);
+        Assert.Equal(2750, s.LengthMm);
         s.RollerCount = 5;
         s.RecalculateLength();
         Assert.Equal(1000, s.InteraxialLengthMm);
-        Assert.Equal(1300, s.LengthMm);
+        Assert.Equal(1250, s.LengthMm);
     }
 
     [Fact]
-    public void InteraxialLength_IsNotSerializedButOverhangRoundTrips()
+    public void InteraxialLength_IsNotSerializedButLengthRoundTrips()
     {
         var p = LegacySamples.CreateStandardLine();
         var json = LineSimulator.Infrastructure.ProjectSerializer.Serialize(p);
