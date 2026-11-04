@@ -9,7 +9,7 @@ public class LineIntegrationTests
 {
     private static SimulationEngine RunStandard(Action<LineProject>? tweak = null)
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         tweak?.Invoke(p);
         var e = new SimulationEngine(p);
         e.RunToCompletion();
@@ -19,14 +19,14 @@ public class LineIntegrationTests
     [Fact]
     public void StandardLine_IsValid()
     {
-        var r = ProjectValidator.Validate(SampleProjects.CreateStandardLine());
+        var r = ProjectValidator.Validate(LegacySamples.CreateStandardLine());
         Assert.False(r.HasErrors, string.Join("\n", r.Errors));
     }
 
     [Fact]
     public void SingleStrapperLine_IsValid()
     {
-        var r = ProjectValidator.Validate(SampleProjects.CreateSingleStrapperLine());
+        var r = ProjectValidator.Validate(LegacySamples.CreateSingleStrapperLine());
         Assert.False(r.HasErrors, string.Join("\n", r.Errors));
     }
 
@@ -76,7 +76,7 @@ public class LineIntegrationTests
     [Fact]
     public void StandardLine_UpstreamPackageStopsInPrecedingZoneWhenDownstreamBlocked()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var e = new SimulationEngine(p);
         bool seen = false;
         while (e.Step())
@@ -143,7 +143,7 @@ public class LineIntegrationTests
     [Fact]
     public void StrappingStation_ExecutesParallelPlanAtCorrectPosition()
     {
-        var e = new SimulationEngine(SampleProjects.CreateStandardLine());
+        var e = new SimulationEngine(LegacySamples.CreateStandardLine());
         while (e.Step())
         {
             if (e.Station!.State == StationState.Strapping)
@@ -166,7 +166,7 @@ public class LineIntegrationTests
     [Fact]
     public void SingleStrapperLine_StrapsSequentially()
     {
-        var e = new SimulationEngine(SampleProjects.CreateSingleStrapperLine());
+        var e = new SimulationEngine(LegacySamples.CreateSingleStrapperLine());
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, e.FinishReason + "\n" + string.Join("\n", e.Events.Where(x => x.Severity >= EventSeverity.Warning)));
         Assert.Equal(0, e.Collisions);

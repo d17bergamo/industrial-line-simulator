@@ -63,16 +63,37 @@ public sealed class PackageType : ComponentBase
     }
 }
 
+/// <summary>Regola di ingresso dei pacchi in linea.</summary>
+public enum InfeedMode
+{
+    /// <summary>Un pacco alla volta nella via rulli di legatura (creazione dopo la fotocellula di ingresso, avanzamento dopo quella di uscita).</summary>
+    AfterStrapping = 0,
+    /// <summary>Ingresso a intervallo fisso con distanza minima (comportamento delle versioni precedenti).</summary>
+    FixedInterval = 1
+}
+
 /// <summary>Configurazione dell'ingresso pacchi in linea.</summary>
 public sealed class InfeedConfig
 {
     [UiProperty("Numero pacchi da simulare", "", "Ingresso", Order = 1)]
     public int PackageCount { get; set; } = 10;
 
-    [UiProperty("Intervallo di ingresso", "s", "Ingresso", Order = 2)]
+    /// <summary>
+    /// Regola di ingresso. Predefinita: il nuovo pacco si crea quando la coda del precedente libera la fotocellula di ingresso
+    /// della via rulli di legatura (+ <see cref="NewPackageDelayS"/>) e avanza solo quando la coda del precedente libera
+    /// la fotocellula di uscita della via rulli di legatura.
+    /// </summary>
+    [UiProperty("Regola di ingresso pacchi", "", "Ingresso", Order = 2)]
+    public InfeedMode Mode { get; set; } = InfeedMode.AfterStrapping;
+
+    [UiProperty("Ritardo creazione nuovo pacco (dopo uscita coda dalla fotocellula di ingresso legatura)", "s", "Ingresso", Order = 3)]
+    public double NewPackageDelayS { get; set; } = 10;
+
+    /// <summary>Solo con regola "A intervallo fisso".</summary>
+    [UiProperty("Intervallo di ingresso (solo a intervallo fisso)", "s", "Ingresso", Order = 7)]
     public double IntervalS { get; set; } = 30;
 
-    [UiProperty("Distanza minima tra pacchi in ingresso", "mm", "Ingresso", Order = 3)]
+    [UiProperty("Distanza minima tra pacchi in ingresso (solo a intervallo fisso)", "mm", "Ingresso", Order = 8)]
     public double MinimumGapMm { get; set; } = 1000;
 
     [UiProperty("Istante primo ingresso", "s", "Ingresso", Order = 4)]

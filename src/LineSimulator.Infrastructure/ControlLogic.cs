@@ -167,7 +167,9 @@ public static class ControlLogicGenerator
             }
             if (knof)
                 rules.Add(new ControlRule($"{p.BundleClamp.Id}.CHIUSURA", g, $"DEV(STATION,Clamping) & !RUN({station.Id})" + (cmp ? $" & SIG({p.Compactor.Id}_OK)" : ""),
-                    $"CHIUDI stringifascio ({F(p.BundleClamp.CloseTimeS)} s + conferma)", p.BundleClamp.Id, "Deve essere chiuso prima che inizi il ciclo di legatura della KNCA o della SMA."));
+                    $"CHIUDI stringifascio ({F(p.BundleClamp.CloseTimeS)} s + conferma)", p.BundleClamp.Id,
+                    "Deve essere chiuso prima che inizi il ciclo di legatura della KNCA o della SMA." +
+                    (p.BundleClamp.PerMachine ? $" Uno stringifascio per macchina ({string.Join(", ", LayoutRules.BundleClampPositions(p).Select(x => $"{x.Id} a {F(x.PositionMm, "0")} mm"))}), comando comune." : "")));
             foreach (var m in machines)
             {
                 string cond = $"DEV({m.Id},Armed) & !RUN({station.Id}) & SIG({m.Id}_IN_FERMATA)" + (knof ? $" & DEV({p.BundleClamp.Id},Closed)" : "") +

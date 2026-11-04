@@ -2,189 +2,146 @@ using LineSimulator.Models;
 
 namespace LineSimulator.Core;
 
-/// <summary>Linee di esempio già configurate (usate anche dai test).</summary>
+/// <summary>
+/// Modelli di area di legatura già configurati. Regole comuni a tutti i modelli:
+/// - il modulo di legatura è sempre il primo della linea (la fotocellula di ingresso è al suo inizio);
+/// - legatrici a 2500 mm l'una dall'altra, ad almeno 3 m dal trasferitore sollevabile;
+/// - uno stringifascio KNOF davanti a ogni legatrice;
+/// - la via a rulli davanti al trasferitore ha la stessa lunghezza del trasferitore;
+/// - tipologie di pacco 6, 9, 12, 18 e 24 m; in ingresso solo quelle per cui il modello è dimensionato;
+/// - ingresso: un pacco alla volta nella via rulli di legatura (vedi <see cref="InfeedMode.AfterStrapping"/>).
+/// </summary>
 public static class SampleProjects
 {
     public static IReadOnlyList<(string Name, Func<LineProject> Factory)> All { get; } = new List<(string, Func<LineProject>)>
     {
-        ("Linea standard - 3 legatrici", CreateStandardLine),
-        ("Linea con 1 legatrice", CreateSingleStrapperLine),
-        ("Linea completa - KNCA, KNOF, compattatore, fermi, bilici", CreateFullProcessLine)
+        ("3 legatrici - pacchi 6/9/12/18/24 m", CreateThreeStrappers24m),
+        ("2 legatrici - pacchi 6/9/12/18 m", CreateTwoStrappers18m),
+        ("2 legatrici - pacchi 6/9/12 m", CreateTwoStrappers12m),
+        ("1 legatrice - pacchi 6/9/12 m", CreateOneStrapper12m)
     };
 
-    /// <summary>
-    /// Linea di riferimento:
-    /// M1 ingresso (0-13 m) → M2 accumulo (13-26 m) → M3 legatura (26-42 m)
-    /// → M4 uscita con stopper a 55 m e trasferitore sotto il pacco in battuta.
-    /// Pacco 12 m / 3000 kg con legature a 1500, 6000, 10500 mm dalla testa.
-    /// </summary>
-    public static LineProject CreateStandardLine() => Complete(BuildStandardLine());
+    /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>
+    public const double StrapperSpacingMm = 2500;
 
-    /// <summary>Completa l'esempio con i sensori di processo obbligatori (aggiunti in automatico).</summary>
-    private static LineProject Complete(LineProject p)
-    {
-        ProjectNormalizer.EnsureProcessSensors(p);
-        return p;
-    }
+    /// <summary>Lunghezze delle tipologie di pacco presenti in tutti i modelli (m).</summary>
+    public static IReadOnlyList<int> PackageLengthsM { get; } = new[] { 6, 9, 12, 18, 24 };
 
-    private static LineProject BuildStandardLine()
-    {
-        var p = new LineProject { Name = "Linea standard - 3 legatrici", Description = "Linea di esempio con accumulo, stazione di legatura a 3 legatrici, stopper e trasferitore." };
+    /// <summary>Modello aperto all'avvio: 3 legatrici, pacchi fino a 24 m.</summary>
+    public static LineProject CreateStandardLine() => CreateThreeStrappers24m();
 
+    public static LineProject CreateOneStrapper12m() =>
+        Build("1 legatrice - pacchi 6/9/12 m", strappers: 1, maxLengthM: 12, infeedLengthsM: new[] { 6, 9, 12 });
 
-        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
-        p.Sections.Add(Mod("M2", "Modulo 2 - Accumulo", 13000, 13000));
-        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 26000, 16000));
-        p.Sections.Add(Mod("M4", "Modulo 4 - Uscita/Stopper", 42000, 14000));
+    public static LineProject CreateTwoStrappers12m() =>
+        Build("2 legatrici - pacchi 6/9/12 m", strappers: 2, maxLengthM: 12, infeedLengthsM: new[] { 6, 9, 12 });
 
-        p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "M2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 40500, "M3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 53500, "M4", PhotocellAction.SlowDown));
-        p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 54800, "", PhotocellAction.None));
+    public static LineProject CreateTwoStrappers18m() =>
+        Build("2 legatrici - pacchi 6/9/12/18 m", strappers: 2, maxLengthM: 18, infeedLengthsM: new[] { 6, 9, 12, 18 });
 
-        p.Strappers.Add(Str("L1", "Legatrice 1", 30500));
-        p.Strappers.Add(Str("L2", "Legatrice 2", 35000));
-        p.Strappers.Add(Str("L3", "Legatrice 3", 39500));
-
-        p.StrappingStation = new StrappingStationConfig
-        {
-            IsEnabled = true,
-            InverterId = "M3",
-            PositioningSpeed = 0.3,
-            PositioningToleranceMm = 2,
-            Strategy = StrappingStrategyMode.Automatic
-        };
-
-        p.Stopper = new StopperConfig
-        {
-            Id = "STP", Name = "Stopper", PositionMm = 55000, AlignmentTimeS = 2.0, HeadingTimeS = 0.5,
-            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
-        };
-        p.Transfer = new TransferConfig
-        {
-            Id = "TRF", Name = "Trasferitore", PositionMm = 43000, LengthMm = 12000, LiftStrokeMm = 150,
-            TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
-            BlockInfeedUntilHome = true
-        };
-
-        p.PackageTypes.Add(new PackageType
-        {
-            Id = "P12", Name = "Pacco 12 m", LengthMm = 12000, WeightKg = 3000,
-            StrapPositionsMm = new List<double> { 1500, 6000, 10500 }
-        });
-
-        p.Infeed = new InfeedConfig { PackageCount = 10, IntervalS = 30, MinimumGapMm = 1000, TypeSequence = new List<string> { "P12" } };
-        p.Simulation = new SimulationSettings();
-        return p;
-    }
-
-    /// <summary>Variante con una sola legatrice e zona di legatura più lunga (22 m).</summary>
-    public static LineProject CreateSingleStrapperLine()
-    {
-        var p = BuildStandardLine();
-        p.ProjectId = Guid.NewGuid().ToString("N");
-        p.Name = "Linea con 1 legatrice";
-        p.Description = "Una sola legatrice: legature eseguite in sequenza con riposizionamento del pacco.";
-        p.Sections.Clear();
-        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
-        p.Sections.Add(Mod("M2", "Modulo 2 - Accumulo", 13000, 13000));
-        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 26000, 22000));
-        p.Sections.Add(Mod("M4", "Modulo 4 - Uscita/Stopper", 48000, 14000));
-        p.Photocells.Clear();
-        p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 24500, "M2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 46500, "M3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 59500, "M4", PhotocellAction.SlowDown));
-        p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 60800, "", PhotocellAction.None));
-        p.Strappers.Clear();
-        p.Strappers.Add(Str("L1", "Legatrice 1", 37000));
-        p.Stopper.PositionMm = 61000;
-        p.Transfer.PositionMm = 49000;
-        return Complete(p);
-    }
+    public static LineProject CreateThreeStrappers24m() =>
+        Build("3 legatrici - pacchi 6/9/12/18/24 m", strappers: 3, maxLengthM: 24, infeedLengthsM: new[] { 6, 9, 12, 18, 24 }, intermediateStop: true);
 
     /// <summary>
-    /// Linea completa con tutte le logiche di processo:
-    /// M1 ingresso (0-13 m, fotocellula di ingresso FC0) → M2 trasporto (13-27 m)
-    /// → M3 legatura con stringifascio KNOF, compattatore laterale e 3 legatrici KNCA 7/800 (27-43 m)
-    /// → M4 accumulo/trasferitore 12,5 m con fermo intermedio (intestatura di testa) e stopper finale
-    /// → trasferitore a 2 pacchi → 2 bilici di pesatura.
-    /// Pacchi misti 6 m / 6 m / 12 m / 4 m.
+    /// M1 via rulli di legatura (primo modulo, lunga 2 × pacco massimo + 1 m: il pacco più lungo attraversa tutte le macchine)
+    /// con le legatrici al centro a 2500 mm e un KNOF davanti a ciascuna; fotocellula di uscita legatura a fine modulo
+    /// → M2 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con stopper finale
+    /// → trasferitore sollevabile → due bilici di pesatura.
     /// </summary>
-    public static LineProject CreateFullProcessLine()
+    private static LineProject Build(string name, int strappers, int maxLengthM, int[] infeedLengthsM, bool intermediateStop = false)
     {
+        double lmax = maxLengthM * 1000.0;
+        double strapLen = 2 * lmax + 1000;           // via rulli di legatura
+        double trfLen = lmax + 500;                  // trasferitore = via rulli davanti al trasferitore
+        double spread = (strappers - 1) * StrapperSpacingMm;
+        double first = Math.Round(strapLen / 2 - spread / 2);
+
         var p = new LineProject
         {
-            Name = "Linea completa - KNCA, KNOF, compattatore, fermi, bilici",
-            Description = "Fotocellula di ingresso, arresto automatico inverter, stringifascio KNOF, compattatore, legatrici KNCA 7/800, accumulo 12 m con fermo intermedio, trasferitore a 2 pacchi e bilici."
+            Name = name,
+            Description = $"Area di legatura con {strappers} {(strappers == 1 ? "legatrice" : "legatrici")} KNCA a {StrapperSpacingMm:0} mm, " +
+                          $"stringifascio KNOF per ogni legatrice, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
         };
 
-        p.Sections.Add(Mod("M1", "Modulo 1 - Ingresso", 0, 13000));
-        p.Sections.Add(Mod("M2", "Modulo 2 - Trasporto", 13000, 14000));
-        p.Sections.Add(Mod("M3", "Modulo 3 - Legatura", 27000, 16000));
-        p.Sections.Add(Mod("M4", "Modulo 4 - Accumulo trasferitore", 43000, 14000));
+        p.Sections.Add(Mod("M1", "Modulo 1 - Legatura", 0, strapLen));
+        p.Sections.Add(Mod("M2", "Modulo 2 - Trasferitore", strapLen, trfLen));
 
         p.Photocells.Add(Entry());
-        p.Photocells.Add(Pc("FC1", "FC1 accumulo ingresso", 11500, "M1", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC2", "FC2 accumulo", 25500, "M2", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC3", "FC3 fine legatura", 41500, "M3", PhotocellAction.Accumulation));
-        p.Photocells.Add(Pc("FC4", "FC4 rallentamento stopper", 54500, "M4", PhotocellAction.SlowDown));
-        p.Photocells.Add(Pc("FC5", "FC5 presenza stopper", 56300, "", PhotocellAction.None));
+        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 500, "M1", PhotocellAction.Accumulation);
+        exit.Purpose = PhotocellPurpose.StrappingExit;
+        p.Photocells.Add(exit);
+        p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", strapLen + trfLen - 1500, "M2", PhotocellAction.SlowDown));
+        p.Photocells.Add(Pc("FC3", "FC3 presenza stopper", strapLen + trfLen - 300, "", PhotocellAction.None));
 
-        p.Strappers.Add(Str("L1", "Legatrice KNCA 1", 31500));
-        p.Strappers.Add(Str("L2", "Legatrice KNCA 2", 36000));
-        p.Strappers.Add(Str("L3", "Legatrice KNCA 3", 40500));
+        for (int i = 0; i < strappers; i++)
+            p.Strappers.Add(Str($"L{i + 1}", $"Legatrice KNCA {i + 1}", first + i * StrapperSpacingMm));
         p.StrappingStation = new StrappingStationConfig
         {
-            IsEnabled = true, InverterId = "M3", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic
+            IsEnabled = true, InverterId = "M1", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic
         };
-        // Tempi di default da documento: KNOF chiusura/apertura 2 s, compattatore 3 s
-        p.BundleClamp = new BundleClampConfig { IsEnabled = true, PositionMm = 30800, HoldTimeS = 0.5 };
-        p.Compactor = new SideCompactorConfig
-        {
-            IsEnabled = true, PositionMm = 32200, JawLengthMm = 1500, HoldTimeS = 1.0, OpenPhase = CompactorOpenPhase.AfterStrapping
-        };
-        // Rigettatrice generica (scarto): presente ma disabilitata; la SMA è una reggettatrice
-        p.Rejector = new RejectorConfig
-        {
-            IsEnabled = false, PositionMm = 14500, LengthMm = 12000, Side = LateralSide.Left, StrokeMm = 1800,
-            EjectTimeS = 3, ReturnTimeS = 3, RestartDelayS = 1
-        };
+        // Uno stringifascio davanti a ogni legatrice (450 mm a monte), tempi di default da documento
+        p.BundleClamp = new BundleClampConfig { IsEnabled = true, PerMachine = true, MachineOffsetMm = 450, PositionMm = first - 450, HoldTimeS = 0.5 };
+        p.Compactor = new SideCompactorConfig { IsEnabled = false };
+        p.Rejector = new RejectorConfig { IsEnabled = false };
 
         p.Stopper = new StopperConfig
         {
-            Id = "STP", Name = "Stopper finale", PositionMm = 56500, AlignmentTimeS = 2.0, HeadingTimeS = 0.5,
-            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
+            Id = "STP", Name = "Stopper finale", PositionMm = strapLen + trfLen - 100, DistanceFromLastRollerMm = 100,
+            AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
         };
-        p.IntermediateStops.Add(new IntermediateStopConfig
-        {
-            Id = "FM1", Name = "Fermo intermedio", PositionMm = 50100, Reference = StopReference.Head, AlignmentTimeS = 2.0
-        });
+        if (intermediateStop)
+            p.IntermediateStops.Add(new IntermediateStopConfig
+            {
+                Id = "FM1", Name = "Fermo intermedio scomparente", PositionMm = strapLen + 12000, AlignmentTimeS = 2.0
+            });
         p.Transfer = new TransferConfig
         {
-            Id = "TRF", Name = "Trasferitore sollevabile", PositionMm = 44000, LengthMm = 12500, LiftStrokeMm = 150,
-            TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
-            BlockInfeedUntilHome = true, BatchSize = 2, BatchWaitTimeoutS = 60
+            Id = "TRF", Name = "Trasferitore sollevabile", Kind = TransferKind.Lifting, PositionMm = strapLen, LengthMm = trfLen,
+            LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
+            BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60
         };
-        p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = 44000, LengthMm = 6200 });
-        p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = 50300, LengthMm = 6300 });
+        p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen / 2 });
+        p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = strapLen + trfLen / 2, LengthMm = trfLen / 2 });
 
-        p.PackageTypes.Add(new PackageType { Id = "P6", Name = "Pacco 6 m", LengthMm = 6000, WeightKg = 1500, StrapPositionsMm = new List<double> { 750, 3000, 5250 } });
-        p.PackageTypes.Add(new PackageType { Id = "P12", Name = "Pacco 12 m", LengthMm = 12000, WeightKg = 3000, StrapPositionsMm = new List<double> { 1500, 6000, 10500 } });
-        p.PackageTypes.Add(new PackageType { Id = "P4", Name = "Pacco corto 4 m", LengthMm = 4000, WeightKg = 1000, StrapPositionsMm = new List<double> { 800, 2000, 3200 } });
+        foreach (int m in PackageLengthsM) p.PackageTypes.Add(Package(m));
 
         p.Infeed = new InfeedConfig
         {
-            PackageCount = 8, IntervalS = 45, MinimumGapMm = 1000,
-            TypeSequence = new List<string> { "P6", "P6", "P12", "P4" },
-            WeightOverrides = "2=1480; 6=1525"
+            Mode = InfeedMode.AfterStrapping, NewPackageDelayS = 10,
+            PackageCount = 2 * infeedLengthsM.Length,
+            TypeSequence = infeedLengthsM.Select(m => $"P{m}").ToList()
         };
-        // Banking e intestatura si scelgono nelle simulazioni: questo campione lavora in double banking di testa
-        p.Simulation = new SimulationSettings { Banking = AccumulationMode.DoubleBanking, Heading = StopReference.Head };
+        p.Simulation = new SimulationSettings { Banking = AccumulationMode.SingleBanking, Heading = StopReference.Head };
         return Complete(p);
+    }
+
+    /// <summary>Pacco da m metri: legature simmetriche a 1000 mm dalle estremità e circa ogni 3-3,5 m, a passi di 100 mm; 250 kg/m.</summary>
+    public static PackageType Package(int meters)
+    {
+        double len = meters * 1000.0;
+        int n = meters switch { <= 6 => 3, <= 9 => 4, <= 12 => 5, <= 18 => 6, _ => 7 };
+        var pos = new List<double>();
+        for (int i = 0; i < n; i++)
+        {
+            double x = 1000 + i * (len - 2000) / (n - 1);
+            double r = Math.Round(x / 100.0) * 100;
+            // simmetria rispetto al centro: la seconda metà è lo specchio della prima
+            if (i >= (n + 1) / 2) r = len - pos[n - 1 - i];
+            pos.Add(r);
+        }
+        return new PackageType
+        {
+            Id = $"P{meters}", Name = $"Pacco {meters} m", LengthMm = len, WeightKg = 250 * meters, StrapPositionsMm = pos
+        };
+    }
+
+    /// <summary>Completa il modello: via a rulli davanti al trasferitore, fermo finale e sensori di processo obbligatori.</summary>
+    private static LineProject Complete(LineProject p)
+    {
+        LayoutRules.AlignTransferModule(p);
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        ProjectNormalizer.EnsureProcessSensors(p);
+        return p;
     }
 
     private static PhotocellConfig Entry() => new()
@@ -193,13 +150,17 @@ public static class SampleProjects
         ResponseTimeMs = 20, IsEntryPhotocell = true, Action = PhotocellAction.None
     };
 
-    /// <summary>Modulo di via a rulli con il proprio inverter (0,15/0,6 m/s, 0,5/0,6 m/s²).</summary>
-    private static RollerSection Mod(string id, string name, double start, double length) => new()
+    /// <summary>Modulo di via a rulli con il proprio inverter (0,15/0,6 m/s, 0,5/0,6 m/s²), sporgenze standard di 200 mm.</summary>
+    private static RollerSection Mod(string id, string name, double start, double length)
     {
-        Id = id, Name = name, StartMm = start, LengthMm = length, WidthMm = 1200,
-        RollerPitchMm = 300, RollerCount = (int)Math.Floor(length / 300.0) + 1 - (length % 300 == 0 ? 1 : 0),
-        RollerDiameterMm = 150, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
-    };
+        var s = new RollerSection
+        {
+            Id = id, Name = name, WidthMm = 1200, RollerPitchMm = 300,
+            RollerDiameterMm = 150, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
+        };
+        LineReflow.Fit(s, start, start + length);
+        return s;
+    }
 
     private static PhotocellConfig Pc(string id, string name, double pos, string inv, PhotocellAction action) => new()
     {

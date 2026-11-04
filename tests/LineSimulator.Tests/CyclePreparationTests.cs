@@ -28,7 +28,7 @@ public class CyclePreparationTests
     [Fact]
     public void DuplicateAndUnorderedNames_AreRenumberedAlongTheLine_AndReferencesFollow()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Strappers[0].Id = "L3";   // 30,5 m
         p.Strappers[1].Id = "L1";   // 35 m
         p.Strappers[2].Id = "";     // 39,5 m
@@ -56,7 +56,7 @@ public class CyclePreparationTests
     [Fact]
     public void MovingStrappersToAnotherModule_StationFollows_AndPackagesAreStrapped()
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         // Le tre legatrici vengono spostate dal modulo M3 al modulo M2
         p.Strappers[0].PositionMm = 16500;
         p.Strappers[1].PositionMm = 21000;
@@ -82,7 +82,7 @@ public class CyclePreparationTests
     [Fact]
     public void StrappersOnTwoModules_AreJoinedInOneCommandZone()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Strappers[0].PositionMm = 25000;   // modulo M2 (13-26 m); le altre restano in M3
         var r = SimulationPreparation.Prepare(p);
         var topo = new LineTopology(p);
@@ -94,7 +94,7 @@ public class CyclePreparationTests
     [Fact]
     public void AllStrappersDisabled_PackagesGoToTransferWithoutStrapping()
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         p.Infeed.PackageCount = 3;
         foreach (var s in p.Strappers) s.IsEnabled = false;
         var e = new SimulationEngine(p);
@@ -108,9 +108,9 @@ public class CyclePreparationTests
     [Fact]
     public void StrappersEnabled_UnstrappablePackage_DoesNotStart()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         foreach (var s in p.Strappers) s.PositionMm += 2000;   // il pacco da 12 m non è più legabile nella zona M3
-        var r = SimulationPreparation.Prepare(SampleProjects.CreateStandardLine().Also(q => { foreach (var s in q.Strappers) s.PositionMm += 2000; }));
+        var r = SimulationPreparation.Prepare(LegacySamples.CreateStandardLine().Also(q => { foreach (var s in q.Strappers) s.PositionMm += 2000; }));
         Assert.Contains(r.Errors, x => x.Contains("deve essere legato", StringComparison.Ordinal) && x.Contains("P12", StringComparison.Ordinal));
         var e = new SimulationEngine(p);
         Assert.True(e.IsFinished);
@@ -122,7 +122,7 @@ public class CyclePreparationTests
     [Fact]
     public void StrappersEnabled_PackageWithoutStraps_DoesNotStart()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.PackageTypes[0].StrapPositionsMm.Clear();
         var r = SimulationPreparation.Prepare(p);
         Assert.Contains(r.Errors, x => x.Contains("non ha legature", StringComparison.Ordinal));
@@ -131,7 +131,7 @@ public class CyclePreparationTests
     [Fact]
     public void WrongLinks_AreReconnected()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.StrappingStation.InverterId = "M1";
         p.Photocells.Single(x => x.Id == "FC2").ControlledInverterId = "INESISTENTE";
         var r = SimulationPreparation.Prepare(p);

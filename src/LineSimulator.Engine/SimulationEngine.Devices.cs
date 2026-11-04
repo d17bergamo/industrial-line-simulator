@@ -170,7 +170,7 @@ public sealed partial class SimulationEngine
             case StationState.Clamping:
             {
                 var k = BundleClamp!;
-                if (k.IsOpen) { TryCommandClose(k, Project.BundleClamp.PositionMm, st, p); break; }
+                if (k.IsOpen) { TryCommandClose(k, BundleClampPositionsMm(), st, p); break; }
                 if (k.IsClosed) TryStartStrapping(st, p, t);
                 break;
             }
@@ -236,7 +236,7 @@ public sealed partial class SimulationEngine
             st.State = StationState.Clamping;
             p.State = PackageState.Strapping;
             Emit(SimEventType.BundleClampPhase, EventSeverity.Info, $"{p.Id} in posizione di legatura", BundleClamp.Id, p.Id);
-            TryCommandClose(BundleClamp, Project.BundleClamp.PositionMm, st, p);
+            TryCommandClose(BundleClamp, BundleClampPositionsMm(), st, p);
         }
         else
         {
@@ -251,18 +251,25 @@ public sealed partial class SimulationEngine
         if (BundleClamp != null)
         {
             st.State = StationState.Clamping;
-            TryCommandClose(BundleClamp, Project.BundleClamp.PositionMm, st, p);
+            TryCommandClose(BundleClamp, BundleClampPositionsMm(), st, p);
         }
         else TryStartStrapping(st, p, t);
     }
 
     /// <summary>Comando di chiusura con interblocchi: pacco presente sotto il dispositivo, via a rulli ferma, consenso.</summary>
+    /// <summary>Posizioni degli stringifascio: uno per macchina (se previsto) oppure quello unico; si chiudono insieme.</summary>
+    private IReadOnlyList<double> BundleClampPositionsMm() => LayoutRules.BundleClampPositions(Project).Select(x => x.PositionMm).ToList();
+
     private void TryCommandClose(ClampRuntime c, double positionMm, StationRuntime st, PackageRuntime p)
+        => TryCommandClose(c, new[] { positionMm }, st, p);
+
+    private void TryCommandClose(ClampRuntime c, IReadOnlyList<double> positionsMm, StationRuntime st, PackageRuntime p)
     {
         if (!c.IsOpen) return;
         var type = c == BundleClamp ? SimEventType.BundleClampPhase : SimEventType.CompactorPhase;
-        double x = positionMm / 1000.0;
-        bool covers = p.TailM <= x + 1e-6 && p.HeadM >= x - 1e-6;
+        // Con uno stringifascio per macchina basta che il pacco sia sotto almeno uno di essi (gli altri chiudono a vuoto o sul pacco)
+        bool covers = positionsMm.Any(mm => p.TailM <= mm / 1000.0 + 1e-6 && p.HeadM >= mm / 1000.0 - 1e-6);
+        double positionMm = positionsMm.Count > 0 ? positionsMm[0] : 0;
         if (!covers)
         {
             if (!st.InterlockReported)
@@ -999,11 +1006,10 @@ public sealed partial class SimulationEngine
         }
         else
         {
-            lead.ShortPosition = p.LengthM <= cfg.ShortPackageMaxLengthMm / 1000.0 + 1e-9;
-            lead.TargetHeadM = lead.ShortPosition
-                ? (cfg.IntermediateHeadPositionMm > 0 ? cfg.IntermediateHeadPositionMm / 1000.0 : (lead.StartM + lead.EndM + p.LengthM) / 2)
-                : (cfg.StandardHeadPositionMm > 0 ? cfg.StandardHeadPositionMm / 1000.0 : lead.EndM);
-            where = lead.ShortPosition ? "pacco corto: posizione intermedia" : "posizione standard";
+            // Sul bilico il pacco non si muove: viene pesato dove il trasferitore lo deposita
+            lead.ShortPosition = false;
+            lead.TargetHeadM = p.HeadM;
+            where = "pesatura sul punto di deposito, il pacco non si muove sul bilico";
         }
         Emit(SimEventType.WeighingPhase, EventSeverity.Info,
             $"{p.Id} indirizzato al bilico {p.ScaleId} ({where}, testa a {lead.TargetHeadM * 1000:0} mm)", lead.Id, p.Id);

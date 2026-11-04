@@ -9,7 +9,7 @@ public class OptimizationTests
 {
     private static StrappingProblem StandardProblem(LineProject? p = null)
     {
-        p ??= SampleProjects.CreateStandardLine();
+        p ??= LegacySamples.CreateStandardLine();
         var pb = StrappingPlanner.BuildProblem(p, new LineTopology(p), p.PackageTypes[0], out var err);
         Assert.Null(err);
         return pb!;
@@ -18,7 +18,7 @@ public class OptimizationTests
     [Fact]
     public void StandardLine_BestIsThreeStrappersInParallel()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var cmp = StrappingPlanner.Compare(p, new LineTopology(p), p.PackageTypes[0]);
         Assert.Equal(7, cmp.Automatic.EvaluatedCombinations);
         var best = cmp.Selected;
@@ -50,7 +50,7 @@ public class OptimizationTests
     [Fact]
     public void SingleStrapper_SequentialPlanTimes()
     {
-        var p = SampleProjects.CreateSingleStrapperLine();
+        var p = LegacySamples.CreateSingleStrapperLine();
         var pb = StandardProblem(p);
         var best = new StrappingOptimizer().Optimize(pb).Best!;
         Assert.Equal(new[] { 38.5, 43.0, 47.5 }, best.Stops.Select(s => Math.Round(s.HeadPositionM, 6)));
@@ -78,7 +78,7 @@ public class OptimizationTests
     [Fact]
     public void NonCombinableStrapper_ExcludedFromCombinations()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Strappers[1].AllowCombinedWork = false;
         var res = new StrappingOptimizer().Optimize(StandardProblem(p));
         Assert.Null(res.Best);

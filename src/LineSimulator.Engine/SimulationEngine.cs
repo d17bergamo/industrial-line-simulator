@@ -330,8 +330,36 @@ public sealed partial class SimulationEngine : ILogicContext
 
     private double NextDueTime() => Project.Infeed.FirstEntryTimeS + _nextIndex * Project.Infeed.IntervalS;
 
+    /// <summary>Posizione (m) della fotocellula di ingresso della via rulli di legatura.</summary>
+    private double StrappingEntryM
+    {
+        get
+        {
+            var zi = Station?.Zone.Info;
+            var inZone = zi == null ? null : _photocells.Where(pc => pc.Config.IsEnabled && pc.PositionM >= zi.StartM - 1e-6 && pc.PositionM <= zi.EndM + 1e-6)
+                                                        .OrderBy(pc => pc.PositionM).FirstOrDefault();
+            return inZone?.PositionM ?? _photocells.FirstOrDefault(pc => pc.IsEntry)?.PositionM ?? Topology.LineStartM;
+        }
+    }
+
+    /// <summary>Posizione (m) della fotocellula di uscita della via rulli di legatura (fine della zona se manca).</summary>
+    private double StrappingExitM
+    {
+        get
+        {
+            var tagged = _photocells.Where(pc => pc.Config.IsEnabled && pc.Config.Purpose == PhotocellPurpose.StrappingExit).OrderBy(pc => pc.PositionM).LastOrDefault();
+            if (tagged != null) return tagged.PositionM;
+            var zi = Station?.Zone.Info ?? (_zones.Count > 0 ? _zones[0].Info : null);
+            if (zi == null) return Topology.LineStartM;
+            var inZone = _photocells.Where(pc => pc.Config.IsEnabled && !pc.IsEntry && pc.PositionM >= zi.StartM - 1e-6 && pc.PositionM <= zi.EndM + 1e-6)
+                                    .OrderBy(pc => pc.PositionM).LastOrDefault();
+            return inZone?.PositionM ?? zi.EndM;
+        }
+    }
+
     private void Infeed(double t)
     {
+        if (Project.Infeed.Mode == InfeedMode.AfterStrapping) { InfeedAfterStrapping(t); return; }
         var cfg = Project.Infeed;
         if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;
         double due = NextDueTime();
@@ -368,6 +396,66 @@ public sealed partial class SimulationEngine : ILogicContext
         _active.Add(pkg);
         _lastProgressTime = t;
         Emit(SimEventType.PackageEntered, EventSeverity.Info, $"Ingresso {pkg.Id} ({type.Id}, {type.LengthMm:0} mm, {pkg.WeightKg:0} kg)", null, pkg.Id);
+    }
+
+    /// <summary>
+    /// Ingresso "un pacco alla volta nella via rulli di legatura": il nuovo pacco si crea a monte della linea quando la coda del
+    /// precedente libera la fotocellula di ingresso della via rulli di legatura, più il ritardo impostato; avanza solo quando la
+    /// coda del precedente libera la fotocellula di uscita della via rulli di legatura.
+    /// </summary>
+    private void InfeedAfterStrapping(double t)
+    {
+        var cfg = Project.Infeed;
+        // Consenso ad avanzare al pacco in attesa
+        var waiting = _active.FirstOrDefault(p => !p.InfeedReleased);
+        if (waiting != null)
+        {
+            var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
+            bool clear = prev == null || !prev.OnRollers || prev.TailM > StrappingExitM + 1e-9;
+            if (!clear) { InfeedWaitingS += Dt; return; }
+            waiting.InfeedReleased = true;
+            _lastProgressTime = t;
+            Emit(SimEventType.InfeedWaiting, EventSeverity.Info,
+                prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
+                             : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato la fotocellula di uscita legatura ({StrappingExitM * 1000:0} mm)", null, waiting.Id);
+            return;
+        }
+        if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;
+        var last = _packages.LastOrDefault();
+        if (last == null)
+        {
+            if (t < cfg.FirstEntryTimeS - 1e-9) return;
+        }
+        else
+        {
+            if (last.EntryClearedTimeS == null)
+            {
+                if (last.OnRollers && last.TailM <= StrappingEntryM + 1e-9) return;
+                last.EntryClearedTimeS = t;
+            }
+            if (t < last.EntryClearedTimeS.Value + Math.Max(0, cfg.NewPackageDelayS) - 1e-9) return;
+        }
+
+        var type = _typeSequence[_nextIndex % _typeSequence.Count];
+        double start = Topology.LineStartM;
+        var pkg = new PackageRuntime(_nextIndex + 1, type)
+        {
+            HeadM = start,               // creato a monte della linea: testa all'inizio della via rulli di legatura
+            EntryTimeS = t,
+            StrapsTotal = type.StrapPositionsMm.Count,
+            InfeedReleased = false
+        };
+        if (_weights.TryGetValue(pkg.Sequence, out var w)) pkg.WeightKg = w;
+        pkg.StrapStatus = Station != null && pkg.StrapsTotal > 0 ? StrapStatus.Pending : StrapStatus.NotRequired;
+        pkg.Velocity = 0;
+        _nextIndex++;
+        _packages.Add(pkg);
+        _active.Add(pkg);
+        _lastProgressTime = t;
+        Emit(SimEventType.PackageEntered, EventSeverity.Info,
+            $"Creato {pkg.Id} ({type.Id}, {type.LengthMm:0} mm, {pkg.WeightKg:0} kg) in ingresso" +
+            (last != null ? $": coda di {last.Id} uscita dalla fotocellula di ingresso legatura + {cfg.NewPackageDelayS:0.#} s" : ""), null, pkg.Id);
+        InfeedAfterStrapping(t);   // il primo pacco (o con il precedente già uscito) avanza subito
     }
 
     // ------------------------------------------------------------------ 2. Fotocellule
@@ -678,6 +766,9 @@ public sealed partial class SimulationEngine : ILogicContext
     private bool ShouldAutoStop(ZoneRuntime z)
     {
         if (!z.SensorsEmpty) return false;
+        // Il primo modulo resta in marcia per accogliere il pacco che ha il consenso ad avanzare dall'ingresso
+        if (z.Info.StartM <= Topology.LineStartM + 1e-6 && _active.Any(p => p.InfeedReleased && p.OnRollers && p.TailM < z.Info.StartM + 1e-6 && p.HeadM <= z.Info.EndM))
+            return false;
         var hidden = _active.FirstOrDefault(p => p.OnRollers && p.HeadM > z.Info.StartM + 1e-9 && p.TailM < z.Info.EndM - 1e-9);
         if (hidden == null) return true;
         if (!z.UndetectedWarned)
@@ -724,7 +815,11 @@ public sealed partial class SimulationEngine : ILogicContext
             double sv = s.Enabled ? s.Zone.ActualSpeed : 0;
             if (sv < v) v = sv;
         }
-        return any ? v : 0;
+        if (any) return v;
+        // Pacco in ingresso a monte della linea: avanza con la via rulli di legatura solo dopo il consenso
+        if (p.InfeedReleased && p.HeadM <= Topology.LineStartM + 1e-6 && _sections.Count > 0)
+            return _sections[0].Enabled ? _sections[0].Zone.ActualSpeed : 0;
+        return 0;
     }
 
     private void MovePackages(double t, double dt)

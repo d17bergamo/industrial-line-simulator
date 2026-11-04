@@ -22,7 +22,9 @@ public enum PhotocellPurpose
     /// <summary>Arresto davanti al trasferitore sollevabile: ferma il modulo mentre il trasferitore è sollevato.</summary>
     TransferStop = 1,
     /// <summary>Riferimento dell'encoder di legatura: azzera il conteggio e avvia la carica del filo delle KNCA.</summary>
-    StrappingReference = 2
+    StrappingReference = 2,
+    /// <summary>Uscita della via a rulli di legatura: il pacco successivo avanza quando la coda del precedente la libera.</summary>
+    StrappingExit = 3
 }
 
 /// <summary>Tipo di legatura del pacco: un solo tipo per pacco.</summary>
@@ -110,6 +112,16 @@ public sealed class BundleClampConfig : SequenceDeviceConfig
     /// <summary>Posizione in linea; 0 = default, 450 mm a monte della prima macchina di legatura.</summary>
     [UiProperty("Posizione in linea (0 = 450 mm a monte della legatrice)", "mm", "Geometria", Order = 10)]
     public double PositionMm { get; set; }
+
+    /// <summary>
+    /// Uno stringifascio davanti a ogni legatrice/reggettatrice abilitata (a <see cref="MachineOffsetMm"/> a monte di ciascuna).
+    /// Gli stringifascio si chiudono e si aprono insieme. Con questa opzione <see cref="PositionMm"/> non si usa.
+    /// </summary>
+    [UiProperty("Uno stringifascio per ogni legatrice/reggettatrice", "", "Geometria", Order = 11)]
+    public bool PerMachine { get; set; }
+
+    [UiProperty("Distanza a monte di ogni macchina (stringifascio per macchina)", "mm", "Geometria", Order = 12)]
+    public double MachineOffsetMm { get; set; } = 450;
 
     [UiProperty("Tempo di chiusura", "s", "Tempi", Order = 20)]
     public double CloseTimeS { get; set; } = 2.0;
@@ -268,22 +280,22 @@ public sealed class WeighingScaleConfig : SequenceDeviceConfig
     [UiProperty("Lunghezza bilico", "mm", "Geometria", Order = 11)]
     public double LengthMm { get; set; } = 6500;
 
-    [UiProperty("Posizione testa standard (0 = fine bilico)", "mm", "Posizionamento", Order = 20)]
+    /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
     public double StandardHeadPositionMm { get; set; }
 
-    [UiProperty("Lunghezza massima pacco corto", "mm", "Posizionamento", Order = 21)]
+    /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
     public double ShortPackageMaxLengthMm { get; set; } = 4500;
 
-    [UiProperty("Posizione testa intermedia per pacchi corti (0 = centrato)", "mm", "Posizionamento", Order = 22)]
+    /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
     public double IntermediateHeadPositionMm { get; set; }
 
-    [UiProperty("Velocità di posizionamento", "m/s", "Posizionamento", Order = 23)]
+    /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
     public double PositioningSpeed { get; set; } = 0.2;
 
-    [UiProperty("Accelerazione rulli bilico", "m/s²", "Posizionamento", Order = 24)]
+    /// <summary>Non più usato: sul bilico il pacco non si muove (viene solo pesato dove il trasferitore lo deposita).</summary>
     public double Acceleration { get; set; } = 0.3;
 
-    [UiProperty("Tolleranza di posizionamento", "mm", "Posizionamento", Order = 25)]
+    [UiProperty("Tolleranza di verifica posizione sul bilico", "mm", "Posizionamento", Order = 25)]
     public double PositionToleranceMm { get; set; } = 10;
 
     [UiProperty("Tempo di stabilizzazione", "s", "Tempi", Order = 30)]

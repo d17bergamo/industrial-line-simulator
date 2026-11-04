@@ -47,7 +47,7 @@ public class MultiEditTests
         var mixed = new List<object> { new InverterConfig(), new PhotocellConfig() };
         Assert.False(MultiEdit.SameType(mixed, out _));
 
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var idsBefore = p.Photocells.Select(x => x.Id).ToList();
         var pcs = p.Photocells.Cast<object>().ToList();
         Assert.True(MultiEdit.SameType(pcs, out var t));

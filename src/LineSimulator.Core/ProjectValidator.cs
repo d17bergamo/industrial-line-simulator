@@ -215,10 +215,14 @@ public static class ProjectValidator
             if (s.PreparationTimeS < 0 || s.StrappingTimeS <= 0 || s.ReturnTimeS < 0)
                 r.Error("STR_TIME", "Tempi legatrice non validi (legatura > 0, altri ≥ 0).", s.Id);
         }
+        foreach (var s in LayoutRules.StrappersTooCloseToTransfer(p))
+            r.Error("STR_TRF_MIN", $"La legatrice deve stare ad almeno 3 m dal trasferitore sollevabile (massimo {F(Math.Round(LayoutRules.MaxStrapperPositionMm(p)))} mm).", s.Id);
     }
 
     private static void ValidateStopperAndTransfer(LineProject p, LineTopology topo, ValidationReport r)
     {
+        if (!LayoutRules.TransferModuleMatches(p))
+            r.Warn("TRF_MODULE", "La via a rulli davanti al trasferitore deve avere la stessa lunghezza del trasferitore e iniziare con esso.", p.Transfer.Id);
         var stp = p.Stopper;
         double xs = Units.MmToM(stp.PositionMm);
         if (topo.StopperZone == null)
@@ -257,6 +261,7 @@ public static class ProjectValidator
         var f = p.Infeed;
         if (f.PackageCount <= 0) r.Error("INF_COUNT", "Numero pacchi deve essere > 0.");
         if (f.IntervalS < 0) r.Error("INF_INT", "Intervallo di ingresso negativo.");
+        if (f.NewPackageDelayS < 0) r.Error("INF_DELAY", "Ritardo di creazione del nuovo pacco negativo.");
         if (f.MinimumGapMm < 0) r.Error("INF_GAP", "Distanza minima tra pacchi negativa.");
         foreach (var id in f.TypeSequence.Where(id => !p.PackageTypes.Any(t => t.Id == id)))
             r.Error("INF_TYPE", $"Tipologia '{id}' nella sequenza non definita.");
@@ -376,6 +381,14 @@ public static class ProjectValidator
         if (k.IsEnabled)
         {
             if (stationZone == null) r.Warn("KNOF_STATION", "Stringifascio inattivo: nessuna legatrice abilitata (stazione di legatura non attiva).", k.Id);
+            else if (k.PerMachine)
+            {
+                foreach (var (id, pos) in LayoutRules.BundleClampPositions(p))
+                {
+                    double x = Units.MmToM(pos);
+                    if (x < stationZone.StartM || x > stationZone.EndM) r.Error("KNOF_POS", $"Stringifascio {id} ({F(Math.Round(pos))} mm) fuori dalla zona di legatura {stationZone.Id}.", k.Id);
+                }
+            }
             else
             {
                 double x = Units.MmToM(k.PositionMm);

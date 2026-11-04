@@ -58,8 +58,8 @@ public static class FunctionalSpecExporter
                 s.Id, s.MachineType == StrapperMachineType.SMA ? "Reggettatrice " + s.Model : "Legatrice " + s.Model, N(s.PositionMm, "0"),
                 $"{(s.MachineType == StrapperMachineType.SMA ? "riarmo" : "carica filo")} {N(s.ArmingTimeS)} s; ciclo {N(s.StrappingTimeS)} s", s.IsEnabled ? "abilitata" : "disabilitata"
             });
-        if (p.BundleClamp.IsEnabled)
-            rows.Add(new[] { p.BundleClamp.Id, "Stringifascio " + p.BundleClamp.Model, N(p.BundleClamp.PositionMm, "0"),
+        foreach (var (kid, kpos) in LayoutRules.BundleClampPositions(p))
+            rows.Add(new[] { kid, "Stringifascio " + p.BundleClamp.Model + (p.BundleClamp.PerMachine ? " (uno per macchina, comando comune)" : ""), N(kpos, "0"),
                 $"chiusura {N(p.BundleClamp.CloseTimeS)} s, mantenimento {N(p.BundleClamp.HoldTimeS)} s, apertura {N(p.BundleClamp.OpenTimeS)} s", "abilitato" });
         if (p.Compactor.IsEnabled)
             rows.Add(new[] { p.Compactor.Id, "Compattatore laterale", N(p.Compactor.PositionMm, "0"),

@@ -15,7 +15,7 @@ public class ProcessLogicTests
 {
     private static LineProject Full(Action<LineProject>? tweak = null)
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         tweak?.Invoke(p);
         return p;
     }
@@ -100,7 +100,7 @@ public class ProcessLogicTests
     [Fact]
     public void SchemaV1Project_GetsEntryPhotocellOnLoad()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Photocells.RemoveAll(x => x.IsEntryPhotocell);
         string json = ProjectSerializer.Serialize(p).Replace($"\"schemaVersion\": {LineProject.CurrentSchemaVersion}", "\"schemaVersion\": 1");
         var loaded = ProjectSerializer.Deserialize(json);
@@ -429,7 +429,7 @@ public class ProcessLogicTests
     [Fact]
     public void Inverter_StopsAfterEmptyTravelEqualToItsLength_AndRestartsFromUpstreamPhotocell()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Infeed.PackageCount = 2;
         p.Infeed.IntervalS = 200;
         double? emptyAtStop = null;
@@ -462,7 +462,7 @@ public class ProcessLogicTests
     [Fact]
     public void CommandZone_GroupsModulesUnderOneInverter()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Sections.Single(s => s.Id == "M1").CommandZoneId = "INV-A";
         p.Sections.Single(s => s.Id == "M2").CommandZoneId = "INV-A";
         var topo = new LineTopology(p);
@@ -484,7 +484,7 @@ public class ProcessLogicTests
     [Fact]
     public void CommandZone_NonContiguousModulesAreRejected()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Sections.Single(s => s.Id == "M1").CommandZoneId = "INV-A";
         p.Sections.Single(s => s.Id == "M3").CommandZoneId = "INV-A";
         Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "ZONE_SPLIT");
@@ -531,7 +531,7 @@ public class ProcessLogicTests
     public void Knca_LoadsWireAtReferencePhotocell_AndBetweenStrapsOfSamePattern()
     {
         // Linea a una legatrice: 3 legature sequenziali dello stesso pattern
-        var e = RunChecked(SampleProjects.CreateSingleStrapperLine().Also(p => p.Infeed.PackageCount = 2));
+        var e = RunChecked(LegacySamples.CreateSingleStrapperLine().Also(p => p.Infeed.PackageCount = 2));
         Assert.True(e.CompletedNormally, Diag(e));
         var l1 = e.Strappers.Single();
         // 2 pacchi × 3 legature: carica filo all'arrivo (2) + tra le legature dello stesso pattern (2 × 2)
@@ -576,7 +576,7 @@ public class ProcessLogicTests
     [Fact]
     public void AutoStopDisabled_KeepsInverterRunning()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Infeed.PackageCount = 1;
         foreach (var m in p.Sections) m.AutoStopWhenEmpty = false;
         var e = new SimulationEngine(p);

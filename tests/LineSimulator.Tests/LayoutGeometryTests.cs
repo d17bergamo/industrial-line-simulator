@@ -30,7 +30,7 @@ public class LayoutGeometryTests
     [Fact]
     public void InteraxialLength_IsNotSerializedButOverhangRoundTrips()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var json = LineSimulator.Infrastructure.ProjectSerializer.Serialize(p);
         Assert.DoesNotContain("interaxialLengthMm", json);
         var q = LineSimulator.Infrastructure.ProjectSerializer.Deserialize(json);
@@ -52,7 +52,7 @@ public class LayoutGeometryTests
     [Fact]
     public void Describe_GivesCenterEntryExitOfRollerModulesAndDevices()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var info = LayoutGeometry.Describe(p);
         var s = p.Sections.OrderBy(x => x.StartMm).First();
         var m = info.Single(i => i.Id == s.Id);
@@ -67,7 +67,7 @@ public class LayoutGeometryTests
     [Fact]
     public void EntryReference_IsTheEntryPhotocellPosition()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         ProjectNormalizer.EnsureEntryPhotocell(p);
         var pc = p.Photocells.First(f => f.IsEntryPhotocell);
         Assert.Equal(pc.PositionMm / 1000.0, LayoutGeometry.EntryReferenceM(p), 6);
@@ -76,7 +76,7 @@ public class LayoutGeometryTests
     [Fact]
     public void Gaps_AreMeasuredBetweenExitAndNextEntry()
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         var gaps = LayoutGeometry.Gaps(p);
         Assert.NotEmpty(gaps);
         var info = LayoutGeometry.Describe(p).ToDictionary(i => i.Id);

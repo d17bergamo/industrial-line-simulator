@@ -548,6 +548,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (markModified) _modified = true;
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
+        // Regole di layout (sessione B): via a rulli davanti al trasferitore lunga come il trasferitore; legatrici ad almeno 3 m dal trasferitore
+        var layoutFixes = LayoutRules.Enforce(_project);
+        if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
         // Intestatura di coda solo con un fermo intermedio scomparente (sessione B)
         if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo intermedio scomparente: impostata di testa";
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading));

@@ -119,7 +119,7 @@ public class StopperAlignmentTests
     [Fact]
     public void Stopper_IsAfterTheLastRoller_AtTheSetDistance()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var last = p.Sections.OrderBy(s => s.EndMm).Last();
         double lastRoller = last.EndMm - last.EndOverhangMm;
         p.Stopper.DistanceFromLastRollerMm = 40;
@@ -131,7 +131,7 @@ public class StopperAlignmentTests
     [Fact]
     public void Stopper_FollowsTheLastRoller_WhenTheLastSectionMoves()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         ProjectNormalizer.AlignStopperToLastRoller(p);
         double before = p.Stopper.PositionMm;
         p.Sections.OrderBy(s => s.EndMm).Last().StartMm += 1000;
@@ -142,7 +142,7 @@ public class StopperAlignmentTests
     [Fact]
     public void Stopper_BeyondTheLastSection_StillBelongsToTheLastZone()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var last = p.Sections.OrderBy(s => s.EndMm).Last();
         p.Stopper.DistanceFromLastRollerMm = last.EndOverhangMm + 500;   // oltre la fine della via a rulli
         ProjectNormalizer.AlignStopperToLastRoller(p);

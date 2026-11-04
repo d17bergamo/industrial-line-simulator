@@ -10,7 +10,7 @@ public class InfrastructureTests
     [Fact]
     public void Json_RoundTrip_PreservesProject()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Rules.Add(new LogicRule
         {
             Id = "R1", Name = "Esempio", TargetInverterId = "M2", Action = RuleAction.SetLowSpeed,
@@ -36,14 +36,14 @@ public class InfrastructureTests
     [Fact]
     public void Json_NewerSchemaIsRejected()
     {
-        var json = ProjectSerializer.Serialize(SampleProjects.CreateStandardLine()).Replace($"\"schemaVersion\": {LineProject.CurrentSchemaVersion}", "\"schemaVersion\": 999");
+        var json = ProjectSerializer.Serialize(LegacySamples.CreateStandardLine()).Replace($"\"schemaVersion\": {LineProject.CurrentSchemaVersion}", "\"schemaVersion\": 999");
         Assert.Throws<InvalidDataException>(() => ProjectSerializer.Deserialize(json));
     }
 
     [Fact]
     public void Duplicate_ChangesIdAndName()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var d = ProjectSerializer.Duplicate(p);
         Assert.NotEqual(p.ProjectId, d.ProjectId);
         Assert.EndsWith("(copia)", d.Name);
@@ -68,7 +68,7 @@ public class InfrastructureTests
     {
         string dir = Path.Combine(Path.GetTempPath(), "ils_test_" + Guid.NewGuid().ToString("N"));
         var repo = new ProjectRepository(Path.Combine(dir, "auto"));
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         string file = Path.Combine(dir, "linea.json");
         repo.Save(p, file);
         Assert.Equal(p.Name, repo.Load(file).Name);
@@ -80,7 +80,7 @@ public class InfrastructureTests
     [Fact]
     public void Reports_CsvAndExcelAreWritten()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Infeed.PackageCount = 3;
         var e = new SimulationEngine(p);
         e.RunToCompletion();
@@ -102,7 +102,7 @@ public class ValidatorTests
     [Fact]
     public void InsufficientBrakingSpace_IsError()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Photocells.First(x => x.Id == "FC1").PositionMm = 12900;
         var r = ProjectValidator.Validate(p);
         Assert.Contains(r.Errors, i => i.Code == "PC_BRAKE" && i.ComponentId == "FC1");
@@ -111,7 +111,7 @@ public class ValidatorTests
     [Fact]
     public void ReverseSection_IsReportedAsUnsupported()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Sections[0].Direction = TransportDirection.Reverse;
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "SEC_DIR");
     }
@@ -119,7 +119,7 @@ public class ValidatorTests
     [Fact]
     public void MoreThanThreeStrappers_IsError()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Strappers.Add(new StrapperConfig { Id = "L4", PositionMm = 28000 });
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "STR_COUNT");
     }
@@ -127,7 +127,7 @@ public class ValidatorTests
     [Fact]
     public void OverlappingStrapperFootprints_IsError()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Strappers[1].PositionMm = p.Strappers[0].PositionMm + 500;
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "STR_INTERF");
     }
@@ -135,7 +135,7 @@ public class ValidatorTests
     [Fact]
     public void GapBetweenSections_IsError()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Sections[1].StartMm += 100;
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "SEC_GAP");
     }
@@ -143,7 +143,7 @@ public class ValidatorTests
     [Fact]
     public void StrapOutsidePackage_IsError()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.PackageTypes[0].StrapPositionsMm.Add(11900);
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "STRAP_POS");
     }

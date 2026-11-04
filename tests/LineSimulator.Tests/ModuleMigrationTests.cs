@@ -66,7 +66,7 @@ public class ModuleMigrationTests
     [Fact]
     public void ModuleProject_RoundTripsWithoutInverterList()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         string json = ProjectSerializer.Serialize(p);
         Assert.DoesNotContain("\"inverters\"", json);
         var q = ProjectSerializer.Deserialize(json);
@@ -77,7 +77,7 @@ public class ModuleMigrationTests
     [Fact]
     public void EachModuleIsOneControlZone()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var topo = new LineTopology(p);
         Assert.Equal(p.Sections.Count, topo.Zones.Count);
         foreach (var s in p.Sections)

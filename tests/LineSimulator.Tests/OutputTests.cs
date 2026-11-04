@@ -20,7 +20,7 @@ public class OutputTests
     [Fact]
     public void ControlLogic_RulesAreValidAndOrNotConditions()
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         var d = ControlLogicGenerator.Generate(p);
         Assert.NotEmpty(d.Rules);
         foreach (var r in d.Rules)
@@ -59,7 +59,7 @@ public class OutputTests
     public void ControlLogic_ExportsJsonAndCsv()
     {
         var dir = TempDir();
-        var d = ControlLogicGenerator.Generate(SampleProjects.CreateStandardLine());
+        var d = ControlLogicGenerator.Generate(LegacySamples.CreateStandardLine());
         var files = ControlLogicGenerator.Export(d, Path.Combine(dir, "logica.json"));
         Assert.Equal(6, files.Count);
         Assert.All(files, f => Assert.True(File.Exists(f), f));
@@ -73,7 +73,7 @@ public class OutputTests
     {
         var dir = TempDir();
         string path = Path.Combine(dir, "specifica.docx");
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         p.Infeed.PackageCount = 2;
         var e = new LineSimulator.Engine.SimulationEngine(p);
         e.RunToCompletion();
@@ -94,7 +94,7 @@ public class OutputTests
     [Fact]
     public void CommandZoneOptimizer_FindsMinimumInvertersAmongValidPartitions()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var report = CommandZoneOptimizer.Optimize(p, packagesPerType: 2);
         Assert.NotNull(report.Best);
         Assert.True(report.Best!.Valid);

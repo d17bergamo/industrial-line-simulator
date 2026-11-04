@@ -195,6 +195,7 @@ public sealed class LineScene
         _stopVisuals.Clear();
         _scaleVisuals.Clear();
         _knofBrush = _knofBrushR = _compactorBrush = _smaBrush = null;
+        _knofArmBrushes.Clear();
         _highlighted = null;
         _names.Children.Clear();
 
@@ -226,7 +227,8 @@ public sealed class LineScene
         foreach (var st in p.Strappers) AddStrapper(st);
         AddStopper(p.Stopper);
         AddTransfer(p.Transfer);
-        if (p.BundleClamp.IsEnabled) AddBundleClamp(p.BundleClamp);
+        // Uno stringifascio per ogni legatrice/reggettatrice (se previsto) oppure quello unico; si chiudono insieme
+        foreach (var (_, xMm) in LayoutRules.BundleClampPositions(p)) AddBundleClamp(p.BundleClamp, xMm);
         if (p.Compactor.IsEnabled) AddCompactor(p.Compactor);
         if (p.Rejector.IsEnabled) AddRejector(p.Rejector, p.Transfer);
         foreach (var fs in p.IntermediateStops.Where(x => x.IsEnabled)) AddIntermediateStop(fs);
@@ -481,9 +483,9 @@ public sealed class LineScene
     /// Stringifascio KNOF (modello semplificato): piastra blu a C aperta verso l'alto su trave a doppio T grigia,
     /// due bracci gialli in alto che chiudono lateralmente sul pacco, arco con golfari, quadro comandi.
     /// </summary>
-    private void AddBundleClamp(BundleClampConfig k)
+    private void AddBundleClamp(BundleClampConfig k, double positionMm)
     {
-        double x = k.PositionMm / 1000.0, w = _lineWidth;
+        double x = positionMm / 1000.0, w = _lineWidth;
         double zb = _zTop - 0.35;
         var beam = new MeshFactory();
         beam.AddBox(new Point3D(x, 0, zb - 0.1), 0.3, w + 1.1, 0.2);                                  // trave a doppio T
@@ -500,8 +502,10 @@ public sealed class LineScene
         armR.AddBox(new Point3D(x, -w / 2 - 0.12, _zTop + 0.55), 0.18, 0.35, 0.14);
         Part(armL, MachYellow, k, _knofArmL);
         _knofBrush = _lastPartBrush;
+        if (_knofBrush != null) _knofArmBrushes.Add(_knofBrush);
         Part(armR, MachYellow, k, _knofArmR);
         _knofBrushR = _lastPartBrush;
+        if (_knofBrushR != null) _knofArmBrushes.Add(_knofBrushR);
         var eye = new MeshFactory();
         eye.AddBox(new Point3D(x, w / 2 + 0.3, zb + 1.6), 0.1, 0.1, 0.1);                              // golfari uniti da un arco
         eye.AddBox(new Point3D(x, -w / 2 - 0.3, zb + 1.6), 0.1, 0.1, 0.1);
@@ -513,6 +517,8 @@ public sealed class LineScene
     }
 
     private SolidColorBrush? _knofBrushR;
+    /// <summary>Bracci di tutti gli stringifascio (uno per macchina): stesso stato, stesso colore.</summary>
+    private readonly List<SolidColorBrush> _knofArmBrushes = new();
 
     /// <summary>Compattatore laterale: due ganasce che si chiudono verso l'asse linea.</summary>
     private void AddCompactor(SideCompactorConfig c)
@@ -722,8 +728,7 @@ public sealed class LineScene
         if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
         {
             var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
-            _knofBrush.Color = kc;
-            if (_knofBrushR != null) _knofBrushR.Color = kc;
+            foreach (var b in _knofArmBrushes) b.Color = kc;
         }
 
         // Compattatore: ganasce verso l'asse

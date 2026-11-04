@@ -96,6 +96,12 @@ public sealed class PackageRuntime
     public int AssignedStop { get; internal set; } = -1;
     internal bool InIntermediateStopContact;
     internal bool HeldByTailStop;
+    /// <summary>Ingresso "un pacco alla volta": il pacco creato attende a monte della linea finché non riceve il consenso ad avanzare.</summary>
+    internal bool InfeedReleased = true;
+    /// <summary>Istante in cui la coda ha liberato la fotocellula di ingresso della via rulli di legatura.</summary>
+    internal double? EntryClearedTimeS;
+    /// <summary>Il pacco è stato creato e attende a monte della via rulli di legatura.</summary>
+    public bool WaitingAtInfeed => !InfeedReleased;
 
     public bool InStopperContact { get; internal set; }
     public bool IsSlipping { get; internal set; }

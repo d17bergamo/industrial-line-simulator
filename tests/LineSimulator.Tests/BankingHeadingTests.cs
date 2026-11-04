@@ -16,7 +16,7 @@ public class BankingHeadingTests
 
     private static LineProject Full(AccumulationMode banking, StopReference heading, string type = "P6", int count = 3)
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         p.Simulation.Banking = banking;
         p.Simulation.Heading = heading;
         p.Infeed.TypeSequence = new List<string> { type };
@@ -120,15 +120,15 @@ public class BankingHeadingTests
     [Fact]
     public void WithoutIntermediateStop_TailIsNotAvailable_AndIsResetToHead()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         Assert.False(BankingOptions.TailHeadingAvailable(p));
-        Assert.True(BankingOptions.TailHeadingAvailable(SampleProjects.CreateFullProcessLine()));
+        Assert.True(BankingOptions.TailHeadingAvailable(LegacySamples.CreateFullProcessLine()));
         p.Simulation.Heading = StopReference.Tail;
         var r = SimulationPreparation.Prepare(p);
         Assert.Equal(StopReference.Head, p.Simulation.Heading);
         Assert.Contains(r.Changes, c => c.Contains("Intestatura di coda non disponibile", StringComparison.Ordinal));
         // Anche se il progetto arriva al motore con "coda", il motore usa la testa
-        var q = SampleProjects.CreateStandardLine();
+        var q = LegacySamples.CreateStandardLine();
         q.Simulation.Heading = StopReference.Tail;
         q.Infeed.PackageCount = 2;
         var e = new SimulationEngine(q);
@@ -139,7 +139,7 @@ public class BankingHeadingTests
 
     private static LineProject StandardWith6m(AccumulationMode banking, int count)
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.PackageTypes.Add(new PackageType { Id = "P6", Name = "Pacco 6 m", LengthMm = 6000, WeightKg = 1500, StrapPositionsMm = new List<double> { 750, 3000, 5250 } });
         p.Infeed.TypeSequence = new List<string> { "P6" };
         p.Infeed.PackageCount = count;
@@ -185,7 +185,7 @@ public class BankingHeadingTests
     [Fact]
     public void DoubleBanking_12m_WithoutIntermediateStop_OnePackagePerCycle()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         p.Simulation.Banking = AccumulationMode.DoubleBanking;
         p.Infeed.PackageCount = 2;
         var (e, lifts) = Run(p);
@@ -197,7 +197,7 @@ public class BankingHeadingTests
     [Fact]
     public void OldProject_BatchSizeAndStopReference_BecomeSimulationSettings()
     {
-        var p = SampleProjects.CreateFullProcessLine();
+        var p = LegacySamples.CreateFullProcessLine();
         p.IntermediateStops[0].Reference = StopReference.Tail;
         var node = JsonNode.Parse(ProjectSerializer.Serialize(p))!.AsObject();
         var sim = node.First(kv => kv.Key.Equals("simulation", StringComparison.OrdinalIgnoreCase)).Value!.AsObject();

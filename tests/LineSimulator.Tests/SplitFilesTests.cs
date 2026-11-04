@@ -11,7 +11,7 @@ public class SplitFilesTests
     [Fact]
     public void LayoutFile_ContainsNoPackageTypes_AndReloadsIdentically()
     {
-        var p = SampleProjects.CreateStandardLine();
+        var p = LegacySamples.CreateStandardLine();
         var path = Tmp("layout.json");
         try
         {
@@ -32,7 +32,7 @@ public class SplitFilesTests
     [Fact]
     public void ExtractLayout_HasNoPackageTypes()
     {
-        var layout = SplitFiles.ExtractLayout(SampleProjects.CreateStandardLine());
+        var layout = SplitFiles.ExtractLayout(LegacySamples.CreateStandardLine());
         Assert.Empty(layout.PackageTypes);
         Assert.Empty(layout.Infeed.TypeSequence);
     }
