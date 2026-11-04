@@ -7,8 +7,8 @@ namespace LineSimulator.App.Rendering;
 /// <summary>Anteprima 3D di una tipologia di pacco: parallelepipedo con le legature nelle posizioni impostate (dalla testa, a destra).</summary>
 public sealed class PackageScene
 {
-    private static readonly Color Wood = Color.FromRgb(0xD9, 0xC2, 0x9A);
-    private static readonly Color Strap = Color.FromRgb(0x2E, 0x9E, 0x50);
+    private static readonly Color Wood = Color.FromRgb(0xD3, 0xDB, 0xE5);
+    private static readonly Color Strap = Color.FromRgb(0x3C, 0x48, 0x56);
     private static readonly Color StrapBad = Color.FromRgb(0xC0, 0x39, 0x2B);
 
     public ModelVisual3D Visual { get; } = new();
@@ -42,7 +42,7 @@ public sealed class PackageScene
         {
             double s = pos[i];
             bool bad = s < minEnd || s > L - minEnd || pos.Where((_, j) => j != i).Any(o => Math.Abs(o - s) < minGap);
-            double x = L / 2 - s, t = 0.04, e = 0.012;
+            double x = L / 2 - s, t = 0.06, e = 0.02;
             var f = new MeshFactory();
             f.AddBox(new Point3D(x, 0, H + e / 2), t, W + 2 * e, e);       // sopra
             f.AddBox(new Point3D(x, 0, -e / 2 + 0.0), t, W + 2 * e, e);    // sotto
