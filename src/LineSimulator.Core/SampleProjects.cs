@@ -155,8 +155,8 @@ public static class SampleProjects
     {
         var s = new RollerSection
         {
-            Id = id, Name = name, WidthMm = 1200, RollerPitchMm = 300,
-            RollerDiameterMm = 150, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
+            Id = id, Name = name, WidthMm = 1200, RollerPitchMm = RollerSection.DefaultPitchMm,
+            RollerDiameterMm = RollerSection.DefaultDiameterMm, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
         };
         LineReflow.Fit(s, start, start + length);
         return s;

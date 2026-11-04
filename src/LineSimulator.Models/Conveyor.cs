@@ -16,19 +16,22 @@ public sealed class RollerSection : ComponentBase
     /// Non si modifica a mano: dipende da passo, numero rulli e sporgenza (vedi <see cref="RecalculateLength"/>).
     /// </summary>
     [UiProperty("Lunghezza fisica struttura (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 2)]
-    public double LengthMm { get; set; } = 6000;
+    public double LengthMm { get; set; } = 6650;
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
     public double WidthMm { get; set; } = 1200;
 
     [UiProperty("Numero rulli", "", "Geometria", Order = 4)]
-    public int RollerCount { get; set; } = 21;
+    public int RollerCount { get; set; } = 6;
 
     [UiProperty("Passo rulli", "mm", "Geometria", Order = 5)]
-    public double RollerPitchMm { get; set; } = 300;
+    public double RollerPitchMm { get; set; } = DefaultPitchMm;
 
     [UiProperty("Diametro rulli (grafico)", "mm", "Geometria", Order = 6)]
-    public double RollerDiameterMm { get; set; } = 150;
+    public double RollerDiameterMm { get; set; } = DefaultDiameterMm;
+
+    /// <summary>Passo e diametro rulli di default in tutti i modelli.</summary>
+    public const double DefaultPitchMm = 1250, DefaultDiameterMm = 268;
 
     private double _endOverhangMm = -1;
 

@@ -52,6 +52,31 @@ public static class LineReflow
         ProjectNormalizer.AlignStopperToLastRoller(p);
     }
 
+    /// <summary>Sposta di dxMm tutto ciò che sta oltre fromMm (vie, fotocellule, macchine, trasferitore, bilici): usato per spostare la parte a valle.</summary>
+    public static void ShiftBeyond(LineProject p, double fromMm, double dxMm)
+    {
+        if (Math.Abs(dxMm) < 1e-9) return;
+        Apply(p, v => v > fromMm + 1e-6 ? v + dxMm : v);
+    }
+
+    /// <summary>
+    /// Porta i vecchi valori di default (passo 300 mm, diametro 150 mm) ai nuovi (passo 1250 mm, diametro 268 mm): le vie
+    /// mantengono posizione e lunghezza, cambia il numero di rulli. Le vie con valori personalizzati non si toccano.
+    /// </summary>
+    public static bool ApplyDefaultRollerGeometry(LineProject p)
+    {
+        bool changed = false;
+        foreach (var s in p.Sections)
+        {
+            if (Math.Abs(s.RollerDiameterMm - 150) > 0.01 || s.RollerPitchMm > 400) continue;
+            s.RollerDiameterMm = RollerSection.DefaultDiameterMm;
+            s.RollerPitchMm = RollerSection.DefaultPitchMm;
+            Fit(s, s.StartMm, s.EndMm);
+            changed = true;
+        }
+        return changed;
+    }
+
     /// <summary>Adatta una via a rulli a [start, end): sporgenze fisse a 200 mm, numero di rulli più vicino al passo attuale e passo ricalcolato.</summary>
     public static void Fit(RollerSection s, double startMm, double endMm)
     {
