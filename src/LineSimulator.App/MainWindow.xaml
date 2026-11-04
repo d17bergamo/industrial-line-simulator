@@ -812,9 +812,9 @@
                                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="🗑" Foreground="#B3261E" FontSize="16" Command="{Binding DeletePackageCommand}"
                                                 ToolTip="Cestino: elimina la tipologia selezionata"/>
                                         <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Foreground="#B3261E" Margin="0,0,8,0"
-                                                ToolTip="Toglie la legatura selezionata (o l'ultima)"/>
+                                                ToolTip="Toglie una legatura e rimette le altre in posizione simmetrica"/>
                                         <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
-                                                ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
+                                                ToolTip="Aggiunge una legatura e rimette tutte in posizione simmetrica (passi di 100 mm)"/>
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                             <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
