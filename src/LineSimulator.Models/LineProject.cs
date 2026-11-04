@@ -46,16 +46,13 @@ public sealed class SimulationSettings
 /// <summary>Disposizione grafica globale della linea nella scena 3D.</summary>
 public sealed class LayoutSettings
 {
-    [UiProperty("Origine X scena", "mm", "Layout", Order = 1)]
     public double OriginXMm { get; set; }
 
-    [UiProperty("Origine Y scena", "mm", "Layout", Order = 2)]
     public double OriginYMm { get; set; }
 
-    [UiProperty("Rotazione linea", "°", "Layout", Order = 3)]
     public double RotationDeg { get; set; }
 
-    [UiProperty("Quota piano rulli", "mm", "Layout", Order = 4)]
+    /// <summary>Quota del piano rulli: si modifica dalle proprietà generali delle vie rulli (padre).</summary>
     public double RollerTopElevationMm { get; set; } = 800;
 }
 
@@ -81,6 +78,9 @@ public sealed class LineProject
     public List<RollerSection> Sections { get; set; } = new();
     /// <summary>Proprietà comuni (padre) dei moduli via rulli: i moduli non personalizzati le ereditano.</summary>
     public RollerGroup SectionDefaults { get; set; } = new();
+    public PhotocellGroup PhotocellDefaults { get; set; } = new();
+    public StrapperGroup StrapperDefaults { get; set; } = new();
+    public ScaleGroup ScaleDefaults { get; set; } = new();
     public List<PhotocellConfig> Photocells { get; set; } = new();
     public List<StrapperConfig> Strappers { get; set; } = new();
     public StrappingStationConfig StrappingStation { get; set; } = new();

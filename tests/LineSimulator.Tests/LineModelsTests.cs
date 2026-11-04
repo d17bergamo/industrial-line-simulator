@@ -164,7 +164,7 @@ public class LineModelsTests
         var m = LayoutRules.TransferModule(p)!;
         Assert.Equal(15000, m.LengthMm, 6);
         Assert.Equal(p.Transfer.PositionMm, m.StartMm, 6);
-        Assert.Equal(m.EndMm - m.EndOverhangMm + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
+        Assert.Equal(m.EndMm, p.Stopper.PositionMm, 6);
     }
 
     [Fact]

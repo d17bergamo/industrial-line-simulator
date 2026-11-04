@@ -145,7 +145,6 @@
         <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Height="56">
             <DockPanel Margin="12,0">
                 <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="💾  Salva" Command="{Binding SaveCommand}" Margin="8,0,0,0"/>
-                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="✔  Controlla equipaggiamenti" Command="{Binding CheckEquipmentCommand}" ToolTip="Controlla con regole gli equipaggiamenti (prima fotocellula presente, nella posizione giusta e rinominata) e applica le correzioni"/>
                 <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
                 <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,16,0">
                     <TextBlock Text="{Binding Project.Name}" FontWeight="Bold" FontSize="14" Foreground="#1B2430"/>
@@ -645,6 +644,29 @@
                         </TreeView.ItemTemplate>
                     </TreeView>
                 </DockPanel></TabItem>
+                        <TabItem Header="Controllo">
+                            <DockPanel Background="White">
+                                <StackPanel DockPanel.Dock="Top" Margin="12,10,12,4">
+                                    <TextBlock Text="Controllo equipaggiamenti" FontWeight="SemiBold" FontSize="14"/>
+                                    <TextBlock Text="{Binding CheckSummary}" Foreground="#5B6573" Margin="0,2,0,8"/>
+                                    <Button Style="{StaticResource PrimaryButton}" Content="🛠  Sistema automaticamente" Command="{Binding CheckEquipmentCommand}"
+                                            HorizontalAlignment="Left" ToolTip="Applica le correzioni sicure agli errori elencati (le anomalie senza correzione automatica restano nell'elenco)"/>
+                                </StackPanel>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CheckItems}" Margin="12,6">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,4">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Icon}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </DockPanel>
+                        </TabItem>
                         <TabItem Header="Stato">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding EquipmentStatus}" Margin="12,8">

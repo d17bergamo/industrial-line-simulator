@@ -85,7 +85,7 @@ public class StrapperTrackTests
             double needed = p.PackageTypes.Max(t => t.LengthMm) - 500 + 100 - (p.Strappers.Count - 1) * 2500 - fc0.PositionMm;
             Assert.True(d <= Math.Max(5000, needed) + 100);
         }
-        Assert.Equal(5300, SampleProjects.FirstStrapperPositionMm(1, 5));
+        Assert.Equal(5000, SampleProjects.FirstStrapperPositionMm(1, 5));
     }
 
     [Fact]
@@ -146,5 +146,74 @@ public class StrapperTrackTests
         Assert.Equal(0.8, p.Sections[0].HighSpeed);
         Assert.Equal(300, p.Sections[0].RollerDiameterMm);
         Assert.Equal(1.0, p.Sections[1].HighSpeed);        // personalizzato: non segue il padre
+    }
+
+    [Fact]
+    public void FirstPhotocell_StartsAtZeroTogetherWithTheTrack_AndDefaultWidthIs700()
+    {
+        foreach (var (_, create) in SampleProjects.All)
+        {
+            var p = create();
+            Assert.Equal(p.Sections.Min(x => x.StartMm), p.Photocells.Single(x => x.IsEntryPhotocell).PositionMm, 6);
+            Assert.All(p.Sections, x => Assert.Equal(700, x.WidthMm));
+            Assert.Equal(p.Sections.Max(x => x.EndMm), p.Stopper.PositionMm, 6);
+            Assert.All(p.Sections, x => Assert.Equal(0, x.RollerPitchMm % 50, 6));
+        }
+        var q = SampleProjects.CreateTwoStrappers12m();
+        q.Photocells.Single(x => x.IsEntryPhotocell).PositionMm = 300;
+        Assert.True(ProjectNormalizer.AlignEntryPhotocell(q));
+        Assert.Equal(0, q.Photocells.Single(x => x.IsEntryPhotocell).PositionMm);
+    }
+
+    [Fact]
+    public void DraggingTheLastModule_MovesTransferAndScalesAndStops_AndPitchStaysRound()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        var last = LayoutRules.TransferModule(p)!;
+        double trf = p.Transfer.PositionMm, sc = p.Scales[0].StartMm, fm = p.IntermediateStops[0].PositionMm;
+        double dx = LineReflow.MoveSection(p, last, 1250);
+        Assert.Equal(1250, dx, 6);
+        Assert.Equal(trf + 1250, p.Transfer.PositionMm, 6);
+        Assert.Equal(sc + 1250, p.Scales[0].StartMm, 6);
+        Assert.Equal(fm + 1250, p.IntermediateStops[0].PositionMm, 6);
+        Assert.Equal(last.EndMm, p.Stopper.PositionMm, 6);
+        Assert.Empty(LineReflow.Discontinuities(p));
+        Assert.All(p.Sections, x => Assert.Equal(0, x.RollerPitchMm % 50, 6));
+    }
+
+    [Fact]
+    public void FamiliesOfPhotocellsScalesAndStrappers_PassPropertiesToNonCustomizedChildren()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        p.PhotocellDefaults.ResponseTimeMs = 40;
+        p.ScaleDefaults.StabilizationTimeS = 5;
+        p.StrapperDefaults.StrappingTimeS = 9;
+        p.Photocells[1].OverrideGroup = true;
+        Assert.True(GroupInheritance.PropagateAll(p));
+        Assert.Equal(40, p.Photocells[0].ResponseTimeMs);
+        Assert.Equal(20, p.Photocells[1].ResponseTimeMs);
+        Assert.All(p.Scales, x => Assert.Equal(5, x.StabilizationTimeS));
+        Assert.All(p.Strappers, x => Assert.Equal(9, x.StrappingTimeS));
+        Assert.Contains("ResponseTimeMs", GroupInheritance.InheritedNames(p.PhotocellDefaults));
+        // progetti vecchi: valori diversi dal padre restano, marcati come personalizzati
+        var q = SampleProjects.CreateTwoStrappers12m();
+        q.Strappers[0].StrappingTimeS = 7;
+        Assert.True(GroupInheritance.MarkAllCustomized(q));
+        Assert.True(q.Strappers[0].OverrideGroup);
+        Assert.False(q.Strappers[1].OverrideGroup);
+    }
+
+    [Fact]
+    public void EquipmentCheck_ListsProblemsWithoutFixing_ThenFixesThem()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        p.Strappers[0].PositionMm = 200;
+        p.Stopper.PositionMm += 300;
+        var list = EquipmentCheck.Run(p, fix: false);
+        Assert.Contains(list, i => i.Code == "STRAPPER_START" && i.IsProblem && !i.Fixed);
+        Assert.Contains(list, i => i.Code == "STOPPER");
+        Assert.Equal(200, p.Strappers[0].PositionMm);
+        EquipmentCheck.Run(p);
+        Assert.DoesNotContain(EquipmentCheck.Run(p, fix: false), i => i.IsProblem);
     }
 }

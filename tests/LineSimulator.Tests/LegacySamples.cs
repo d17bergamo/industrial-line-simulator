@@ -195,7 +195,7 @@ public static class LegacySamples
 
     private static PhotocellConfig Entry() => new()
     {
-        Id = "FC0", Name = "FC0 ingresso (identificazione)", PositionMm = ProjectNormalizer.DefaultEntryOffsetMm,
+        Id = "FC0", Name = "FC0 ingresso (identificazione)", PositionMm = 300,
         ResponseTimeMs = 20, IsEntryPhotocell = true, Action = PhotocellAction.None
     };
 

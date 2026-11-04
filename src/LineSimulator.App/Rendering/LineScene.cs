@@ -128,7 +128,7 @@ public sealed class LineScene
     private void RebuildDimensions()
     {
         _dims.Children.Clear();
-        if (!(_showDimensions || _dragging) || _project == null) return;
+        if (!_showDimensions || _project == null) return;
         double refX = LayoutGeometry.EntryReferenceM(_project);          // origine delle quote: fotocellula di ingresso
         var info = LayoutGeometry.Describe(_project)
             .Where(i => i.Kind is not ("Fotocellula" or "Fermo intermedio"))

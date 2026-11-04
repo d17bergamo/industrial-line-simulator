@@ -66,8 +66,9 @@ public static class SampleProjects
     private static LineProject Build(string name, int strappers, int maxLengthM, int[] infeedLengthsM, bool intermediateStop = false)
     {
         double lmax = maxLengthM * 1000.0;
-        double strapLen = 2 * lmax + 1000;           // via rulli di legatura
-        double trfLen = lmax + 500;                  // trasferitore = via rulli davanti al trasferitore
+        // lunghezze multiple di 2500 mm: con passo 1250 mm i rulli sono interi e il passo resta multiplo di 50 mm
+        double strapLen = Math.Ceiling((2 * lmax + 1000) / 2500) * 2500;      // via rulli di legatura
+        double trfLen = Math.Ceiling((lmax + 500) / 2500) * 2500;            // trasferitore = via rulli davanti al trasferitore
         double first = FirstStrapperPositionMm(strappers, maxLengthM);
 
         var p = new LineProject
@@ -166,7 +167,7 @@ public static class SampleProjects
     {
         var s = new RollerSection
         {
-            Id = id, Name = name, WidthMm = 1200, RollerPitchMm = RollerSection.DefaultPitchMm,
+            Id = id, Name = name, RollerPitchMm = RollerSection.DefaultPitchMm,
             RollerDiameterMm = RollerSection.DefaultDiameterMm, DefaultSpeed = SpeedLevel.High
         };
         LineReflow.Fit(s, start, start + length);

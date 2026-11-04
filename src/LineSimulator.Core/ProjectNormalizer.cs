@@ -6,7 +6,7 @@ namespace LineSimulator.Core;
 public static class ProjectNormalizer
 {
     /// <summary>Distanza della fotocellula di ingresso aggiunta automaticamente dall'inizio linea.</summary>
-    public const double DefaultEntryOffsetMm = 300;
+    public const double DefaultEntryOffsetMm = 0;
 
     /// <summary>
     /// Garantisce la presenza della fotocellula di ingresso (obbligatoria). Se nessuna fotocellula è marcata
@@ -45,11 +45,23 @@ public static class ProjectNormalizer
     /// </summary>
     public static bool AlignStopperToLastRoller(LineProject p)
     {
-        var last = LastRollerPositionMm(p);
-        if (last == null) return false;
-        double pos = last.Value + Math.Max(0, p.Stopper.DistanceFromLastRollerMm);
-        if (Math.Abs(pos - p.Stopper.PositionMm) < 1e-9) return false;
+        if (p.Sections.Count == 0) return false;
+        var lastSec = p.Sections.OrderBy(s => s.EndMm).Last();
+        double pos = lastSec.EndMm;                       // il fermo sta alla fine dell'ultimo modulo (= fine del trasferitore)
+        bool changed = Math.Abs(pos - p.Stopper.PositionMm) >= 1e-9 || Math.Abs(p.Stopper.DistanceFromLastRollerMm - lastSec.EndOverhangMm) >= 1e-9;
+        p.Stopper.DistanceFromLastRollerMm = lastSec.EndOverhangMm;
         p.Stopper.PositionMm = pos;
+        return changed;
+    }
+
+    /// <summary>La prima fotocellula (ingresso) sta sempre sullo zero della via rulli. Restituisce true se è stata spostata.</summary>
+    public static bool AlignEntryPhotocell(LineProject p)
+    {
+        if (p.Sections.Count == 0) return false;
+        var entry = p.Photocells.Where(x => x.IsEntryPhotocell).OrderBy(x => x.PositionMm).FirstOrDefault();
+        double start = p.Sections.Min(s => s.StartMm);
+        if (entry == null || Math.Abs(entry.PositionMm - start) < 1e-9) return false;
+        entry.PositionMm = start;
         return true;
     }
 

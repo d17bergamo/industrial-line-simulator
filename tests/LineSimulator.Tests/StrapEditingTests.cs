@@ -117,19 +117,18 @@ public class StrapEditingTests
 public class StopperAlignmentTests
 {
     [Fact]
-    public void Stopper_IsAfterTheLastRoller_AtTheSetDistance()
+    public void Stopper_IsAtTheEndOfTheLastModule_WhichIsLastRollerPlusOverhang()
     {
         var p = LegacySamples.CreateStandardLine();
         var last = p.Sections.OrderBy(s => s.EndMm).Last();
-        double lastRoller = last.EndMm - last.EndOverhangMm;
-        p.Stopper.DistanceFromLastRollerMm = 40;
         Assert.True(ProjectNormalizer.AlignStopperToLastRoller(p));
-        Assert.Equal(lastRoller + 40, p.Stopper.PositionMm, 6);
+        Assert.Equal(last.EndMm, p.Stopper.PositionMm, 6);
+        Assert.Equal(last.EndOverhangMm, p.Stopper.DistanceFromLastRollerMm, 6);
         Assert.False(ProjectNormalizer.AlignStopperToLastRoller(p));   // idempotente
     }
 
     [Fact]
-    public void Stopper_FollowsTheLastRoller_WhenTheLastSectionMoves()
+    public void Stopper_FollowsTheLastModule_WhenItMoves()
     {
         var p = LegacySamples.CreateStandardLine();
         ProjectNormalizer.AlignStopperToLastRoller(p);
@@ -140,11 +139,10 @@ public class StopperAlignmentTests
     }
 
     [Fact]
-    public void Stopper_BeyondTheLastSection_StillBelongsToTheLastZone()
+    public void Stopper_BelongsToTheLastZone()
     {
         var p = LegacySamples.CreateStandardLine();
         var last = p.Sections.OrderBy(s => s.EndMm).Last();
-        p.Stopper.DistanceFromLastRollerMm = last.EndOverhangMm + 500;   // oltre la fine della via a rulli
         ProjectNormalizer.AlignStopperToLastRoller(p);
         var topo = new LineTopology(p);
         Assert.NotNull(topo.StopperZone);
@@ -255,7 +253,7 @@ public class SectionChainTests
         Assert.Empty(LineReflow.Discontinuities(p));
         Assert.Equal(14500, p.Transfer.PositionMm, 6);
         Assert.Equal(15500, p.Scales[0].StartMm, 6);
-        Assert.Equal(p.Sections[2].EndMm - p.Sections[2].EndOverhangMm + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
+        Assert.Equal(p.Sections[2].EndMm, p.Stopper.PositionMm, 6);
     }
 
     [Fact]
@@ -277,7 +275,7 @@ public class SectionChainTests
         Assert.True(LineReflow.EnforceOverhang(p));
         Assert.Equal(s.RollerPitchMm / 2, s.EndOverhangMm, 6);
         Assert.Equal(s.LengthMm, s.RollerCount * s.RollerPitchMm, 6);
+        Assert.Equal(0, s.RollerPitchMm % 50, 6);                         // passo multiplo di 50 mm
         Assert.Equal(start, s.StartMm); Assert.Equal(end, s.EndMm, 6);
-        Assert.Equal(20, s.RollerCount);
     }
 }

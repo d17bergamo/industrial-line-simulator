@@ -52,3 +52,9 @@ public enum LateralSide
     Left = 0,
     Right = 1
 }
+
+/// <summary>Componente figlio di una famiglia: segue le proprietà del padre finché non è spuntato "personalizza".</summary>
+public interface IGroupChild
+{
+    bool OverrideGroup { get; set; }
+}

@@ -77,15 +77,30 @@ public static class LineReflow
         return changed;
     }
 
+    /// <summary>Il passo rulli si arrotonda a multipli di 50 mm.</summary>
+    public const double PitchStepMm = 50;
+
+    public static double RoundPitch(double pitchMm) => Math.Max(PitchStepMm, Math.Round(pitchMm / PitchStepMm) * PitchStepMm);
+
     /// <summary>
     /// Adatta una via a rulli a [start, end): la sporgenza terminale è metà passo, quindi la lunghezza vale sempre
-    /// numero rulli × passo. Il numero di rulli è il più vicino al passo attuale e il passo viene ricalcolato.
+    /// numero rulli × passo. Cerca il numero di rulli per cui il passo è un multiplo di 50 mm il più vicino a quello attuale;
+    /// se la lunghezza non lo permette il passo viene ricalcolato (così le giunzioni restano esatte).
     /// </summary>
     public static void Fit(RollerSection s, double startMm, double endMm)
     {
         double pitch = Math.Max(10, s.RollerPitchMm);
         double len = Math.Max(2 * pitch, endMm - startMm);
         int n = Math.Max(2, (int)Math.Round(len / pitch));
+        double best = double.MaxValue; int bestN = -1;
+        for (int k = Math.Max(2, n / 2); k <= n * 2 + 2; k++)
+        {
+            double pk = len / k;
+            if (Math.Abs(pk / PitchStepMm - Math.Round(pk / PitchStepMm)) > 1e-9) continue;     // passo non multiplo di 50
+            double d = Math.Abs(pk - pitch);
+            if (d < best) { best = d; bestN = k; }
+        }
+        if (bestN > 0 && best <= pitch * 0.5) n = bestN;
         s.RollerCount = n;
         s.RollerPitchMm = len / n;
         s.StartMm = startMm;
@@ -132,6 +147,7 @@ public static class LineReflow
         {
             p.Transfer.PositionMm += dx;
             foreach (var sc in p.Scales) sc.StartMm += dx;
+            foreach (var fs in p.IntermediateStops) fs.PositionMm += dx;
         }
         ProjectNormalizer.AlignStopperToLastRoller(p);
         return dx;
