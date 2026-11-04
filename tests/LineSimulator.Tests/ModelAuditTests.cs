@@ -35,9 +35,12 @@ public class ModelAuditTests
         Assert.Equal(m1.EndMm, exit.PositionMm, 6);
         Assert.True(p.Transfer.PositionMm - exit.PositionMm >= 1000 - 1e-6);
 
-        // Regola 3: nessuna fotocellula di presenza sul fermo finale; resta il rallentamento 1,5 m prima
+        // Regola 3: nessuna fotocellula di presenza sul fermo finale; resta il rallentamento, a 2 m dal fermo
         Assert.DoesNotContain(p.Photocells, x => x.PositionMm > p.Stopper.PositionMm - 1000);
-        Assert.Contains(p.Photocells, x => x.Action == PhotocellAction.SlowDown && Math.Abs(p.Stopper.PositionMm - 1500 - x.PositionMm) < 1);
+        Assert.Contains(p.Photocells, x => x.Action == PhotocellAction.SlowDown && Math.Abs(p.Stopper.PositionMm - 2000 - x.PositionMm) < 1);
+        // Fotocellule che rallentano o fermano ad almeno 2 m dal punto di arresto; nulla da unire o spostare prima della simulazione
+        Assert.Empty(PhotocellRules.TooCloseToTarget(p));
+        Assert.Empty(PhotocellRules.BeforeSimulation(Model(name)));
 
         // Fermo finale alla fine dell'ultimo modulo, a metà passo dall'ultimo rullo
         Assert.Equal(m3.EndMm, p.Stopper.PositionMm, 6);
@@ -152,5 +155,52 @@ public class ModelAuditTests
         Assert.True(q.Transfer.PositionMm - qm1End >= 1000 - 1e-6);
         Assert.Equal(qm1End, q.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingExit).PositionMm, 6);
         Assert.Empty(LineReflow.Discontinuities(q));
+    }
+
+    [Fact]
+    public void SlowOrStopPhotocells_AreMovedTo2mFromTheirTarget()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var slow = p.Photocells.Single(x => x.Action == PhotocellAction.SlowDown);
+        slow.PositionMm = p.Stopper.PositionMm - 1200;                       // troppo vicina al fermo finale
+        var trf = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
+        trf.PositionMm = p.Transfer.PositionMm - 1500;                       // troppo vicina al trasferitore
+        Assert.Equal(2, PhotocellRules.TooCloseToTarget(p).Count());
+        Assert.Contains(ProjectValidator.Validate(p).Warnings, x => x.Code == "PC_TARGET_DIST");
+        Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "PC_TARGET_DIST");
+        var fixes = PhotocellRules.BeforeSimulation(p);
+        Assert.Equal(p.Stopper.PositionMm - 2000, slow.PositionMm, 6);
+        Assert.Equal(p.Transfer.PositionMm - 2000, trf.PositionMm, 6);
+        Assert.Empty(PhotocellRules.TooCloseToTarget(p));
+        Assert.Equal(2, fixes.Count);
+    }
+
+    [Fact]
+    public void ExitAndTransferStop_WhenClose_AreMergedIntoOnePhotocell()
+    {
+        // Svincolo lungo 3 m: uscita legatura a 3 m dal trasferitore, arresto davanti al trasferitore a 2,5 m → 500 mm tra le due
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var m2 = p.Sections.Single(x => x.Id == "M2");
+        double oldEnd = m2.EndMm;
+        LineReflow.Fit(m2, m2.StartMm, m2.StartMm + 3 * m2.RollerPitchMm - 750);   // ~3 m con passo ricalcolato
+        LineReflow.AfterResize(p, m2, oldEnd);
+        var exit = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingExit);
+        var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
+        stop.PositionMm = p.Transfer.PositionMm - ProjectNormalizer.TransferStopDistanceMm(p);
+        Assert.True(Math.Abs(exit.PositionMm - stop.PositionMm) <= 1000);
+        Assert.NotNull(PhotocellRules.MergeCandidate(p));
+        var fixes = PhotocellRules.MergeExitWithTransferStop(p);
+        Assert.Single(fixes);
+        Assert.DoesNotContain(p.Photocells, x => x.Purpose == PhotocellPurpose.TransferStop);
+        Assert.True(exit.AlsoTransferStop && exit.ActsAsTransferStop);
+        Assert.Equal(p.Sections.Single(x => x.Id == "M1").EndMm, exit.PositionMm, 6);   // resta a fine via di legatura
+        // Nessuna nuova fotocellula di arresto aggiunta in automatico, e la simulazione funziona
+        Assert.Empty(ProjectNormalizer.EnsureProcessSensors(p).Where(a => a.Contains("arresto", StringComparison.Ordinal)));
+        p.Infeed.PackageCount = 3;
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
+        Assert.Equal(0, e.Collisions);
     }
 }

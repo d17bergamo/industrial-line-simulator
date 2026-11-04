@@ -111,7 +111,7 @@ public static class ControlLogicGenerator
                 string act = a.Action switch { PhotocellAction.SlowDown => $"VELOCITÀ BASSA ({F(z.Inverter.LowSpeed)} m/s)", PhotocellAction.SpeedUp => $"VELOCITÀ ALTA ({F(z.Inverter.HighSpeed)} m/s)", _ => "ARRESTA inverter (interblocco)" };
                 rules.Add(new ControlRule($"{z.Id}.{a.Action.ToString().ToUpperInvariant()}_{a.Id}", group, cond, act, z.Id, a.Name));
             }
-            foreach (var t in pcs.Where(x => x.Purpose == PhotocellPurpose.TransferStop && topo.ResolveZoneId(x.ControlledInverterId) == z.Id))
+            foreach (var t in pcs.Where(x => x.ActsAsTransferStop && topo.ResolveZoneId(x.ControlledInverterId) == z.Id))
                 rules.Add(new ControlRule($"{z.Id}.ARRESTO_TRASFERITORE_{t.Id}", group,
                     $"{PC(t)} & (DEV({p.Transfer.Id},Lifting) | DEV({p.Transfer.Id},Translating) | DEV({p.Transfer.Id},WaitingDestination))",
                     "ARRESTA inverter (interblocco trasferitore sollevato)", z.Id,
@@ -263,7 +263,7 @@ public static class ControlLogicGenerator
         {
             var parts = new List<string>();
             if (x.IsEntryPhotocell) parts.Add("Ingresso: identificazione pacco (punto zero)");
-            if (x.Purpose == PhotocellPurpose.TransferStop) parts.Add("Arresto davanti al trasferitore sollevato");
+            if (x.ActsAsTransferStop) parts.Add("Arresto davanti al trasferitore sollevato");
             if (x.Purpose == PhotocellPurpose.StrappingReference) parts.Add("Riferimento encoder di legatura, avvio carica filo KNCA");
             switch (x.Action)
             {

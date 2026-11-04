@@ -221,6 +221,10 @@ public static class ProjectValidator
             if (s.PreparationTimeS < 0 || s.StrappingTimeS <= 0 || s.ReturnTimeS < 0)
                 r.Error("STR_TIME", "Tempi legatrice non validi (legatura > 0, altri ≥ 0).", s.Id);
         }
+        foreach (var (pc, t, d) in PhotocellRules.TooCloseToTarget(p))
+            r.Warn("PC_TARGET_DIST", $"La fotocellula {pc.Id} rallenta o ferma a {F(Math.Round(d))} mm dal punto di arresto ({F(Math.Round(t))} mm): servono almeno 2000 mm per fermarsi dalla velocità massima.", pc.Id);
+        if (PhotocellRules.MergeCandidate(p) is var (mx, ms))
+            r.Info("PC_MERGE", $"Le fotocellule {mx.Id} (uscita legatura) e {ms.Id} (arresto davanti al trasferitore) sono vicine: all'avvio della simulazione vengono unite.", ms.Id);
         foreach (var pc in StrappingAreaRules.ReferencePhotocellsBeforeEntry(p))
             r.Warn("REF_PC_ENTRY", $"La fotocellula di riferimento deve stare almeno 100 mm dopo FC0 (minimo {F(Math.Round(StrappingAreaRules.MinReferencePhotocellMm(p)))} mm).", pc.Id);
         if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
@@ -529,9 +533,9 @@ public static class ProjectValidator
                     r.Warn("ZONE_RESTART", $"Fotocellula di ripartenza {restart.Id} a {F(dist * 1000)} mm dall'inizio della zona {z.Id}: servono {F(need * 1000)} mm perché la zona sia a velocità all'arrivo del pacco.", z.Id);
             }
         }
-        if (!p.Photocells.Any(x => x.Purpose == PhotocellPurpose.TransferStop))
+        if (!p.Photocells.Any(x => x.ActsAsTransferStop))
             r.Warn("PC_TRF_STOP", $"Manca la fotocellula di arresto davanti al trasferitore (distanza consigliata {F(ProjectNormalizer.TransferStopDistanceMm(p))} mm).", p.Transfer.Id);
-        foreach (var t in p.Photocells.Where(x => x.Purpose == PhotocellPurpose.TransferStop))
+        foreach (var t in p.Photocells.Where(x => x.ActsAsTransferStop))
         {
             double d = p.Transfer.PositionMm - t.PositionMm;
             if (d < ProjectNormalizer.TransferStopDistanceMm(p) - 1)

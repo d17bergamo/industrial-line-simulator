@@ -1517,7 +1517,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (_engine != null) return true;
         // Preparazione del ciclo sul progetto dell'utente: nomi progressivi, collegamenti, stazione che segue le legatrici,
         // sensori automatici; con le legatrici abilitate ogni pacco deve essere legato (vedi SimulationPreparation).
+        // Controlli sulle fotocellule (sessione B): uscita legatura e arresto trasferitore vicine → unite;
+        // fotocellule che rallentano o fermano ad almeno 2 m dal punto di arresto.
+        var pcFixes = PhotocellRules.BeforeSimulation(_project);
         var prep = SimulationPreparation.Prepare(_project);
+        prep.Changes.InsertRange(0, pcFixes);
         if (prep.Changed)
         {
             ProjectChanged(structural: true);

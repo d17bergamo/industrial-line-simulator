@@ -101,7 +101,8 @@ public static class SampleProjects
         exit.Purpose = PhotocellPurpose.StrappingExit;
         exit.Action = PhotocellAction.None;        // a fine modulo non c'è spazio di frenata: solo segnale di uscita legatura
         p.Photocells.Add(exit);
-        p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", trfStart + trfLen - 1500, "M3", PhotocellAction.SlowDown));
+        // rallentamento ad almeno 2 m dal fermo finale (PhotocellRules.MinDistanceToTargetMm)
+        p.Photocells.Add(Pc("FC2", "FC2 rallentamento fermo finale", trfStart + trfLen - PhotocellRules.MinDistanceToTargetMm, "M3", PhotocellAction.SlowDown));
         // nessuna fotocellula di presenza sul fermo finale: il pacco in battuta lo segnala il fermo e lo vede FC2
 
         for (int i = 0; i < strappers; i++)

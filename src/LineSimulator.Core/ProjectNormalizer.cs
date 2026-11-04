@@ -108,7 +108,7 @@ public static class ProjectNormalizer
         }
 
         // Fotocellula di arresto davanti al trasferitore sollevabile
-        if (!p.Photocells.Any(x => x.Purpose == PhotocellPurpose.TransferStop) && p.Transfer.LengthMm > 0)
+        if (!p.Photocells.Any(x => x.ActsAsTransferStop) && p.Transfer.LengthMm > 0)
         {
             double x = Math.Round(p.Transfer.PositionMm - TransferStopDistanceMm(p));
             var zone = topo.ZoneAt(Units.MmToM(x));

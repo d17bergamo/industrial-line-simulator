@@ -638,7 +638,7 @@ public sealed partial class SimulationEngine : ILogicContext
         bool transferRaised = Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination;
         foreach (var pc in _photocells)
         {
-            if (pc.Config.Purpose != PhotocellPurpose.TransferStop || !pc.Config.IsEnabled || !pc.Output || !transferRaised) continue;
+            if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output || !transferRaised) continue;
             if (_requests.TryGetValue(pc.ControlledZoneId, out var req)) { req.Stop = true; req.StopReasons.Add($"trasferitore sollevato ({pc.Id})"); }
         }
         LogicEvaluator.ApplyRules(Project.Rules, this, _requests, _nextSignals);

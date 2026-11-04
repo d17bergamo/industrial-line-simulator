@@ -121,6 +121,16 @@ public static class EquipmentCheck
             var fixes = fix ? StrappingAreaRules.KeepExitAwayFromTransfer(p) : new List<string>();
             r.Add(new("EXIT_TRF_DIST", $"La fotocellula di uscita legatura (fine via di legatura) deve stare ad almeno 1 m dall'inizio del trasferitore: {(fix ? string.Join("; ", fixes) : "da allungare lo svincolo (o inserirne uno)")}.", fix, true));
         }
+        if (PhotocellRules.MergeCandidate(p) != null)
+        {
+            var merged = fix ? PhotocellRules.MergeExitWithTransferStop(p) : new List<string>();
+            r.Add(new("PC_MERGE", $"Fotocellula di uscita legatura e fotocellula di arresto davanti al trasferitore vicine (entro 1 m): {(fix ? string.Join("; ", merged) : "da unire in una sola")}.", fix, true));
+        }
+        if (PhotocellRules.TooCloseToTarget(p).Any())
+        {
+            var moved = fix ? PhotocellRules.KeepDistanceFromTarget(p) : PhotocellRules.TooCloseToTarget(p).Select(x => $"{x.Pc.Id} a {x.DistanceMm:0} mm").ToList();
+            r.Add(new("PC_TARGET_DIST", $"Le fotocellule che rallentano o fermano devono stare ad almeno 2 m dal punto di arresto: {string.Join("; ", moved)}.", fix, true));
+        }
         if (StrappingAreaRules.SameSideConflicts(p).Any())
         {
             if (fix) StrappingAreaRules.SpreadStrappers(p);
