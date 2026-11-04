@@ -230,6 +230,13 @@ public sealed partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ Imposta layout: libreria, quote, modifica
 
     public ICollectionView LibraryView { get; private set; } = null!;
+    private bool _showLibrary = true, _showInspector = true;
+    /// <summary>Pannello libreria macchine (sinistra): mostrato o nascosto.</summary>
+    public bool ShowLibrary { get => _showLibrary; set => Set(ref _showLibrary, value); }
+    /// <summary>Pannello proprietà / struttura / stato (destra): mostrato o nascosto.</summary>
+    public bool ShowInspector { get => _showInspector; set => Set(ref _showInspector, value); }
+    public ICommand ToggleLibraryCommand => new RelayCommand(() => ShowLibrary = false);
+    public ICommand ToggleInspectorCommand => new RelayCommand(() => ShowInspector = false);
     private bool _showCyclogram = true;
     /// <summary>Ciclogramma agganciato sotto il 3D: si può mostrare o nascondere.</summary>
     public bool ShowCyclogram { get => _showCyclogram; set => Set(ref _showCyclogram, value); }
