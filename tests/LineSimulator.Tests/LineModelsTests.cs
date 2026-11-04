@@ -24,7 +24,7 @@ public class LineModelsTests
             var p = SampleProjects.All[i].Factory();
             Assert.Equal(expected[i].Strappers, p.Strappers.Count);
             Assert.Equal(expected[i].Lengths.Select(m => $"P{m} (Wire)"), p.Infeed.TypeSequence);
-            Assert.Equal(new[] { 6000.0, 9000, 12000, 18000, 24000 }, p.PackageTypes.Select(t => t.LengthMm));   // sempre tutte le tipologie
+            Assert.Equal(expected[i].Lengths.Select(m => m * 1000.0), p.PackageTypes.Select(t => t.LengthMm));   // solo le tipologie del nome dell'esempio
         }
     }
 

@@ -82,8 +82,9 @@ public static class SampleProjects
         p.Sections.Add(Mod("M2", "Modulo 2 - Trasferitore", strapLen, trfLen));
 
         p.Photocells.Add(Entry());
-        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 700, "M1", PhotocellAction.Accumulation);
+        var exit = Pc("FC1", "FC1 uscita legatura", strapLen, "M1", PhotocellAction.None);
         exit.Purpose = PhotocellPurpose.StrappingExit;
+        exit.Action = PhotocellAction.None;        // a fine modulo non c'è spazio di frenata: solo segnale di uscita legatura
         p.Photocells.Add(exit);
         p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", strapLen + trfLen - 1500, "M2", PhotocellAction.SlowDown));
         p.Photocells.Add(Pc("FC3", "FC3 presenza stopper", strapLen + trfLen - 300, "", PhotocellAction.None));
@@ -123,7 +124,8 @@ public static class SampleProjects
             p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = strapLen + trfLen / 2, LengthMm = trfLen / 2 });
         }
 
-        foreach (int m in PackageLengthsM) p.PackageTypes.Add(Package(m));
+        // solo le tipologie selezionabili del modello (coerenti con il nome dell'esempio)
+        foreach (int m in infeedLengthsM) p.PackageTypes.Add(Package(m));
 
         p.Infeed = new InfeedConfig
         {

@@ -96,6 +96,16 @@ public static class EquipmentCheck
             if (fix) LayoutRules.AlignTransferModule(p);
             r.Add(new("TRF_MODULE", $"L'ultimo modulo deve avere la stessa lunghezza e lo stesso inizio del trasferitore ({p.Transfer.LengthMm:0} mm): {(fix ? "allineato" : "da allineare")}.", fix, true));
         }
+        if (LayoutRules.ExitPhotocellsOutOfPlace(p).Any())
+        {
+            if (fix) LayoutRules.AlignStrappingExit(p);
+            r.Add(new("EXIT_PC", $"La fotocellula di uscita legatura deve stare mezzo passo dopo l'ultimo rullo della via di legatura: {(fix ? "spostata" : "da spostare")}.", fix, true));
+        }
+        if (p.StrappingEncoder.IsEnabled && p.Strappers.Any(x => x.IsEnabled) && p.Strappers.Where(x => x.IsEnabled).Min(x => x.PositionMm) - p.StrappingEncoder.PositionMm < StrapperTrack.MinEncoderToStrapperMm - 1e-6)
+        {
+            if (fix) StrapperTrack.KeepEncoderBehindFirstStrapper(p);
+            r.Add(new("ENCODER_DIST", $"Encoder e fotocellula di legatura devono stare ad almeno 1 m prima della prima legatrice: {(fix ? "spostati" : "da spostare")}.", fix, true));
+        }
         if (LayoutRules.StopsOutOfPlace(p).Any())
         {
             if (fix) LayoutRules.SnapIntermediateStops(p);

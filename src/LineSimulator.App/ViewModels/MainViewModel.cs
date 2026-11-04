@@ -1125,6 +1125,7 @@ public sealed partial class MainViewModel : ObservableObject
                 if (LayoutRules.TransferModule(_project) is { } trfMod) LineReflow.MoveSection(_project, trfMod, dxMm);
                 break;
         }
+        StrapperTrack.KeepEncoderBehindFirstStrapper(_project);    // encoder e fotocellula di legatura seguono la prima legatrice (≥ 1 m)
         ProjectNormalizer.AlignStopperToLastRoller(_project);
         LayoutScene.Build(_project);
         LayoutScene.Highlight(m);
