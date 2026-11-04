@@ -384,9 +384,9 @@ public class ProcessLogicTests
     }
 
     [Fact]
-    public void ShortPackage_IsWeighedAtIntermediatePosition()
+    public void ShortPackage_IsWeighedWhereDeposited_WithoutMoving()
     {
-        double? headAtStabilizing = null;
+        double? headAtStabilizing = null, headAtDeposit = null;
         var e = RunChecked(Full(x =>
         {
             x.Infeed.TypeSequence = new List<string> { "P4" };
@@ -395,6 +395,7 @@ public class ProcessLogicTests
         }), en =>
         {
             var b2 = en.Scales.Single(s => s.Id == "B2");
+            if (headAtDeposit == null && en.Packages.Count > 0 && en.Packages[0].State == PackageState.OnScale) headAtDeposit = en.Packages[0].HeadM;
             if (b2.State == ScaleState.Stabilizing && headAtStabilizing == null) headAtStabilizing = b2.Package!.HeadM;
         });
         Assert.True(e.CompletedNormally, Diag(e));
@@ -402,11 +403,12 @@ public class ProcessLogicTests
         Assert.Equal("B2", pk.ScaleId);
         Assert.Equal(1000.0, pk.MeasuredWeightKg!.Value);
         Assert.True(pk.WeighingValid);
-        Assert.True(e.Scales.Single(s => s.Id == "B2").ShortPosition);
-        // Posizione intermedia = pacco centrato sul bilico: (50.3 + 56.6 + 4.0) / 2 = 55.45 m
+        Assert.False(e.Scales.Single(s => s.Id == "B2").ShortPosition);
+        // Sul bilico il pacco non si muove: pesato dove il trasferitore lo ha depositato (testa allo stopper, 56,5 m)
         Assert.NotNull(headAtStabilizing);
-        Assert.Equal(55.45, headAtStabilizing!.Value, 3);
-        Assert.Contains(e.Events, x => x.Type == SimEventType.WeighingPhase && x.Message.Contains("posizione intermedia"));
+        Assert.Equal(headAtDeposit!.Value, headAtStabilizing!.Value, 9);
+        Assert.Equal(56.5, headAtStabilizing.Value, 2);
+        Assert.Contains(e.Events, x => x.Type == SimEventType.WeighingPhase && x.Message.Contains("non si muove sul bilico"));
         Assert.Contains(e.Events, x => x.Type == SimEventType.WeightAcquired && x.Message.Contains("1000 kg"));
     }
 

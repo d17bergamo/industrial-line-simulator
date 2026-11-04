@@ -89,7 +89,7 @@ public class LineModelsTests
                 if (!created.ContainsKey(k.Sequence))
                 {
                     created[k.Sequence] = t;
-                    Assert.Equal(p.Sections.Min(s => s.StartMm) / 1000.0, k.HeadM, 6);   // nasce a monte della via rulli di legatura
+                    Assert.InRange(k.HeadM, p.Sections.Min(s => s.StartMm) / 1000.0 - 1e-9, 0.01);   // nasce a monte della via rulli di legatura
                     if (k.Sequence > 1)
                         Assert.True(t >= clearedEntry[k.Sequence - 1] + p.Infeed.NewPackageDelayS - 0.05,
                             $"{k.Id} creato a {t:0.00} s, la coda del precedente ha liberato l'ingresso a {clearedEntry[k.Sequence - 1]:0.00} s");

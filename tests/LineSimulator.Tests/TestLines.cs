@@ -24,7 +24,7 @@ internal static class TestLines
             LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1
         };
         p.PackageTypes.Add(new PackageType { Id = "P12", Name = "P12", LengthMm = 12000, WeightKg = 3000, StrapPositionsMm = new List<double>() });
-        p.Infeed = new InfeedConfig { PackageCount = packages, IntervalS = 20, MinimumGapMm = 1000 };
+        p.Infeed = new InfeedConfig { Mode = InfeedMode.FixedInterval, PackageCount = packages, IntervalS = 20, MinimumGapMm = 1000 };
         p.Simulation = new SimulationSettings { DeadlockTimeoutS = 30, MaxSimulationTimeS = 3600 };
         return p;
     }
