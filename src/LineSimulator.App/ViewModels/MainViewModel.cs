@@ -230,6 +230,10 @@ public sealed partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ Imposta layout: libreria, quote, modifica
 
     public ICollectionView LibraryView { get; private set; } = null!;
+    private bool _showCyclogram = true;
+    /// <summary>Ciclogramma agganciato sotto il 3D: si può mostrare o nascondere.</summary>
+    public bool ShowCyclogram { get => _showCyclogram; set => Set(ref _showCyclogram, value); }
+    public ICommand ToggleCyclogramCommand => new RelayCommand(() => ShowCyclogram = false);
     private bool _showDistances;
     /// <summary>Mostra le quote degli equipaggiamenti rispetto all'origine (X = Y = Z = 0).</summary>
     public bool ShowDistances

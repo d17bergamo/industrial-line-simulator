@@ -159,6 +159,7 @@
                 <Button Style="{StaticResource ToolButton}" Content="Ruota 180°" Command="{Binding RotateSelectedCommand}" ToolTip="Porta il dispositivo sul lato opposto della linea"/>
                 <CheckBox Content="MOSTRA DISTANZE DALL'ORIGINE" IsChecked="{Binding ShowDistances}" VerticalAlignment="Center" Margin="12,0,6,0" FontWeight="SemiBold"/>
                 <Button Style="{StaticResource ToolButton}" Content="✔ Controlla equipaggiamenti" Command="{Binding CheckEquipmentCommand}" FontWeight="SemiBold" ToolTip="Controlla con regole gli equipaggiamenti (es. prima fotocellula presente, nella posizione giusta e rinominata) e applica le correzioni"/>
+                <CheckBox Content="Ciclogramma" IsChecked="{Binding ShowCyclogram}" VerticalAlignment="Center" Margin="12,0,6,0" FontWeight="SemiBold" ToolTip="Mostra o nasconde il ciclogramma sotto il 3D"/>
                 <Button Style="{StaticResource ToolButton}" Content="Libreria ⇄" Click="ToggleLibrary_Click" ToolTip="Comprimi o espandi la libreria macchine"/>
                         <TextBlock Text="Tipologia di pacco:" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox Width="260" ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" VerticalAlignment="Center"/>
@@ -272,7 +273,7 @@
             </Grid>
                     <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
 <TabControl Grid.Column="2" BorderThickness="0" Padding="0">
-<TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                         <Grid>
                             <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True"
@@ -322,6 +323,20 @@
                         <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </DockPanel>
                 </Border>
+<Border Grid.Row="2" Height="240" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0"
+        Visibility="{Binding ShowCyclogram, Converter={StaticResource BoolVis}}">
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="8,4,4,2">
+            <Button DockPanel.Dock="Right" Content="✕" Padding="8,0" ToolTip="Nascondi il ciclogramma" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
+            <TextBlock Text="Ciclogramma" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
+            <TextBlock Text="  Clic sul diagramma: porta il 3D a quell'istante" Foreground="#5A6672" VerticalAlignment="Center"/>
+        </DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ctl:CyclogramControl x:Name="DockedCyclogram" Recorder="{Binding Recorder}" CursorTime="{Binding DisplayTime, Mode=TwoWay}"
+                                  MaxTime="{Binding MaxTime}" Version="{Binding CyclogramVersion}"/>
+        </ScrollViewer>
+    </DockPanel>
+</Border>
 </Grid></TabItem>
                     <TabItem Header="Ciclogramma a gradini">
                         <DockPanel Background="White">
