@@ -240,6 +240,10 @@ public sealed partial class MainViewModel : ObservableObject
     public bool ShowInspector { get => _showInspector; set => Set(ref _showInspector, value); }
     private bool _showPackageProps = true;
     /// <summary>Colonna "Caratteristiche del pacco" nella schermata Pacchi: si chiude e si riapre.</summary>
+    private double _libraryWidth = 264, _inspectorWidth = 360;
+    /// <summary>Larghezza dei pannelli laterali: si regola trascinando il bordo.</summary>
+    public double LibraryWidth { get => _libraryWidth; set => Set(ref _libraryWidth, value); }
+    public double InspectorWidth { get => _inspectorWidth; set => Set(ref _inspectorWidth, value); }
     public bool ShowPackageProps { get => _showPackageProps; set => Set(ref _showPackageProps, value); }
     public ICommand TogglePackagePropsCommand => new RelayCommand(() => ShowPackageProps = !ShowPackageProps);
     public ICommand ToggleLibraryCommand => new RelayCommand(() => ShowLibrary = false);

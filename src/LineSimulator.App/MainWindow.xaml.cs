@@ -252,6 +252,15 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Selezione e spostamento col mouse (layout e simulazione)
 
+    private void LibraryThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        => _vm.LibraryWidth = Math.Clamp(_vm.LibraryWidth + e.HorizontalChange, 180, 600);
+
+    private void InspectorThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        => _vm.InspectorWidth = Math.Clamp(_vm.InspectorWidth - e.HorizontalChange, 240, 800);
+
+    private void CyclogramThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        => CyclogramBorder.Height = Math.Clamp(CyclogramBorder.Height - e.VerticalChange, 80, 800);
+
     private bool _moving;
     private double _lastXm;
     private HelixToolkit.Wpf.HelixViewport3D? _moveViewport;
