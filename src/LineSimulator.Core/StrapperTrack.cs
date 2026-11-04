@@ -54,4 +54,25 @@ public static class StrapperTrack
         foreach (var s in p.Strappers.Where(x => x.PositionMm < min - 1e-6)) { s.PositionMm = min; changed = true; }
         return changed;
     }
+
+    /// <summary>Distanza minima tra l'encoder / fotocellula di legatura e la prima legatrice (a monte di essa).</summary>
+    public const double MinEncoderToStrapperMm = 1000;
+
+    /// <summary>
+    /// Encoder e fotocellula di riferimento di legatura restano ad almeno 1 m a monte della prima legatrice: se la legatrice
+    /// si avvicina di più, si spostano con lei (la fotocellula sta 300 mm prima dell'encoder). True se qualcosa è stato spostato.
+    /// </summary>
+    public static bool KeepEncoderBehindFirstStrapper(LineProject p)
+    {
+        var first = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).FirstOrDefault();
+        if (first == null || !p.StrappingEncoder.IsEnabled) return false;
+        double start = TrackStartMm(p) ?? 0;
+        double enc = p.StrappingEncoder.PositionMm;
+        if (first.PositionMm - enc >= MinEncoderToStrapperMm - 1e-6) return false;
+        enc = Math.Max(start, first.PositionMm - MinEncoderToStrapperMm);
+        p.StrappingEncoder.PositionMm = enc;
+        foreach (var pc in p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingReference))
+            pc.PositionMm = Math.Max(start + 100, enc - ProjectNormalizer.ReferencePhotocellOffsetMm);   // sempre dopo la prima fotocellula
+        return true;
+    }
 }

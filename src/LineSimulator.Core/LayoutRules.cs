@@ -99,6 +99,28 @@ public static class LayoutRules
         return done;
     }
 
+    /// <summary>La fotocellula di uscita legatura sta mezzo passo dopo l'ultimo rullo della via di legatura, cioè alla sua fine.</summary>
+    public static IEnumerable<PhotocellConfig> ExitPhotocellsOutOfPlace(LineProject p)
+    {
+        var sec = StrapperTrack.LastStrapper(p) is { } ls ? StrapperTrack.SectionAt(p, ls.PositionMm) : null;
+        sec ??= p.Sections.OrderBy(x => x.StartMm).FirstOrDefault();
+        if (sec == null) return Enumerable.Empty<PhotocellConfig>();
+        return p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingExit && Math.Abs(x.PositionMm - sec.EndMm) > 0.5);
+    }
+
+    public static bool AlignStrappingExit(LineProject p)
+    {
+        var list = ExitPhotocellsOutOfPlace(p).ToList();
+        if (list.Count == 0) return false;
+        var sec = (StrapperTrack.LastStrapper(p) is { } ls ? StrapperTrack.SectionAt(p, ls.PositionMm) : null) ?? p.Sections.OrderBy(x => x.StartMm).First();
+        foreach (var x in list)
+        {
+            x.PositionMm = sec.EndMm;
+            if (x.Action == PhotocellAction.Accumulation) x.Action = PhotocellAction.None;   // a fine modulo non c'è spazio di frenata
+        }
+        return true;
+    }
+
     /// <summary>Applica tutte le regole (usato dall'app a ogni modifica). Restituisce una descrizione delle correzioni.</summary>
     public static List<string> Enforce(LineProject p)
     {
@@ -109,6 +131,10 @@ public static class LayoutRules
         if (StrapperTrack.ClampStrappersToTrackStart(p))
             done.Add("Legatrice riportata ad almeno 1 m dall'inizio della via rulli");
         done.AddRange(SnapIntermediateStops(p));
+        if (StrapperTrack.KeepEncoderBehindFirstStrapper(p))
+            done.Add("Encoder e fotocellula di legatura spostati: restano ad almeno 1 m prima della prima legatrice");
+        if (AlignStrappingExit(p))
+            done.Add("Fotocellula di uscita legatura portata mezzo passo dopo l'ultimo rullo (fine della via di legatura)");
         return done;
     }
 

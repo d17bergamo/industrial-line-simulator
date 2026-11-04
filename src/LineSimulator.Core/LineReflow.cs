@@ -138,6 +138,20 @@ public static class LineReflow
         if (prev != null) dx = Math.Max(dx, prev.StartMm + MinLengthMm(prev) - s.StartMm);
         if (next != null) dx = Math.Min(dx, next.EndMm - MinLengthMm(next) - s.EndMm);
         if (Math.Abs(dx) < 1e-9) return 0;
+        // ciò che sta dentro la via (fotocellule, macchine, fermi) si sposta con lei
+        bool InS(double v) => v >= s.StartMm - 1e-6 && v < s.EndMm - 1e-6;
+        foreach (var x in p.Photocells.Where(x => !x.IsEntryPhotocell && InS(x.PositionMm))) x.PositionMm += dx;
+        foreach (var x in p.Strappers.Where(x => InS(x.PositionMm))) x.PositionMm += dx;
+        if (next != null)
+        {
+            foreach (var x in p.IntermediateStops.Where(x => InS(x.PositionMm))) x.PositionMm += dx;
+            foreach (var x in p.Scales.Where(x => InS(x.StartMm))) x.StartMm += dx;
+            if (InS(p.Transfer.PositionMm)) p.Transfer.PositionMm += dx;
+        }
+        if (p.BundleClamp.PositionMm > 0 && InS(p.BundleClamp.PositionMm)) p.BundleClamp.PositionMm += dx;
+        if (p.Compactor.PositionMm > 0 && InS(p.Compactor.PositionMm)) p.Compactor.PositionMm += dx;
+        if (p.Rejector.PositionMm > 0 && InS(p.Rejector.PositionMm)) p.Rejector.PositionMm += dx;
+        if (p.StrappingEncoder.PositionMm > 0 && InS(p.StrappingEncoder.PositionMm)) p.StrappingEncoder.PositionMm += dx;
         double ns = s.StartMm + dx, ne = s.EndMm + dx;
         double nextEnd = next?.EndMm ?? 0, prevStart = prev?.StartMm ?? 0;
         s.StartMm = ns;

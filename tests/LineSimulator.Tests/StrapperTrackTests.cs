@@ -216,4 +216,62 @@ public class StrapperTrackTests
         EquipmentCheck.Run(p);
         Assert.DoesNotContain(EquipmentCheck.Run(p, fix: false), i => i.IsProblem);
     }
+
+    [Fact]
+    public void MovingAModule_MovesTheMachinesAndPhotocellsInsideIt()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        var m2 = M(p, "M2");
+        var inside = p.Photocells.Where(x => x.PositionMm >= m2.StartMm && x.PositionMm < m2.EndMm && !x.IsEntryPhotocell).ToDictionary(x => x, x => x.PositionMm);
+        Assert.NotEmpty(inside);
+        double dx = LineReflow.MoveSection(p, m2, 1250);
+        Assert.Equal(1250, dx, 6);
+        Assert.All(inside, kv => Assert.Equal(kv.Value + 1250, kv.Key.PositionMm, 6));
+        // nella via di legatura (primo modulo) le legatrici seguono la via se la si sposta dentro
+        var q = SampleProjects.CreateThreeStrappers24m();
+        q.Sections.Add(new RollerSection { Id = "M0", StartMm = -2500, LengthMm = 2500 });
+        var m1 = M(q, "M1");
+        double before = q.Strappers[0].PositionMm;
+        LineReflow.MoveSection(q, m1, 1250);
+        Assert.Equal(before + 1250, q.Strappers[0].PositionMm, 6);
+    }
+
+    [Fact]
+    public void EncoderAndReferencePhotocell_FollowTheFirstStrapperAtLeast1mAway()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        double gap0 = p.Strappers.Min(x => x.PositionMm) - p.StrappingEncoder.PositionMm;
+        Assert.True(gap0 >= 1000);
+        var first = p.Strappers.OrderBy(x => x.PositionMm).First();
+        first.PositionMm = p.StrappingEncoder.PositionMm + 400;
+        Assert.True(StrapperTrack.KeepEncoderBehindFirstStrapper(p));
+        Assert.Equal(1000, first.PositionMm - p.StrappingEncoder.PositionMm, 6);
+        var rif = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingReference);
+        Assert.Equal(p.StrappingEncoder.PositionMm - 300, rif.PositionMm, 6);
+    }
+
+    [Fact]
+    public void ExitPhotocell_IsHalfAPitchAfterTheLastRollerOfTheStrappingTrack()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var exit = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingExit);
+        var m1 = M(p, "M1");
+        Assert.Equal(m1.EndMm - m1.RollerPitchMm / 2 + m1.RollerPitchMm / 2, exit.PositionMm, 6);
+        exit.PositionMm -= 700; exit.Action = PhotocellAction.Accumulation;
+        Assert.True(LayoutRules.AlignStrappingExit(p));
+        Assert.Equal(m1.EndMm, exit.PositionMm, 6);
+        Assert.Equal(PhotocellAction.None, exit.Action);
+    }
+
+    [Fact]
+    public void ExampleNames_MatchTheirSelectablePackages()
+    {
+        foreach (var (name, create) in SampleProjects.All)
+        {
+            var p = create();
+            Assert.Equal(p.Infeed.TypeSequence.OrderBy(x => x), p.PackageTypes.Select(t => t.Id).OrderBy(x => x));
+            foreach (var t in p.PackageTypes) Assert.Contains($"{t.LengthMm / 1000:0}", name);
+            if (name.Contains("6/9/12 m")) Assert.DoesNotContain(p.PackageTypes, t => t.LengthMm > 12000);
+        }
+    }
 }
