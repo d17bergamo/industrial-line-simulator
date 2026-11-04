@@ -16,7 +16,7 @@ public sealed class RollerSection : ComponentBase
     /// Non si modifica a mano: dipende da passo, numero rulli e sporgenza (vedi <see cref="RecalculateLength"/>).
     /// </summary>
     [UiProperty("Lunghezza fisica struttura (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 2)]
-    public double LengthMm { get; set; } = 6650;
+    public double LengthMm { get; set; } = 7500;
 
     [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
     public double WidthMm { get; set; } = 1200;

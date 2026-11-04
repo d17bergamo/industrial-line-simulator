@@ -24,6 +24,18 @@ public static class SampleProjects
     /// <summary>Distanza della prima legatrice (in ordine di flusso) dalla prima fotocellula.</summary>
     public const double FirstStrapperFromEntryMm = 5000;
 
+    /// <summary>
+    /// Posizione della prima legatrice: 5 m dalla prima fotocellula. Il motore lega il pacco solo quando sta tutto sulla via
+    /// rulli di legatura, quindi la legatura di testa (a 500 mm dalla testa) richiede che l'ultima legatrice stia ad almeno
+    /// (pacco massimo − 500 mm) dall'inizio della via: se 5 m non bastano, la prima legatrice è portata al minimo ammesso.
+    /// </summary>
+    public static double FirstStrapperPositionMm(int strappers, int maxLengthM)
+    {
+        double byRule = ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
+        double feasible = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm + 100 - (strappers - 1) * StrapperSpacingMm;
+        return Math.Max(byRule, Math.Ceiling(feasible / 100) * 100);
+    }
+
     /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>
     public const double StrapperSpacingMm = 2500;
 
@@ -56,8 +68,7 @@ public static class SampleProjects
         double lmax = maxLengthM * 1000.0;
         double strapLen = 2 * lmax + 1000;           // via rulli di legatura
         double trfLen = lmax + 500;                  // trasferitore = via rulli davanti al trasferitore
-        // la prima legatrice sta sempre a circa 5 m dalla prima fotocellula (ingresso, fissa vicino allo zero)
-        double first = ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
+        double first = FirstStrapperPositionMm(strappers, maxLengthM);
 
         var p = new LineProject
         {
@@ -70,7 +81,7 @@ public static class SampleProjects
         p.Sections.Add(Mod("M2", "Modulo 2 - Trasferitore", strapLen, trfLen));
 
         p.Photocells.Add(Entry());
-        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 500, "M1", PhotocellAction.Accumulation);
+        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 700, "M1", PhotocellAction.Accumulation);
         exit.Purpose = PhotocellPurpose.StrappingExit;
         p.Photocells.Add(exit);
         p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", strapLen + trfLen - 1500, "M2", PhotocellAction.SlowDown));

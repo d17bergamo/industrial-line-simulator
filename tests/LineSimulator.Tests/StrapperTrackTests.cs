@@ -74,14 +74,18 @@ public class StrapperTrackTests
     }
 
     [Fact]
-    public void FirstStrapper_IsAbout5mFromTheFirstPhotocell_InAllModels()
+    public void FirstStrapper_IsAtLeast5mFromTheFirstPhotocell_AndAsCloseAsTheLongestPackageAllows()
     {
         foreach (var (_, create) in SampleProjects.All)
         {
             var p = create();
             var fc0 = p.Photocells.First(x => x.IsEntryPhotocell);
-            Assert.Equal(5000, p.Strappers.Min(s => s.PositionMm) - fc0.PositionMm, 1);
+            double d = p.Strappers.Min(s => s.PositionMm) - fc0.PositionMm;
+            Assert.True(d >= 5000 - 1e-6);
+            double needed = p.PackageTypes.Max(t => t.LengthMm) - 500 + 100 - (p.Strappers.Count - 1) * 2500 - fc0.PositionMm;
+            Assert.True(d <= Math.Max(5000, needed) + 100);
         }
+        Assert.Equal(5300, SampleProjects.FirstStrapperPositionMm(1, 5));
     }
 
     [Fact]
