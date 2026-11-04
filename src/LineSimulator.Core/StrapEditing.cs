@@ -19,6 +19,29 @@ public static class StrapEditing
     }
 
     /// <summary>
+    /// Cambiata la lunghezza del pacco, le legature si spostano in proporzione (a passi di 100 mm) senza cambiarne il numero:
+    /// se due legature cadrebbero sullo stesso punto, la successiva scorre di un passo.
+    /// </summary>
+    public static void ScaleToLength(PackageType p, double oldLengthMm)
+    {
+        if (oldLengthMm <= 0 || p.LengthMm <= 0 || p.StrapPositionsMm.Count == 0) return;
+        double ratio = p.LengthMm / oldLengthMm;
+        var pos = p.StrapPositionsMm.OrderBy(v => v).Select(v => Snap(v * ratio)).ToList();
+        int n = pos.Count;
+        for (int i = 0; i < n; i++)
+        {
+            double min = i == 0 ? StepMm : pos[i - 1] + StepMm;
+            if (pos[i] < min) pos[i] = min;
+        }
+        for (int i = n - 1; i >= 0; i--)
+        {
+            double max = i == n - 1 ? Math.Max(StepMm, p.LengthMm - StepMm) : pos[i + 1] - StepMm;
+            if (pos[i] > max) pos[i] = max;
+        }
+        p.StrapPositionsMm = pos;
+    }
+
+    /// <summary>
     /// Aggiunge una legatura nel punto più libero (al centro del tratto più lungo), su multipli di 100 mm e nel rispetto
     /// delle distanze minime. Restituisce false se non c'è posto.
     /// </summary>

@@ -15,6 +15,26 @@ public class StrapEditingTests
     public void Snap_GoesToMultiplesOf100(double input, double expected) => Assert.Equal(expected, StrapEditing.Snap(input));
 
     [Fact]
+    public void ScaleToLength_KeepsCountAndMovesInProportion()
+    {
+        var p = Pack(1500, 6000, 10500);
+        p.LengthMm = 6000;
+        StrapEditing.ScaleToLength(p, 12000);
+        Assert.Equal(new double[] { 800, 3000, 5300 }, p.StrapPositionsMm);
+    }
+
+    [Fact]
+    public void ScaleToLength_VeryShort_KeepsCountWithoutOverlaps()
+    {
+        var p = Pack(1500, 1600, 1700, 10500);
+        p.LengthMm = 1000;
+        StrapEditing.ScaleToLength(p, 12000);
+        Assert.Equal(4, p.StrapPositionsMm.Count);
+        Assert.Equal(4, p.StrapPositionsMm.Distinct().Count());
+        Assert.All(p.StrapPositionsMm, v => Assert.InRange(v, 100, 900));
+    }
+
+    [Fact]
     public void SnapAll_SortsDedupesAndKeepsInsidePackage()
     {
         var p = Pack(10540, 1510, 1490, 0, 12000, 6000);

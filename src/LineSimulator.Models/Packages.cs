@@ -21,35 +21,35 @@ public sealed class PackageType : ComponentBase
     [UiProperty("Lunghezza pacco", "mm", "Dati", Order = 1)]
     public double LengthMm { get; set; } = 12000;
 
-    [UiProperty("Peso pacco", "kg", "Dati", Order = 2)]
+    [UiProperty("Peso pacco", "kg", "Dati", Order = 4)]
     public double WeightKg { get; set; } = 3000;
 
-    [UiProperty("Larghezza pacco", "mm", "Dati", Order = 3)]
+    [UiProperty("Larghezza pacco", "mm", "Dati", Order = 2)]
     public double GraphicWidthMm { get; set; } = 600;
 
-    [UiProperty("Altezza pacco", "mm", "Dati", Order = 4)]
+    [UiProperty("Altezza pacco", "mm", "Dati", Order = 3)]
     public double GraphicHeightMm { get; set; } = 400;
 
     /// <summary>Posizioni delle legature misurate dalla testa del pacco (mm).</summary>
-    [UiProperty("Posizioni legature dalla testa", "mm", "Legatura", Order = 20)]
+    [UiProperty("Posizioni delle legature dalla testa", "mm", "Legatura", Order = 24)]
     public List<double> StrapPositionsMm { get; set; } = new() { 1500, 6000, 10500 };
 
     /// <summary>Un solo tipo per pacco: legature a filo (KNCA) oppure reggettature a reggia d'acciaio (SMA).</summary>
-    [UiProperty("Tipo di legatura (filo KNCA / reggia SMA)", "", "Legatura", Order = 19)]
+    [UiProperty("Tipo di legatura (filo / reggetta)", "", "Legatura", Order = 19)]
     public BindingType BindingType { get; set; } = BindingType.Wire;
 
-    [UiProperty("Distanza minima legatura-estremità", "mm", "Legatura", Order = 21)]
+    [UiProperty("Distanza minima legature-estremità", "mm", "Legatura", Order = 21)]
     public double MinStrapDistanceFromEndsMm { get; set; } = 300;
 
     [UiProperty("Distanza minima tra legature", "mm", "Legatura", Order = 22)]
     public double MinDistanceBetweenStrapsMm { get; set; } = 500;
 
     [JsonIgnore]
-    [UiProperty("Numero di legature", "", "Legatura", ReadOnly = true, Order = 23)]
+    [UiProperty("Numero di legature", "", "Legatura", ReadOnly = true, Order = 20)]
     public int StrapCount => StrapPositionsMm.Count;
 
     [JsonIgnore]
-    [UiProperty("Distanze tra legature", "mm", "Legatura", ReadOnly = true, Order = 24)]
+    [UiProperty("Distanze tra legature", "mm", "Legatura", ReadOnly = true, Order = 23)]
     public string StrapSpacingsText
     {
         get
