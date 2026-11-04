@@ -21,14 +21,29 @@ public static class SampleProjects
         ("1 legatrice - pacchi 6/9/12 m", CreateOneStrapper12m)
     };
 
+    /// <summary>Distanza della prima legatrice (in ordine di flusso) dalla prima fotocellula.</summary>
+    public const double FirstStrapperFromEntryMm = 5000;
+
+    /// <summary>
+    /// Posizione della prima legatrice: 5 m dalla prima fotocellula. Il motore lega il pacco solo quando sta tutto sulla via
+    /// rulli di legatura, quindi la legatura di testa (a 500 mm dalla testa) richiede che l'ultima legatrice stia ad almeno
+    /// (pacco massimo − 500 mm) dall'inizio della via: se 5 m non bastano, la prima legatrice è portata al minimo ammesso.
+    /// </summary>
+    public static double FirstStrapperPositionMm(int strappers, int maxLengthM)
+    {
+        double byRule = ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
+        double feasible = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm + 100 - (strappers - 1) * StrapperSpacingMm;
+        return Math.Max(byRule, Math.Ceiling(feasible / 100) * 100);
+    }
+
     /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>
     public const double StrapperSpacingMm = 2500;
 
     /// <summary>Lunghezze delle tipologie di pacco presenti in tutti i modelli (m).</summary>
     public static IReadOnlyList<int> PackageLengthsM { get; } = new[] { 6, 9, 12, 18, 24 };
 
-    /// <summary>Modello aperto all'avvio: 3 legatrici, pacchi fino a 24 m.</summary>
-    public static LineProject CreateStandardLine() => CreateThreeStrappers24m();
+    /// <summary>Modello aperto all'avvio: 2 legatrici, pacchi 6/9/12 m.</summary>
+    public static LineProject CreateStandardLine() => CreateTwoStrappers12m();
 
     public static LineProject CreateOneStrapper12m() =>
         Build("1 legatrice - pacchi 6/9/12 m", strappers: 1, maxLengthM: 12, infeedLengthsM: new[] { 6, 9, 12 });
@@ -53,8 +68,7 @@ public static class SampleProjects
         double lmax = maxLengthM * 1000.0;
         double strapLen = 2 * lmax + 1000;           // via rulli di legatura
         double trfLen = lmax + 500;                  // trasferitore = via rulli davanti al trasferitore
-        double spread = (strappers - 1) * StrapperSpacingMm;
-        double first = Math.Round(strapLen / 2 - spread / 2);
+        double first = FirstStrapperPositionMm(strappers, maxLengthM);
 
         var p = new LineProject
         {
@@ -67,7 +81,7 @@ public static class SampleProjects
         p.Sections.Add(Mod("M2", "Modulo 2 - Trasferitore", strapLen, trfLen));
 
         p.Photocells.Add(Entry());
-        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 500, "M1", PhotocellAction.Accumulation);
+        var exit = Pc("FC1", "FC1 uscita legatura", strapLen - 700, "M1", PhotocellAction.Accumulation);
         exit.Purpose = PhotocellPurpose.StrappingExit;
         p.Photocells.Add(exit);
         p.Photocells.Add(Pc("FC2", "FC2 rallentamento stopper", strapLen + trfLen - 1500, "M2", PhotocellAction.SlowDown));
@@ -92,7 +106,7 @@ public static class SampleProjects
         if (intermediateStop)
             p.IntermediateStops.Add(new IntermediateStopConfig
             {
-                Id = "FM1", Name = "Fermo intermedio scomparente", PositionMm = strapLen + 12000, AlignmentTimeS = 2.0
+                Id = "FM1", Name = "Fermo intermedio scomparente", PositionMm = strapLen + trfLen / 2, AlignmentTimeS = 2.0
             });
         p.Transfer = new TransferConfig
         {
@@ -100,8 +114,13 @@ public static class SampleProjects
             LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
             BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60
         };
-        p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen / 2 });
-        p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = strapLen + trfLen / 2, LengthMm = trfLen / 2 });
+        if (maxLengthM <= 12)    // modelli 6/9/12 m: un solo bilico lungo come il trasferitore
+            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen });
+        else
+        {
+            p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", StartMm = strapLen, LengthMm = trfLen / 2 });
+            p.Scales.Add(new WeighingScaleConfig { Id = "B2", Name = "Bilico 2", StartMm = strapLen + trfLen / 2, LengthMm = trfLen / 2 });
+        }
 
         foreach (int m in PackageLengthsM) p.PackageTypes.Add(Package(m));
 
@@ -109,29 +128,21 @@ public static class SampleProjects
         {
             Mode = InfeedMode.AfterStrapping, NewPackageDelayS = 10,
             PackageCount = 2 * infeedLengthsM.Length,
-            TypeSequence = infeedLengthsM.Select(m => $"P{m}").ToList()
+            TypeSequence = infeedLengthsM.Select(m => PackageNaming.IdFor(m * 1000.0, BindingType.Wire)).ToList()
         };
         p.Simulation = new SimulationSettings { Banking = AccumulationMode.SingleBanking, Heading = StopReference.Head };
         return Complete(p);
     }
 
-    /// <summary>Pacco da m metri: legature simmetriche a 1000 mm dalle estremità e circa ogni 3-3,5 m, a passi di 100 mm; 250 kg/m.</summary>
-    public static PackageType Package(int meters)
+    /// <summary>Pacco da m metri (filo): legature di testa e di coda a 500 mm dalle estremità, le altre equidistanti e simmetriche; 250 kg/m.</summary>
+    public static PackageType Package(int meters, BindingType binding = BindingType.Wire)
     {
         double len = meters * 1000.0;
         int n = meters switch { <= 6 => 3, <= 9 => 4, <= 12 => 5, <= 18 => 6, _ => 7 };
-        var pos = new List<double>();
-        for (int i = 0; i < n; i++)
-        {
-            double x = 1000 + i * (len - 2000) / (n - 1);
-            double r = Math.Round(x / 100.0) * 100;
-            // simmetria rispetto al centro: la seconda metà è lo specchio della prima
-            if (i >= (n + 1) / 2) r = len - pos[n - 1 - i];
-            pos.Add(r);
-        }
         return new PackageType
         {
-            Id = $"P{meters}", Name = $"Pacco {meters} m", LengthMm = len, WeightKg = 250 * meters, StrapPositionsMm = pos
+            Id = PackageNaming.IdFor(len, binding), Name = $"Pacco {meters} m", LengthMm = len, WeightKg = 250 * meters,
+            BindingType = binding, StrapPositionsMm = PackageNaming.DefaultStraps(len, n)
         };
     }
 
@@ -150,13 +161,13 @@ public static class SampleProjects
         ResponseTimeMs = 20, IsEntryPhotocell = true, Action = PhotocellAction.None
     };
 
-    /// <summary>Modulo di via a rulli con il proprio inverter (0,15/0,6 m/s, 0,5/0,6 m/s²), sporgenze standard di 200 mm.</summary>
+    /// <summary>Modulo di via a rulli con i parametri di default del padre (0,3 / 1,0 / 1,5 m/s, 1 m/s²); sporgenza = metà passo.</summary>
     private static RollerSection Mod(string id, string name, double start, double length)
     {
         var s = new RollerSection
         {
             Id = id, Name = name, WidthMm = 1200, RollerPitchMm = RollerSection.DefaultPitchMm,
-            RollerDiameterMm = RollerSection.DefaultDiameterMm, LowSpeed = 0.15, HighSpeed = 0.6, Acceleration = 0.5, Deceleration = 0.6, DefaultSpeed = SpeedLevel.High
+            RollerDiameterMm = RollerSection.DefaultDiameterMm, DefaultSpeed = SpeedLevel.High
         };
         LineReflow.Fit(s, start, start + length);
         return s;

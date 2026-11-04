@@ -3,8 +3,8 @@ using LineSimulator.Models;
 namespace LineSimulator.Core;
 
 /// <summary>
-/// Via a rulli a valle dell'ultima legatrice: almeno 2 m (anche con una sola legatrice) e, se si sposta l'ultima legatrice,
-/// con lei si sposta tutta la parte a valle (fine della sua via, vie successive, fotocellule, trasferitore e bilici).
+/// Via a rulli attorno alle legatrici: almeno 1 m dall'inizio della via a monte e almeno 2 m a valle dell'ultima legatrice
+/// (anche con una sola). La via si allunga solo se l'ultima legatrice arriva a meno di 2 m dalla sua fine.
 /// </summary>
 public static class StrapperTrack
 {
@@ -37,26 +37,21 @@ public static class StrapperTrack
         return deficit;
     }
 
-    /// <summary>
-    /// L'ultima legatrice è stata spostata da oldPositionMm alla posizione attuale: la parte a valle la segue (la via che la contiene
-    /// si allunga o accorcia e tutto ciò che sta oltre si sposta). Per le altre legatrici non cambia nulla.
-    /// Restituisce true se ha spostato la parte a valle.
-    /// </summary>
-    public static bool FollowLastStrapper(LineProject p, StrapperConfig moved, double oldPositionMm)
+    /// <summary>Distanza minima di una legatrice dall'inizio della via rulli di legatura.</summary>
+    public const double MinStrapperFromTrackStartMm = 1000;
+
+    /// <summary>Inizio della via rulli di legatura (prima via), null se non ci sono vie.</summary>
+    public static double? TrackStartMm(LineProject p) => p.Sections.Count == 0 ? null : p.Sections.Min(s => s.StartMm);
+
+    /// <summary>Posizione minima ammessa per una legatrice (1 m dall'inizio della via), 0 se non ci sono vie.</summary>
+    public static double MinStrapperPositionMm(LineProject p) => (TrackStartMm(p) ?? 0) + MinStrapperFromTrackStartMm;
+
+    /// <summary>Riporta a 1 m dall'inizio della via le legatrici più vicine. Restituisce true se ne ha spostata qualcuna.</summary>
+    public static bool ClampStrappersToTrackStart(LineProject p)
     {
-        double dx = moved.PositionMm - oldPositionMm;
-        if (Math.Abs(dx) < 1e-9) return false;
-        bool wasLast = p.Strappers.Where(s => s.IsEnabled && !ReferenceEquals(s, moved)).All(s => s.PositionMm <= oldPositionMm + 1e-6);
-        if (!wasLast) return false;
-        var sec = SectionAt(p, oldPositionMm);
-        if (sec == null) return false;
-        double oldEnd = sec.EndMm;
-        double minEnd = sec.StartMm + LineReflow.MinLengthMm(sec);
-        if (oldEnd + dx < minEnd) dx = minEnd - oldEnd;
-        moved.PositionMm = oldPositionMm;           // la legatrice resta ferma mentre si sposta la parte a valle
-        LineReflow.ShiftBeyond(p, oldPositionMm, dx);
-        LineReflow.Fit(sec, sec.StartMm, oldEnd + dx);
-        moved.PositionMm = oldPositionMm + dx;
-        return true;
+        double min = MinStrapperPositionMm(p);
+        bool changed = false;
+        foreach (var s in p.Strappers.Where(x => x.PositionMm < min - 1e-6)) { s.PositionMm = min; changed = true; }
+        return changed;
     }
 }

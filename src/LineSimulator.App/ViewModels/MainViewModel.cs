@@ -455,8 +455,9 @@ public sealed partial class MainViewModel : ObservableObject
         p.Stopper = new StopperConfig { Id = "STP", Name = "Stopper", PositionMm = 13500 };
         p.Transfer = new TransferConfig { Id = "TRF", Name = "Trasferitore", PositionMm = 1500, LengthMm = 12000 };
         p.StrappingStation.IsEnabled = false;
-        p.PackageTypes.Add(new PackageType { Id = "P12", Name = "Pacco 12 m" });
-        p.Infeed.TypeSequence.Add("P12");
+        var pk = SampleProjects.Package(12);
+        p.PackageTypes.Add(pk);
+        p.Infeed.TypeSequence.Add(pk.Id);
         return p;
     }
 
@@ -464,8 +465,12 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
+        RollerGroups.MarkCustomized(_project);                   // progetti precedenti: i moduli diversi dal padre restano personalizzati
         LineReflow.ApplyDefaultRollerGeometry(_project);         // passo 1250 mm e diametro 268 mm al posto dei vecchi default
-        LineReflow.EnforceOverhang(_project);                    // 200 mm tra ultimo rullo e fine/inizio modulo
+        LineReflow.EnforceOverhang(_project);                    // sporgenza terminale = metà passo rulli
+        PackageNaming.MigrateLegacyIds(_project);                // identificativi pacco "P12 (Wire)"
+        StrapperTrack.ClampStrappersToTrackStart(_project);      // legatrici ad almeno 1 m dall'inizio della via rulli
+        LayoutRules.SnapIntermediateStops(_project);
         StrapperTrack.EnsureMinimumTrack(_project);              // almeno 2 m di via rulli dopo l'ultima legatrice
         RememberStrapperPositions();
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
@@ -629,7 +634,7 @@ public sealed partial class MainViewModel : ObservableObject
         var p = _project;
         var root = new TreeNodeViewModel("Progetto: " + p.Name, p, "Project");
         root.Children.Add(new TreeNodeViewModel("Layout 3D", p.Layout, "Layout"));
-        root.Children.Add(Group("Moduli via a rulli (inverter)", "Section", p.Sections.OrderBy(s => s.StartMm)));
+        root.Children.Add(Group("Moduli via a rulli", "Section", p.Sections.OrderBy(s => s.StartMm), p.SectionDefaults));
         root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
         var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
@@ -661,9 +666,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     private static string DeviceHeader(string label, SequenceDeviceConfig d) => d.IsEnabled ? $"{label} ({d.Id})" : $"{label} (disabilitato)";
 
-    private static TreeNodeViewModel Group<T>(string header, string kind, IEnumerable<T> items) where T : ComponentBase
+    private static TreeNodeViewModel Group<T>(string header, string kind, IEnumerable<T> items, object? groupModel = null) where T : ComponentBase
     {
-        var g = new TreeNodeViewModel(header, null, kind + "Group");
+        var g = new TreeNodeViewModel(header, groupModel, kind + "Group");
         foreach (var i in items) g.Children.Add(new TreeNodeViewModel(i.ToString(), i, kind));
         return g;
     }
@@ -744,6 +749,24 @@ public sealed partial class MainViewModel : ObservableObject
         if (model == null) return;
         foreach (var item in PropertyItemViewModel.For(model, OnPropertyEdited, IdOptions))
             Properties.Add(item);
+        ApplyPropertyLocks();
+    }
+
+    /// <summary>Blocca le proprietà ereditate dal padre (finché il modulo non è personalizzato) e le posizioni fisse.</summary>
+    private void ApplyPropertyLocks()
+    {
+        var model = SelectedNode?.Model;
+        foreach (var item in Properties)
+        {
+            bool lockIt = model switch
+            {
+                RollerSection s => (!s.OverrideGroup && RollerGroups.InheritedProperties.Contains(item.Name))
+                                   || (IsLocked(s) && item.Name == nameof(RollerSection.StartMm)),
+                PhotocellConfig pc => pc.IsEntryPhotocell && item.Name == nameof(PhotocellConfig.PositionMm),
+                _ => false
+            };
+            item.Locked = lockIt;
+        }
     }
 
     private IReadOnlyList<string>? IdOptions(string propertyName) => propertyName switch
@@ -764,15 +787,20 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var rs in SelectedModels().OfType<RollerSection>().Where(_ => item.Name is "RollerCount" or "RollerPitchMm"))
         {
             double oldEnd = rs.EndMm;
-            rs.EndOverhangMm = RollerSection.StandardOverhangMm;
             rs.RecalculateLength();
             LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle restano unite
         }
-        // spostando l'ultima legatrice dalle proprietà, la via rulli a valle la segue
-        if (SelectedNode?.Model is StrapperConfig movedStrapper && item.Name == "PositionMm" && _strapperPos.TryGetValue(movedStrapper, out var oldStrapperPos))
-            StrapperTrack.FollowLastStrapper(_project, movedStrapper, oldStrapperPos);
+        // padre → figli: cambiando le proprietà del padre cambiano quelle di tutti i moduli non personalizzati
+        bool groupChanged = false;
+        if (SelectedNode?.Model is RollerGroup)
+            groupChanged = RollerGroups.Propagate(_project, applyPitch: item.Name == nameof(RollerGroup.RollerPitchMm));
+        else if (SelectedNode?.Model is RollerSection && item.Name == nameof(RollerSection.OverrideGroup))
+        {
+            groupChanged = RollerGroups.Propagate(_project, applyPitch: true);   // togliendo la spunta il modulo torna al padre
+            ApplyPropertyLocks();
+        }
         bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
-        ProjectChanged(structural);
+        ProjectChanged(structural || groupChanged);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
 
@@ -810,13 +838,8 @@ public sealed partial class MainViewModel : ObservableObject
         double start = last?.EndMm ?? 0;
         var s = new RollerSection { Id = NextId("M", AllComponents()), StartMm = start, RollerCount = 6 };
         s.Name = "Modulo " + s.Id;
-        s.EndOverhangMm = RollerSection.StandardOverhangMm;
-        if (last != null)
-        {
-            s.WidthMm = last.WidthMm; s.RollerPitchMm = last.RollerPitchMm; s.RollerDiameterMm = last.RollerDiameterMm;
-            s.LowSpeed = last.LowSpeed; s.HighSpeed = last.HighSpeed; s.Acceleration = last.Acceleration; s.Deceleration = last.Deceleration;
-            s.DefaultSpeed = last.DefaultSpeed; s.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
-        }
+        RollerGroups.CopyDrive(_project.SectionDefaults, s);       // i nuovi moduli ereditano dal padre
+        s.RollerPitchMm = _project.SectionDefaults.RollerPitchMm;
         s.RecalculateLength();
         _project.Sections.Add(s);
         AfterAdd(s);
@@ -864,6 +887,7 @@ public sealed partial class MainViewModel : ObservableObject
                      - _project.Simulation.MinSafetyDistanceMm - 100;
         var s = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = Math.Round(pos) };
         _project.IntermediateStops.Add(s);
+        LayoutRules.SnapIntermediateStops(_project);        // solo in mezzo ai bilici (o al centro/estremo di un solo bilico)
         if (_project.Transfer.BatchSize < 1 + _project.IntermediateStops.Count(x => x.IsEnabled))
             _project.Transfer.BatchSize = 1 + _project.IntermediateStops.Count(x => x.IsEnabled);
         AfterAdd(s);
@@ -933,13 +957,8 @@ public sealed partial class MainViewModel : ObservableObject
                 var last = _project.Sections.OrderBy(v => v.StartMm).LastOrDefault();
                 var sec = new RollerSection { Id = NextId("M", AllComponents()), RollerCount = 6 };
                 sec.Name = "Modulo " + sec.Id;
-                if (last != null)
-                {
-                    sec.WidthMm = last.WidthMm; sec.RollerPitchMm = last.RollerPitchMm; sec.RollerDiameterMm = last.RollerDiameterMm;
-                    sec.LowSpeed = last.LowSpeed; sec.HighSpeed = last.HighSpeed; sec.Acceleration = last.Acceleration; sec.Deceleration = last.Deceleration;
-                    sec.DefaultSpeed = last.DefaultSpeed; sec.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
-                }
-                sec.EndOverhangMm = RollerSection.StandardOverhangMm;
+                RollerGroups.CopyDrive(_project.SectionDefaults, sec);
+                sec.RollerPitchMm = _project.SectionDefaults.RollerPitchMm;
                 sec.RecalculateLength();
                 // la nuova via si aggancia alla giunzione più vicina; gli equipaggiamenti a valle avanzano
                 var ordered = _project.Sections.OrderBy(v => v.StartMm).ToList();
@@ -999,6 +1018,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var fs = new IntermediateStopConfig { Id = NextId("FM", AllComponents()), Name = "Fermo intermedio", PositionMm = x };
                 _project.IntermediateStops.Add(fs);
+                LayoutRules.SnapIntermediateStops(_project);
                 added = fs;
                 break;
             }
@@ -1015,6 +1035,14 @@ public sealed partial class MainViewModel : ObservableObject
         Status = $"Inserito: {e.Name} a X = {x / 1000.0:0.000} m";
     }
 
+    /// <summary>Prima fotocellula (ingresso) e inizio della via rulli di legatura sono fissi.</summary>
+    public bool IsLocked(object? m) => m switch
+    {
+        PhotocellConfig pc => pc.IsEntryPhotocell,
+        RollerSection s => _project.Sections.Count > 0 && ReferenceEquals(s, _project.Sections.OrderBy(x => x.StartMm).First()) && s.StartMm <= 0.5,
+        _ => false
+    };
+
     public static bool CanMove(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or BundleClampConfig or SideCompactorConfig
         or RejectorConfig or IntermediateStopConfig or TransferConfig or WeighingScaleConfig;
 
@@ -1022,16 +1050,15 @@ public sealed partial class MainViewModel : ObservableObject
     public void MoveSelectedBy(double dxMm, double yM)
     {
         var m = SelectedNode?.Model;
-        if (!CanMove(m)) return;
+        if (!CanMove(m) || IsLocked(m)) return;
         switch (m)
         {
             case RollerSection s: LineReflow.MoveSection(_project, s, dxMm); break;
             case PhotocellConfig pc: pc.PositionMm += dxMm; break;
             case StrapperConfig st:
             {
-                double before = st.PositionMm;
-                st.PositionMm += dxMm; st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
-                StrapperTrack.FollowLastStrapper(_project, st, before);     // la via rulli a valle segue l'ultima legatrice
+                st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), st.PositionMm + dxMm);   // almeno 1 m dall'inizio della via
+                st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
                 break;
             }
             case BundleClampConfig k: k.PositionMm += dxMm; break;
@@ -1057,9 +1084,7 @@ public sealed partial class MainViewModel : ObservableObject
             case PhotocellConfig pc: pc.PositionMm = Snap(pc.PositionMm); break;
             case StrapperConfig st:
             {
-                double before = st.PositionMm;
-                st.PositionMm = Snap(st.PositionMm);
-                StrapperTrack.FollowLastStrapper(_project, st, before);
+                st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), Snap(st.PositionMm));
                 break;
             }
             case BundleClampConfig k: k.PositionMm = Snap(k.PositionMm); break;
@@ -1264,7 +1289,7 @@ public sealed partial class MainViewModel : ObservableObject
         _packageLengthMm = _selectedPackageType.LengthMm;
         // il nome è doppio con l'identificativo: nella schermata Pacchi si vede e si modifica solo l'identificativo
         foreach (var item in PropertyItemViewModel.For(_selectedPackageType, OnPackageEdited, IdOptions))
-            if (item.Name != "Name") PackageProperties.Add(item);
+            if (item.Name != "Name") { if (item.Name == "Id") item.Locked = true; PackageProperties.Add(item); }
     }
 
     private double _packageLengthMm;
@@ -1281,8 +1306,13 @@ public sealed partial class MainViewModel : ObservableObject
             _packageLengthMm = sel.LengthMm;
             SelectedStrapIndex = -1;
         }
-        if (sel != null && item.Name == "Id") sel.Name = sel.Id;
-        bool renamed = item.Name is "Id" or "Name";
+        // l'identificativo segue lunghezza e tipo di legatura: "P12 (Wire)" / "P12 (Still Strapp)"
+        bool renamed = false;
+        if (sel != null && item.Name is nameof(PackageType.LengthMm) or nameof(PackageType.BindingType))
+        {
+            renamed = PackageNaming.Refresh(_project, sel);
+            sel.Name = sel.Id;
+        }
         ProjectChanged(structural: false);
         if (renamed)
         {
@@ -1298,7 +1328,9 @@ public sealed partial class MainViewModel : ObservableObject
     private void NewPackage()
     {
         // il nuovo pacco è sempre "generale" (valori standard) e si identifica alla prima fotocellula, il punto di zero
-        var t = new PackageType { Id = NextId("T", AllComponents()), Name = "Pacco generale" };
+        var t = new PackageType { Name = "Pacco generale", StrapPositionsMm = PackageNaming.DefaultStraps(12000, 5) };
+        t.Id = PackageNaming.UniqueId(_project, t);
+        t.Name = t.Id;
         _project.PackageTypes.Add(t);
         ProjectChanged(structural: true);
         SelectedPackageType = t;
@@ -1310,11 +1342,13 @@ public sealed partial class MainViewModel : ObservableObject
         if (src == null) return;
         var t = new PackageType
         {
-            Id = NextId("T", AllComponents()), Name = src.Name + " (copia)", LengthMm = src.LengthMm, WeightKg = src.WeightKg,
+            Name = src.Name, BindingType = src.BindingType, LengthMm = src.LengthMm, WeightKg = src.WeightKg,
             GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
             StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
             MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm
         };
+        t.Id = PackageNaming.UniqueId(_project, t);
+        t.Name = t.Id;
         _project.PackageTypes.Add(t);
         ProjectChanged(structural: true);
         SelectedPackageType = t;

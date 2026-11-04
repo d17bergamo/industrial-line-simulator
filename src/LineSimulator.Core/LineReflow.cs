@@ -77,36 +77,36 @@ public static class LineReflow
         return changed;
     }
 
-    /// <summary>Adatta una via a rulli a [start, end): sporgenze fisse a 200 mm, numero di rulli più vicino al passo attuale e passo ricalcolato.</summary>
+    /// <summary>
+    /// Adatta una via a rulli a [start, end): la sporgenza terminale è metà passo, quindi la lunghezza vale sempre
+    /// numero rulli × passo. Il numero di rulli è il più vicino al passo attuale e il passo viene ricalcolato.
+    /// </summary>
     public static void Fit(RollerSection s, double startMm, double endMm)
     {
-        double ov = RollerSection.StandardOverhangMm;
-        double len = Math.Max(2 * ov + 1, endMm - startMm);
-        double inter = len - 2 * ov;
         double pitch = Math.Max(10, s.RollerPitchMm);
-        int n = Math.Max(2, (int)Math.Round(inter / pitch) + 1);
-        s.EndOverhangMm = ov;
+        double len = Math.Max(2 * pitch, endMm - startMm);
+        int n = Math.Max(2, (int)Math.Round(len / pitch));
         s.RollerCount = n;
-        s.RollerPitchMm = inter / (n - 1);
+        s.RollerPitchMm = len / n;
         s.StartMm = startMm;
         s.LengthMm = len;
     }
 
-    /// <summary>Porta tutte le vie a sporgenza standard (200 mm) mantenendo posizione e lunghezza: cambia solo il passo.</summary>
+    /// <summary>Porta tutte le vie a sporgenza = metà passo mantenendo posizione e lunghezza: cambia solo il passo.</summary>
     public static bool EnforceOverhang(LineProject p)
     {
         bool changed = false;
         foreach (var s in p.Sections)
         {
-            if (Math.Abs(s.EndOverhangMm - RollerSection.StandardOverhangMm) < 0.01) continue;
+            if (Math.Abs(s.LengthMm - s.RollerCount * s.RollerPitchMm) < 0.01) continue;
             Fit(s, s.StartMm, s.EndMm);
             changed = true;
         }
         return changed;
     }
 
-    /// <summary>Lunghezza minima di una via adattata (due rulli e le sporgenze).</summary>
-    public static double MinLengthMm(RollerSection s) => 2 * RollerSection.StandardOverhangMm + Math.Max(10, s.RollerPitchMm);
+    /// <summary>Lunghezza minima di una via adattata: due rulli (2 × passo, sporgenze comprese).</summary>
+    public static double MinLengthMm(RollerSection s) => 2 * Math.Max(10, s.RollerPitchMm);
 
     /// <summary>
     /// Sposta una via di dxMm tenendo unite le vie vicine: quella a monte si allunga/accorcia e quella a valle idem.

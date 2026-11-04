@@ -264,7 +264,7 @@ public partial class MainWindow : Window
     private void BeginMove(HelixToolkit.Wpf.HelixViewport3D viewport, Rendering.LineScene scene, MouseButtonEventArgs e)
     {
         var obj = PickAt(viewport, scene, e);
-        if (obj == null || !MainViewModel.CanMove(obj)) return;
+        if (obj == null || !MainViewModel.CanMove(obj) || _vm.IsLocked(obj)) return;   // prima fotocellula e inizio via rulli sono fissi
         var p = PlanePoint(viewport, e.GetPosition(viewport.Viewport));
         if (p == null) return;
         if (_vm.IsPlaying) _vm.PauseCommand.Execute(null);        // si modifica a simulazione ferma: al rilascio riparte da zero

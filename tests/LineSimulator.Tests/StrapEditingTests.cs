@@ -225,8 +225,7 @@ public class SectionChainTests
         for (int i = 0; i < 3; i++)
         {
             var s = new RollerSection { Id = "M" + (i + 1), Name = "M" + (i + 1), StartMm = i * 6000, LengthMm = 6000, RollerCount = 20 };
-            s.EndOverhangMm = RollerSection.StandardOverhangMm;
-            s.RollerPitchMm = 5600.0 / 19;
+            s.RollerPitchMm = 6000.0 / 20;
             p.Sections.Add(s);
         }
         p.Transfer.PositionMm = 14000;
@@ -235,7 +234,7 @@ public class SectionChainTests
     }
 
     [Fact]
-    public void MovingMiddleSection_KeepsNeighboursJoined_AndOverhang200()
+    public void MovingMiddleSection_KeepsNeighboursJoined_AndOverhangIsHalfPitch()
     {
         var p = Chain();
         double dx = LineReflow.MoveSection(p, p.Sections[1], 1000);
@@ -244,8 +243,8 @@ public class SectionChainTests
         Assert.Equal(7000, p.Sections[1].StartMm, 6);
         Assert.Equal(7000, p.Sections[0].EndMm, 6);
         Assert.Equal(18000, p.Sections[2].EndMm, 6);          // la fine linea resta ferma
-        Assert.All(p.Sections, s => Assert.Equal(200, s.EndOverhangMm, 6));
-        Assert.All(p.Sections, s => Assert.Equal(s.LengthMm, s.InteraxialLengthMm + 400, 6));
+        Assert.All(p.Sections, s => Assert.Equal(s.RollerPitchMm / 2, s.EndOverhangMm, 6));
+        Assert.All(p.Sections, s => Assert.Equal(s.LengthMm, s.InteraxialLengthMm + 2 * s.EndOverhangMm, 6));
     }
 
     [Fact]
@@ -256,7 +255,7 @@ public class SectionChainTests
         Assert.Empty(LineReflow.Discontinuities(p));
         Assert.Equal(14500, p.Transfer.PositionMm, 6);
         Assert.Equal(15500, p.Scales[0].StartMm, 6);
-        Assert.Equal(p.Sections[2].EndMm - 200 + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
+        Assert.Equal(p.Sections[2].EndMm - p.Sections[2].EndOverhangMm + p.Stopper.DistanceFromLastRollerMm, p.Stopper.PositionMm, 6);
     }
 
     [Fact]
@@ -272,12 +271,12 @@ public class SectionChainTests
     public void EnforceOverhang_ChangesOnlyPitch()
     {
         var p = new LineProject();
-        var s = new RollerSection { Id = "M1", StartMm = 0, LengthMm = 6000, RollerCount = 20, RollerPitchMm = 300 };
-        s.EndOverhangMm = 150; s.RecalculateLength();
+        var s = new RollerSection { Id = "M1", StartMm = 0, LengthMm = 5950, RollerCount = 20, RollerPitchMm = 300 };   // sporgenza non pari a metà passo
         p.Sections.Add(s);
         double start = s.StartMm, end = s.EndMm;
         Assert.True(LineReflow.EnforceOverhang(p));
-        Assert.Equal(200, s.EndOverhangMm);
+        Assert.Equal(s.RollerPitchMm / 2, s.EndOverhangMm, 6);
+        Assert.Equal(s.LengthMm, s.RollerCount * s.RollerPitchMm, 6);
         Assert.Equal(start, s.StartMm); Assert.Equal(end, s.EndMm, 6);
         Assert.Equal(20, s.RollerCount);
     }

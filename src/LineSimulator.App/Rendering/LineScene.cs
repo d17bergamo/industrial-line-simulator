@@ -452,7 +452,7 @@ public sealed class LineScene
                 f.AddBox(new Point3D(x, 0, _zTop - 0.06), 0.12, _lineWidth + 0.2, 0.08);
             }
             f.AddBox(new Point3D(sx + (sl - gap) / 2, 0, _zTop - 0.1), sl - gap, 0.1, 0.04);       // longherone di sezione
-            _names.Children.Add(Label($"{sec.Name} ({sec.LengthMm:0} mm)", new Point3D(sx + sl / 2, -_lineWidth / 2 - 0.35, _zTop + 0.15)));
+            _names.Children.Add(Label(sec.Name, new Point3D(sx + sl / 2, -_lineWidth / 2 - 0.35, _zTop + 0.15)));
             forks += n;
             sx += sl;
         }
