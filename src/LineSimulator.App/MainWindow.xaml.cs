@@ -95,7 +95,8 @@ public partial class MainWindow : Window
         var pk = _vm.SelectedPackageType;
         if (pk == null || c.ActualWidth < 100) return;
         double x0 = RulerMargin, w = c.ActualWidth - 2 * RulerMargin, len = Math.Max(1, pk.LengthMm);
-        double X(double mm) => x0 + mm / len * w;
+        // la testa del pacco sta a destra, come nel 3D: 0 mm a destra, la coda a sinistra
+        double X(double mm) => x0 + (1 - mm / len) * w;
         var bar = new System.Windows.Shapes.Rectangle { Width = w, Height = 12, RadiusX = 3, RadiusY = 3, Fill = Hex("#E4E9EF"), Stroke = Hex("#C0C9D4") };
         Canvas.SetLeft(bar, x0); Canvas.SetTop(bar, 10); c.Children.Add(bar);
         double step = len > 8000 ? 1000 : 500;
@@ -106,6 +107,10 @@ public partial class MainWindow : Window
             var lbl = new TextBlock { Text = mm.ToString("0"), FontSize = 10.5, Foreground = Hex("#5B6673"), Width = 50, TextAlignment = TextAlignment.Center };
             Canvas.SetLeft(lbl, X(mm) - 25); Canvas.SetTop(lbl, 33); c.Children.Add(lbl);
         }
+        var coda = new TextBlock { Text = "CODA", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Hex("#5B6673") };
+        Canvas.SetLeft(coda, 0); Canvas.SetTop(coda, 46); c.Children.Add(coda);
+        var testa = new TextBlock { Text = "TESTA →", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Hex("#5B6673"), Width = 70, TextAlignment = TextAlignment.Right };
+        Canvas.SetLeft(testa, c.ActualWidth - 70); Canvas.SetTop(testa, 46); c.Children.Add(testa);
         var pos = pk.StrapPositionsMm.OrderBy(v => v).ToList();
         for (int i = 0; i < pos.Count; i++)
         {
@@ -185,7 +190,7 @@ public partial class MainWindow : Window
         int best = -1; double bestD = 14;
         for (int i = 0; i < pk.StrapPositionsMm.Count; i++)
         {
-            double d = Math.Abs(RulerMargin + pk.StrapPositionsMm[i] / len * w - x);
+            double d = Math.Abs(RulerMargin + (1 - pk.StrapPositionsMm[i] / len) * w - x);
             if (d < bestD) { bestD = d; best = i; }
         }
         _vm.SelectedStrapIndex = best;
@@ -199,7 +204,7 @@ public partial class MainWindow : Window
         if (pk == null || _strapDrag < 0 || e.LeftButton != MouseButtonState.Pressed) return;
         double w = StrapRuler.ActualWidth - 2 * RulerMargin;
         if (w <= 0) return;
-        MoveStrapTo(pk, _strapDrag, (e.GetPosition(StrapRuler).X - RulerMargin) / w * Math.Max(1, pk.LengthMm));
+        MoveStrapTo(pk, _strapDrag, (1 - (e.GetPosition(StrapRuler).X - RulerMargin) / w) * Math.Max(1, pk.LengthMm));
     }
 
     private void StrapRuler_MouseUp(object sender, MouseButtonEventArgs e)
