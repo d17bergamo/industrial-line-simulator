@@ -200,7 +200,7 @@
                 </StackPanel>
             </Border>
             <!-- Libreria (sinistra) -->
-            <Border Grid.Column="1" Width="264" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0"
+            <Border Grid.Column="1" Width="{Binding LibraryWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0"
                     Visibility="{Binding ShowLibrary, Converter={StaticResource BoolVis}}">
                 <DockPanel Background="White">
                         <DockPanel DockPanel.Dock="Top" Margin="12,12,8,4">
@@ -240,6 +240,10 @@
                         </ListBox>
                     </DockPanel>
             </Border>
+            <Thumb Grid.Column="1" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20" DragDelta="LibraryThumb_DragDelta"
+                   ToolTip="Trascina per allargare o stringere la libreria" Visibility="{Binding ShowLibrary, Converter={StaticResource BoolVis}}"/>
+            <Thumb Grid.Column="3" Width="6" HorizontalAlignment="Left" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20" DragDelta="InspectorThumb_DragDelta"
+                   ToolTip="Trascina per allargare o stringere il pannello delle proprietà" Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}"/>
             <TabControl Grid.Column="2" Style="{StaticResource FlatTabs}">
 <TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
@@ -299,8 +303,8 @@
                         <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </DockPanel>
                 </Border>
-<Border Grid.Row="2" Height="240" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0"
-        Visibility="{Binding ShowCyclogram, Converter={StaticResource BoolVis}}">
+<Grid Grid.Row="2" Visibility="{Binding ShowCyclogram, Converter={StaticResource BoolVis}}">
+<Border x:Name="CyclogramBorder" Height="240" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0">
     <DockPanel>
         <DockPanel DockPanel.Dock="Top" Margin="8,4,4,2">
             <Button DockPanel.Dock="Right" Content="✕" Padding="8,0" ToolTip="Nascondi il ciclogramma" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
@@ -313,6 +317,9 @@
         </ScrollViewer>
     </DockPanel>
 </Border>
+<Thumb Height="6" VerticalAlignment="Top" Cursor="SizeNS" Background="Transparent" DragDelta="CyclogramThumb_DragDelta"
+       ToolTip="Trascina per alzare o abbassare il ciclogramma"/>
+</Grid>
 </Grid></TabItem>
                     <TabItem Header="Ciclogramma a gradini">
                         <DockPanel Background="White">
@@ -557,7 +564,7 @@
                     </TabItem>
 </TabControl>
             <!-- Ispettore (destra) -->
-            <Border Grid.Column="3" Width="360" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,0,0"
+            <Border Grid.Column="3" Width="{Binding InspectorWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,0,0"
                     Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}">
                 <DockPanel>
                     <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Content="✕" Margin="0,6,8,0" ToolTip="Nascondi il pannello" Command="{Binding ToggleInspectorCommand}"/>

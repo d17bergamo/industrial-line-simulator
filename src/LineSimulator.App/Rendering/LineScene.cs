@@ -44,6 +44,8 @@ public sealed class LineScene
     private readonly Dictionary<string, SolidColorBrush> _strapperBrushes = new();
     private readonly Dictionary<string, (SolidColorBrush Brush, Color Color)> _zoneBrushes = new();
     private readonly Dictionary<string, (GeometryModel3D Model, TranslateTransform3D T, bool Strapped)> _packages = new();
+    private readonly Dictionary<string, GeometryModel3D> _packageStraps = new();
+    private static readonly Color StrapColor = Color.FromRgb(0x1A, 0x1D, 0x21);
     private readonly Dictionary<string, (MeshGeometry3D Plain, MeshGeometry3D Strapped)> _packageMeshes = new();
     private readonly List<string> _zoneOrder = new();
     private Model3DGroup _packagesGroup = new();
@@ -189,6 +191,7 @@ public sealed class LineScene
         _strapperIsSma.Clear();
         _zoneBrushes.Clear();
         _packages.Clear();
+        _packageStraps.Clear();
         _packageMeshes.Clear();
         _zoneOrder.Clear();
         _sectionFrameBrushes.Clear(); _sectionRollerBrushes.Clear();
@@ -627,12 +630,18 @@ public sealed class LineScene
         double L = ps.LengthM, W = ps.GraphicWidthMm / 1000.0, H = ps.GraphicHeightMm / 1000.0;
         var plain = new MeshFactory();
         plain.AddBox(new Point3D(0, 0, 0), L, W, H);
+        // legature / reggette: anelli neri attorno al pacco, con le stesse proporzioni della schermata Pacchi (spessore 60 mm, sporgenza 20 mm)
         var strapped = new MeshFactory();
-        strapped.AddBox(new Point3D(0, 0, 0), L, W, H);
         var type = _project?.PackageTypes.FirstOrDefault(t => t.Id == ps.TypeId);
         if (type != null)
             foreach (var d in type.StrapPositionsMm)
-                strapped.AddBox(new Point3D(L / 2 - d / 1000.0, 0, 0), 0.035, W + 0.02, H + 0.02);
+            {
+                double x = L / 2 - d / 1000.0, t = 0.06, e = 0.02;
+                strapped.AddBox(new Point3D(x, 0, H / 2 + e / 2), t, W + 2 * e, e);
+                strapped.AddBox(new Point3D(x, 0, -H / 2 - e / 2), t, W + 2 * e, e);
+                strapped.AddBox(new Point3D(x, W / 2 + e / 2, 0), t, e, H);
+                strapped.AddBox(new Point3D(x, -W / 2 - e / 2, 0), t, e, H);
+            }
         m = (plain.ToMesh(), strapped.ToMesh());
         _packageMeshes[ps.TypeId] = m;
         return m;
@@ -655,16 +664,21 @@ public sealed class LineScene
                 var meshes = PackageMeshes(ps);
                 if (!_packages.TryGetValue(ps.Id, out var entry))
                 {
-                    var model = MeshFactory.Model(strapped ? meshes.Strapped : meshes.Plain, Color.FromRgb(0x85, 0x92, 0x9E), out _);
+                    var model = MeshFactory.Model(meshes.Plain, Color.FromRgb(0x85, 0x92, 0x9E), out _);
                     var t = new TranslateTransform3D();
                     model.Transform = t;
                     _packagesGroup.Children.Add(model);
+                    var strapModel = MeshFactory.Model(meshes.Strapped, StrapColor, out _);
+                    strapModel.Transform = t;
+                    strapModel.Geometry = strapped ? meshes.Strapped : new MeshGeometry3D();
+                    _packagesGroup.Children.Add(strapModel);
+                    _packageStraps[ps.Id] = strapModel;
                     entry = (model, t, strapped);
                     _packages[ps.Id] = entry;
                 }
                 if (entry.Strapped != strapped)
                 {
-                    entry.Model.Geometry = strapped ? meshes.Strapped : meshes.Plain;
+                    if (_packageStraps.TryGetValue(ps.Id, out var sm)) sm.Geometry = strapped ? meshes.Strapped : new MeshGeometry3D();
                     entry = (entry.Model, entry.T, strapped);
                     _packages[ps.Id] = entry;
                 }
@@ -677,6 +691,7 @@ public sealed class LineScene
         foreach (var id in _packages.Keys.Where(k => !seen.Contains(k)).ToList())
         {
             _packagesGroup.Children.Remove(_packages[id].Model);
+            if (_packageStraps.TryGetValue(id, out var gone)) { _packagesGroup.Children.Remove(gone); _packageStraps.Remove(id); }
             _packages.Remove(id);
         }
 
