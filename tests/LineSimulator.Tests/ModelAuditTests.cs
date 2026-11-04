@@ -178,12 +178,9 @@ public class ModelAuditTests
     [Fact]
     public void ExitAndTransferStop_WhenClose_AreMergedIntoOnePhotocell()
     {
-        // Svincolo lungo 3 m: uscita legatura a 3 m dal trasferitore, arresto davanti al trasferitore a 2,5 m → 500 mm tra le due
+        // Margine di sicurezza più grande: l'arresto davanti al trasferitore va a 4,5 m, 500 mm dopo l'uscita legatura (a 5 m)
         var p = SampleProjects.CreateTwoStrappers12m();
-        var m2 = p.Sections.Single(x => x.Id == "M2");
-        double oldEnd = m2.EndMm;
-        LineReflow.Fit(m2, m2.StartMm, m2.StartMm + 3 * m2.RollerPitchMm - 750);   // ~3 m con passo ricalcolato
-        LineReflow.AfterResize(p, m2, oldEnd);
+        p.Transfer.StopPhotocellMarginMm = 3000;
         var exit = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingExit);
         var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
         stop.PositionMm = p.Transfer.PositionMm - ProjectNormalizer.TransferStopDistanceMm(p);
