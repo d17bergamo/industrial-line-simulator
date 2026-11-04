@@ -672,74 +672,114 @@
             </Border>
         </Grid>
     </DockPanel>
-            <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
-                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
-                    <DockPanel Margin="4,2">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Crea pacco" Command="{Binding NewPackageCommand}"
-                                FontWeight="SemiBold" Foreground="#1E8449" Padding="14,3" Margin="4,2,10,2" ToolTip="Crea una nuova tipologia di pacco"/>
-                        <Button DockPanel.Dock="Left" Style="{StaticResource ToolButton}" Content="⌂ Home" Command="{Binding GoHomeCommand}" FontWeight="SemiBold" ToolTip="Torna alla schermata iniziale"/>
-                        <Border DockPanel.Dock="Left" Background="#EEF0F3" CornerRadius="10" Padding="3" VerticalAlignment="Center" Margin="8,0,12,0">
+            <DockPanel Background="#F4F5F7" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
+                <!-- Barra superiore -->
+                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Height="56">
+                    <DockPanel Margin="12,0">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="＋ Crea pacco" Command="{Binding NewPackageCommand}" Margin="8,0,0,0" ToolTip="Crea una nuova tipologia di pacco"/>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="⧉ Duplica" Command="{Binding DuplicatePackageCommand}" ToolTip="Duplica la tipologia selezionata"/>
+                        <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
+                        <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,0,0">
+                            <TextBlock Text="Tipologie di pacco" FontWeight="Bold" FontSize="14"/>
+                            <TextBlock Text="Indipendenti dal layout della linea" Foreground="#5B6673" FontSize="12"/>
+                        </StackPanel>
+                        <Border DockPanel.Dock="Left" Background="#EEF0F3" CornerRadius="10" Padding="3" VerticalAlignment="Center" Margin="24,0,12,0">
                             <StackPanel Orientation="Horizontal">
                                 <Button Style="{StaticResource SegmentButton}" Content="Layout e simulazione" Command="{Binding GoSectionCommand}" CommandParameter="Layout"/>
                                 <Border Background="White" CornerRadius="7" Padding="14,6"><TextBlock Text="Pacchi" FontWeight="SemiBold"/></Border>
                             </StackPanel>
                         </Border>
-                        <Button DockPanel.Dock="Left" Style="{StaticResource ToolButton}" Content="Duplica" Command="{Binding DuplicatePackageCommand}"/>
-                        <TextBlock Text="Le tipologie sono indipendenti dal layout della linea." Foreground="#5A6672" VerticalAlignment="Center" Margin="12,0"/>
+                        <Grid/>
                     </DockPanel>
                 </Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="260" MinWidth="180"/>
-                        <ColumnDefinition Width="5"/>
+                        <ColumnDefinition Width="290" MinWidth="200"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <!-- Sinistra: elenco dei pacchi creati -->
-                    <DockPanel Grid.Column="0" Background="White">
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Elenco pacchi"/>
-                        <ListBox ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SelectedPackageType, Mode=TwoWay}" BorderThickness="0" FontSize="14"/>
-                    </DockPanel>
-                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
-                    <!-- Centro: pacco in pianta con le legature, sotto le caratteristiche; in basso a destra Salva e Cestino -->
-                    <Grid Grid.Column="2" Background="White">
+                    <!-- Sinistra: elenco dei pacchi come schede -->
+                    <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
                         <DockPanel>
-                            <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Background="#F7F8F9" Padding="8,6">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button Content="🗑" Command="{Binding DeletePackageCommand}" Padding="14,6" Margin="8,0,0,0" FontSize="16" Foreground="#C0392B"
-                                            ToolTip="Cestino: elimina la tipologia selezionata"/>
-                                </StackPanel>
-                            </Border>
-                            <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                            <TextBlock DockPanel.Dock="Top" Text="Elenco pacchi" FontSize="16" FontWeight="Bold" Margin="14,14,14,10"/>
+                            <ListBox ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SelectedPackageType, Mode=TwoWay}" BorderThickness="0" Background="Transparent"
+                                     HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="10,0,10,10">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Margin" Value="0,0,0,8"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="12,9">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#F7F9FB"/></Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#F1F7FE"/>
+                                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Foreground="#5B6673" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                <Run Text="{Binding LengthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicWidthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicHeightMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" · "/><Run Text="{Binding StrapPositionsMm.Count, Mode=OneWay}"/><Run Text=" legature"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+                    <!-- Centro: scheda con pacco in 3D e legature, sotto le caratteristiche -->
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="16">
+                            <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
                                 <DockPanel>
-                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,6,8,0">
-                                        <TextBlock Text="Legature" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                        <Button Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Padding="12,3" Foreground="#1E8449" ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
-                                        <Button Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Padding="12,3" Margin="8,0,0,0" Foreground="#C0392B" ToolTip="Toglie la legatura selezionata (o l'ultima)"/>
-                                        <TextBlock Text="Clic sulla legatura nel 3D per selezionarla, trascina per spostarla (passi di 100 mm). Tasto destro: ruota la vista." Foreground="#5A6672" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    </StackPanel>
-                                    <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="White" Height="300" Margin="8,0"
+                                    <Border DockPanel.Dock="Top" BorderBrush="#EEF0F3" BorderThickness="0,0,0,1" Padding="16,10">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="🗑" Foreground="#B3261E" FontSize="16" Command="{Binding DeletePackageCommand}"
+                                                    ToolTip="Cestino: elimina la tipologia selezionata"/>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Foreground="#B3261E" Margin="0,0,8,0"
+                                                    ToolTip="Toglie la legatura selezionata (o l'ultima)"/>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
+                                                    ToolTip="Aggiunge una legatura nel punto più libero, a passi di 100 mm"/>
+                                            <TextBlock Text="{Binding SelectedPackageType.Name}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </Border>
+                                    <TextBlock DockPanel.Dock="Bottom" Margin="16,0,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
+                                               Text="Clic su una legatura per selezionarla, trascinala per spostarla a passi di 100 mm · tasto destro: ruota la vista"/>
+                                    <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="White" Height="340" Margin="8,0"
                                                        PreviewMouseLeftButtonDown="PackageViewport_MouseDown" PreviewMouseMove="PackageViewport_MouseMove"
                                                        PreviewMouseLeftButtonUp="PackageViewport_MouseUp">
                                         <h:DefaultLights/>
                                     </h:HelixViewport3D>
                                 </DockPanel>
                             </Border>
-                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="Caratteristiche del pacco selezionato"/>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" Margin="8,0,8,8" MaxWidth="900" HorizontalAlignment="Stretch">
-                                    <ItemsControl.GroupStyle>
-                                        <GroupStyle>
-                                            <GroupStyle.HeaderTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,10,0,2"/>
-                                                </DataTemplate>
-                                            </GroupStyle.HeaderTemplate>
-                                        </GroupStyle>
-                                    </ItemsControl.GroupStyle>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </DockPanel>
-                    </Grid>
+                            <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,12">
+                                <StackPanel>
+                                    <TextBlock Text="CARATTERISTICHE DEL PACCO SELEZIONATO" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
+                                    <ItemsControl ItemsSource="{Binding PackagePropertiesView}" ItemTemplate="{StaticResource PropEditor}" MaxWidth="900" HorizontalAlignment="Stretch">
+                                        <ItemsControl.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,12,0,2"/>
+                                                    </DataTemplate>
+                                                </GroupStyle.HeaderTemplate>
+                                            </GroupStyle>
+                                        </ItemsControl.GroupStyle>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </DockPanel>
         </Grid>
