@@ -1198,27 +1198,30 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var p = _selectedPackageType;
         if (p == null) return;
-        if (!StrapEditing.TryAdd(p, out var at))
+        if (!StrapEditing.AddSymmetric(p))
         {
-            Status = "Non c'è posto per un'altra legatura: servono le distanze minime tra legature e dalle estremità.";
+            Status = "Non c'è posto per un'altra legatura in modo simmetrico: servono le distanze minime tra legature e dalle estremità.";
             return;
         }
-        SelectedStrapIndex = p.StrapPositionsMm.IndexOf(at);
+        SelectedStrapIndex = -1;
         ProjectChanged(structural: false);
         BuildPackageProperties();
-        Status = $"Legatura aggiunta a {at:0} mm dalla testa ({p.StrapPositionsMm.Count} legature).";
+        Status = $"Legatura aggiunta, posizioni simmetriche ({p.StrapPositionsMm.Count} legature).";
     }
 
     private void RemoveStrap()
     {
         var p = _selectedPackageType;
         if (p == null || p.StrapPositionsMm.Count == 0) return;
-        int idx = SelectedStrapIndex >= 0 && SelectedStrapIndex < p.StrapPositionsMm.Count ? SelectedStrapIndex : p.StrapPositionsMm.Count - 1;
-        StrapEditing.Remove(p, idx);
+        if (!StrapEditing.RemoveSymmetric(p))
+        {
+            Status = "Impossibile togliere la legatura mantenendo la simmetria.";
+            return;
+        }
         SelectedStrapIndex = -1;
         ProjectChanged(structural: false);
         BuildPackageProperties();
-        Status = $"Legatura tolta ({p.StrapPositionsMm.Count} legature).";
+        Status = $"Legatura tolta, posizioni simmetriche ({p.StrapPositionsMm.Count} legature).";
     }
 
     private void BuildPackageProperties()

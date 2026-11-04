@@ -34,6 +34,40 @@ public class StrapEditingTests
         Assert.All(p.StrapPositionsMm, v => Assert.InRange(v, 100, 900));
     }
 
+    [Theory]
+    [InlineData(1, new double[] { 6000 })]
+    [InlineData(2, new double[] { 1500, 10500 })]
+    [InlineData(3, new double[] { 1500, 6000, 10500 })]
+    [InlineData(4, new double[] { 1500, 4500, 7500, 10500 })]
+    [InlineData(5, new double[] { 1500, 3800, 6000, 8200, 10500 })]
+    public void SetSymmetric_KeepsEndDistanceAndMirrorsAroundTheCentre(int n, double[] expected)
+    {
+        var p = Pack(1500, 6000, 10500);
+        Assert.True(StrapEditing.TrySetSymmetric(p, n));
+        Assert.Equal(n, p.StrapPositionsMm.Count);
+        for (int i = 0; i < n; i++) Assert.Equal(p.LengthMm - p.StrapPositionsMm[n - 1 - i], p.StrapPositionsMm[i]);
+        Assert.Equal(expected, p.StrapPositionsMm);
+    }
+
+    [Fact]
+    public void AddAndRemoveSymmetric_GoBackAndForth()
+    {
+        var p = Pack(1500, 6000, 10500);
+        Assert.True(StrapEditing.AddSymmetric(p));
+        Assert.Equal(new double[] { 1500, 4500, 7500, 10500 }, p.StrapPositionsMm);
+        Assert.True(StrapEditing.RemoveSymmetric(p));
+        Assert.Equal(new double[] { 1500, 6000, 10500 }, p.StrapPositionsMm);
+    }
+
+    [Fact]
+    public void AddSymmetric_FailsWithoutChangesWhenMinimumsWouldBeBroken()
+    {
+        var p = Pack(1500, 6000, 10500);
+        p.MinDistanceBetweenStrapsMm = 4000;
+        Assert.False(StrapEditing.AddSymmetric(p));
+        Assert.Equal(new double[] { 1500, 6000, 10500 }, p.StrapPositionsMm);
+    }
+
     [Fact]
     public void SnapAll_SortsDedupesAndKeepsInsidePackage()
     {
