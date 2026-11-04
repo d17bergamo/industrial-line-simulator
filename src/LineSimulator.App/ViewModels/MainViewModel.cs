@@ -464,7 +464,10 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
+        LineReflow.ApplyDefaultRollerGeometry(_project);         // passo 1250 mm e diametro 268 mm al posto dei vecchi default
         LineReflow.EnforceOverhang(_project);                    // 200 mm tra ultimo rullo e fine/inizio modulo
+        StrapperTrack.EnsureMinimumTrack(_project);              // almeno 2 m di via rulli dopo l'ultima legatrice
+        RememberStrapperPositions();
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
         _filePath = path;
         _modified = false;
@@ -548,6 +551,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (markModified) _modified = true;
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // segue l'ultimo rullo quando si modificano o spostano le vie a rulli
+        double extraTrack = StrapperTrack.EnsureMinimumTrack(_project);
+        if (extraTrack > 0) Status = $"Via a rulli allungata di {extraTrack:0} mm: dopo l'ultima legatrice servono almeno 2 m di via rulli.";
         // Regole di layout (sessione B): via a rulli davanti al trasferitore lunga come il trasferitore; legatrici ad almeno 3 m dal trasferitore
         var layoutFixes = LayoutRules.Enforce(_project);
         if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
@@ -564,7 +569,15 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshValidation();
         RefreshStrategies();
         UpdateEquipmentStatus(_engine == null ? null : _engine.CaptureFrame());
+        RememberStrapperPositions();
         Raise(nameof(Title));
+    }
+
+    private readonly Dictionary<StrapperConfig, double> _strapperPos = new();
+    private void RememberStrapperPositions()
+    {
+        _strapperPos.Clear();
+        foreach (var s in _project.Strappers) _strapperPos[s] = s.PositionMm;
     }
 
     private void RefreshValidation()
@@ -755,6 +768,9 @@ public sealed partial class MainViewModel : ObservableObject
             rs.RecalculateLength();
             LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle restano unite
         }
+        // spostando l'ultima legatrice dalle proprietà, la via rulli a valle la segue
+        if (SelectedNode?.Model is StrapperConfig movedStrapper && item.Name == "PositionMm" && _strapperPos.TryGetValue(movedStrapper, out var oldStrapperPos))
+            StrapperTrack.FollowLastStrapper(_project, movedStrapper, oldStrapperPos);
         bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
         ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
@@ -792,15 +808,16 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var last = _project.Sections.OrderBy(x => x.StartMm).LastOrDefault();
         double start = last?.EndMm ?? 0;
-        var s = new RollerSection { Id = NextId("M", AllComponents()), StartMm = start, LengthMm = 6000, RollerCount = 20 };
+        var s = new RollerSection { Id = NextId("M", AllComponents()), StartMm = start, RollerCount = 6 };
         s.Name = "Modulo " + s.Id;
-        s.EndOverhangMm = RollerSection.StandardOverhangMm; s.RollerPitchMm = (6000 - 2 * RollerSection.StandardOverhangMm) / 19.0; s.RecalculateLength();
+        s.EndOverhangMm = RollerSection.StandardOverhangMm;
         if (last != null)
         {
             s.WidthMm = last.WidthMm; s.RollerPitchMm = last.RollerPitchMm; s.RollerDiameterMm = last.RollerDiameterMm;
             s.LowSpeed = last.LowSpeed; s.HighSpeed = last.HighSpeed; s.Acceleration = last.Acceleration; s.Deceleration = last.Deceleration;
             s.DefaultSpeed = last.DefaultSpeed; s.AutoStopWhenEmpty = last.AutoStopWhenEmpty;
         }
+        s.RecalculateLength();
         _project.Sections.Add(s);
         AfterAdd(s);
     }
@@ -914,7 +931,7 @@ public sealed partial class MainViewModel : ObservableObject
             case "roller":
             {
                 var last = _project.Sections.OrderBy(v => v.StartMm).LastOrDefault();
-                var sec = new RollerSection { Id = NextId("M", AllComponents()), RollerCount = 20, RollerPitchMm = 300, LengthMm = 6000 };
+                var sec = new RollerSection { Id = NextId("M", AllComponents()), RollerCount = 6 };
                 sec.Name = "Modulo " + sec.Id;
                 if (last != null)
                 {
@@ -1010,7 +1027,13 @@ public sealed partial class MainViewModel : ObservableObject
         {
             case RollerSection s: LineReflow.MoveSection(_project, s, dxMm); break;
             case PhotocellConfig pc: pc.PositionMm += dxMm; break;
-            case StrapperConfig st: st.PositionMm += dxMm; st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right; break;
+            case StrapperConfig st:
+            {
+                double before = st.PositionMm;
+                st.PositionMm += dxMm; st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
+                StrapperTrack.FollowLastStrapper(_project, st, before);     // la via rulli a valle segue l'ultima legatrice
+                break;
+            }
             case BundleClampConfig k: k.PositionMm += dxMm; break;
             case SideCompactorConfig c: c.PositionMm += dxMm; break;
             case RejectorConfig r: r.PositionMm += dxMm; break;
@@ -1032,7 +1055,13 @@ public sealed partial class MainViewModel : ObservableObject
         {
             case RollerSection s: LineReflow.MoveSection(_project, s, Snap(s.StartMm) - s.StartMm); break;
             case PhotocellConfig pc: pc.PositionMm = Snap(pc.PositionMm); break;
-            case StrapperConfig st: st.PositionMm = Snap(st.PositionMm); break;
+            case StrapperConfig st:
+            {
+                double before = st.PositionMm;
+                st.PositionMm = Snap(st.PositionMm);
+                StrapperTrack.FollowLastStrapper(_project, st, before);
+                break;
+            }
             case BundleClampConfig k: k.PositionMm = Snap(k.PositionMm); break;
             case SideCompactorConfig c: c.PositionMm = Snap(c.PositionMm); break;
             case RejectorConfig r: r.PositionMm = Snap(r.PositionMm); break;
