@@ -82,7 +82,8 @@ public class StrappingAreaTests
         q.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
         var r = SimulationPreparation.Prepare(q);
         Assert.Contains(r.Changes, c => c.Contains("stesso inverter", StringComparison.Ordinal));
-        Assert.Same(new LineTopology(q).Zone("M1"), new LineTopology(q).Zone("M2"));
+        var tq2 = new LineTopology(q);
+        Assert.Same(tq2.Zone("M1"), tq2.Zone("M2"));
     }
 
     [Fact]
