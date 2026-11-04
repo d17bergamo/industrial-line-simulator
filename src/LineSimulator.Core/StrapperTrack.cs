@@ -72,7 +72,7 @@ public static class StrapperTrack
         enc = Math.Max(start, first.PositionMm - MinEncoderToStrapperMm);
         p.StrappingEncoder.PositionMm = enc;
         foreach (var pc in p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingReference))
-            pc.PositionMm = Math.Max(start, enc - ProjectNormalizer.ReferencePhotocellOffsetMm);
+            pc.PositionMm = Math.Max(start + 100, enc - ProjectNormalizer.ReferencePhotocellOffsetMm);   // sempre dopo la prima fotocellula
         return true;
     }
 }
