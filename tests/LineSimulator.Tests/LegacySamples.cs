@@ -66,7 +66,7 @@ public static class LegacySamples
         p.Stopper = new StopperConfig
         {
             Id = "STP", Name = "Stopper", PositionMm = 55000, AlignmentTimeS = 2.0, HeadingTimeS = 0.5,
-            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
+            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.3
         };
         p.Transfer = new TransferConfig
         {
@@ -163,7 +163,7 @@ public static class LegacySamples
         p.Stopper = new StopperConfig
         {
             Id = "STP", Name = "Stopper finale", PositionMm = 56500, AlignmentTimeS = 2.0, HeadingTimeS = 0.5,
-            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.25
+            AlignmentRollerSpeed = 0.1, IsRaised = true, MaxImpactSpeed = 0.3
         };
         p.IntermediateStops.Add(new IntermediateStopConfig
         {

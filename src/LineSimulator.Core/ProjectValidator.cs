@@ -537,9 +537,7 @@ public static class ProjectValidator
             r.Warn("PC_TRF_STOP", $"Manca la fotocellula di arresto davanti al trasferitore (distanza consigliata {F(ProjectNormalizer.TransferStopDistanceMm(p))} mm).", p.Transfer.Id);
         foreach (var t in p.Photocells.Where(x => x.ActsAsTransferStop))
         {
-            double d = p.Transfer.PositionMm - t.PositionMm;
-            if (d < ProjectNormalizer.TransferStopDistanceMm(p) - 1)
-                r.Warn("PC_TRF_DIST", $"Fotocellula di arresto a {F(d)} mm dal trasferitore: la regola richiede almeno {F(ProjectNormalizer.TransferStopDistanceMm(p))} mm (1,5 s × velocità massima + margine).", t.Id);
+            // distanza dal trasferitore: regola comune PC_TARGET_DIST (almeno 2 m o lo spazio di frenata)
             if (topo.Zone(t.ControlledInverterId) == null)
                 r.Error("PC_TRF_ZONE", $"Fotocellula di arresto davanti al trasferitore senza zona comandata valida ('{t.ControlledInverterId}').", t.Id);
         }

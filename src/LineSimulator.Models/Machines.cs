@@ -177,8 +177,11 @@ public sealed class StopperConfig : ComponentBase
     [UiProperty("Stopper sollevato", "", "Funzionamento", Order = 13)]
     public bool IsRaised { get; set; } = true;
 
+    /// <summary>Velocità massima d'impatto sul fermo: 0,3 m/s, uguale alla velocità minima dei moduli (arrivo dopo il rallentamento).</summary>
     [UiProperty("Velocità massima d'impatto ammessa", "m/s", "Sicurezza", Order = 20)]
-    public double MaxImpactSpeed { get; set; } = 0.25;
+    public double MaxImpactSpeed { get; set; } = DefaultMaxImpactSpeed;
+
+    public const double DefaultMaxImpactSpeed = 0.3;
 }
 
 /// <summary>Trasferitore trasversale a valle dello stopper.</summary>
@@ -248,8 +251,10 @@ public sealed class TransferConfig : ComponentBase
     [UiProperty("Blocca ingresso finché non torna in posizione", "", "Interblocchi", Order = 20)]
     public bool BlockInfeedUntilHome { get; set; } = true;
 
-    /// <summary>Margine di sicurezza della fotocellula di arresto davanti al trasferitore (distanza = 1,5 s × velocità massima + margine).</summary>
-    [UiProperty("Margine fotocellula di arresto davanti al trasferitore", "mm", "Interblocchi", Order = 23)]
+    /// <summary>
+    /// Non più usato: la fotocellula di arresto davanti al trasferitore segue la regola comune (almeno 2 m o lo spazio di
+    /// frenata, vedi PhotocellRules). Mantenuto per leggere i progetti salvati.
+    /// </summary>
     public double StopPhotocellMarginMm { get; set; } = 1000;
 
     /// <summary>

@@ -71,13 +71,17 @@ public static class ProjectNormalizer
     public const double ReferencePhotocellOffsetMm = 300;
 
     /// <summary>
-    /// Distanza della fotocellula di arresto dal trasferitore: 1,5 s di marcia alla velocità massima della linea
-    /// più il margine di sicurezza (es. 1 m/s → 1,5 m + 1 m = 2,5 m).
+    /// Distanza della fotocellula di arresto dal trasferitore: stessa regola di tutte le fotocellule che fermano
+    /// (<see cref="PhotocellRules.RequiredDistanceMm(LineProject, PhotocellConfig, LineTopology?)"/>): almeno 2 m, di più se
+    /// lo spazio per fermarsi dalla velocità massima del modulo a monte del trasferitore lo richiede.
     /// </summary>
     public static double TransferStopDistanceMm(LineProject p)
     {
-        double vmax = p.Sections.Count > 0 ? p.Sections.Max(s => s.HighSpeed) : 1.0;
-        return 1.5 * vmax * 1000.0 + Math.Max(0, p.Transfer.StopPhotocellMarginMm);
+        if (p.Sections.Count == 0) return PhotocellRules.MinDistanceToTargetMm;
+        var zone = new LineTopology(p).ZoneAt(Units.MmToM(p.Transfer.PositionMm - 1));
+        var secs = zone?.Sections ?? (IReadOnlyList<RollerSection>)p.Sections;
+        var existing = p.Photocells.FirstOrDefault(x => x.ActsAsTransferStop);
+        return PhotocellRules.RequiredDistanceMm(p, secs, existing?.ResponseTimeMs ?? PhotocellRules.DefaultResponseMs, toLowSpeed: false);
     }
 
     /// <summary>Prima macchina di legatura abilitata (KNCA o SMA) nella stazione, a monte.</summary>
@@ -87,7 +91,7 @@ public static class ProjectNormalizer
     /// <summary>
     /// Sensori di processo obbligatori, aggiunti in automatico se mancano (e posizioni di default dei dispositivi):
     /// <list type="bullet">
-    /// <item>fotocellula di arresto davanti al primo trasferitore sollevabile (distanza = 1,5 s × v max + margine);</item>
+    /// <item>fotocellula di arresto davanti al primo trasferitore sollevabile (almeno 2 m o lo spazio di frenata dalla velocità massima);</item>
     /// <item>encoder incrementale sul primo rullo a monte della prima macchina di legatura, preceduto da una fotocellula di riferimento;</item>
     /// <item>KNOF e compattatore senza posizione: 450 mm a monte della prima macchina di legatura.</item>
     /// </list>

@@ -99,7 +99,7 @@ public static class FunctionalSpecExporter
             "Il pacco viene identificato dalla fotocellula di ingresso (fronte di salita) e ne viene misurata la lunghezza (fronte di discesa).",
             "Ogni inverter si spegne quando i suoi rulli hanno compiuto una corsa pari alla lunghezza della zona senza che le sue fotocellule rilevino pacchi; riparte quando la fotocellula a monte rileva l'arrivo di un pacco.",
             "Accumulo: una zona si ferma quando la sua fotocellula di accumulo è occupata e la zona a valle non dà il consenso; lo spazio di arresto (tempo di risposta + frenatura) è verificato dentro la zona.",
-            $"Con il trasferitore sollevato il materiale si ferma sulla fotocellula di arresto posta {N(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore (1,5 s × velocità massima + margine) e riparte a trasferitore abbassato."
+            $"Con il trasferitore sollevato il materiale si ferma sulla fotocellula di arresto posta {N(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore (almeno 2 m, o lo spazio per fermarsi dalla velocità massima) e riparte a trasferitore abbassato."
         }) body.Append(Bullet(line));
 
         if (p.StrappingStation.IsEnabled && topo.StrappingZone != null)

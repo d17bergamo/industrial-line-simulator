@@ -178,12 +178,12 @@ public class ModelAuditTests
     [Fact]
     public void ExitAndTransferStop_WhenClose_AreMergedIntoOnePhotocell()
     {
-        // Margine di sicurezza più grande: l'arresto davanti al trasferitore va a 4,5 m, 500 mm dopo l'uscita legatura (a 5 m)
+        // Arresto davanti al trasferitore 500 mm dopo l'uscita legatura (che sta a 5 m dal trasferitore)
         var p = SampleProjects.CreateTwoStrappers12m();
-        p.Transfer.StopPhotocellMarginMm = 3000;
+
         var exit = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingExit);
         var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
-        stop.PositionMm = p.Transfer.PositionMm - ProjectNormalizer.TransferStopDistanceMm(p);
+        stop.PositionMm = exit.PositionMm + 500;                    // arresto davanti al trasferitore spostato vicino all'uscita
         Assert.True(Math.Abs(exit.PositionMm - stop.PositionMm) <= 1000);
         Assert.NotNull(PhotocellRules.MergeCandidate(p));
         var fixes = PhotocellRules.MergeExitWithTransferStop(p);

@@ -121,7 +121,7 @@ public static class SampleProjects
             // fermo finale alla fine dell'ultimo modulo: a metà passo dall'ultimo rullo
             Id = "STP", Name = "Fermo finale", PositionMm = trfStart + trfLen, DistanceFromLastRollerMm = RollerSection.DefaultPitchMm / 2,
             AlignmentTimeS = 2.0, HeadingTimeS = 0.5, AlignmentRollerSpeed = 0.1, IsRaised = true,
-            MaxImpactSpeed = 0.3            // = velocità minima dei moduli (0,3 m/s), a cui arriva il pacco dopo il rallentamento
+            MaxImpactSpeed = StopperConfig.DefaultMaxImpactSpeed   // 0,3 m/s = velocità minima dei moduli
         };
         if (intermediateStop)
             p.IntermediateStops.Add(new IntermediateStopConfig

@@ -24,14 +24,24 @@ public static class PhotocellRules
         topo ??= new LineTopology(p);
         var zone = topo.Zone(pc.ControlledInverterId) ?? topo.ZoneAt(Units.MmToM(pc.PositionMm));
         var secs = zone?.Sections ?? (IReadOnlyList<RollerSection>)p.Sections;
+        bool toLow = pc.Action == PhotocellAction.SlowDown && !pc.ActsAsTransferStop;
+        return RequiredDistanceMm(p, secs, pc.ResponseTimeMs, toLow);
+    }
+
+    /// <summary>Distanza richiesta per i moduli indicati (stessa formula; <paramref name="toLowSpeed"/> = rallentamento).</summary>
+    public static double RequiredDistanceMm(LineProject p, IReadOnlyList<RollerSection> secs, double responseMs, bool toLowSpeed)
+    {
         if (secs.Count == 0) return MinDistanceToTargetMm;
         double v = secs.Max(s => Math.Max(s.MaxSpeed, s.HighSpeed));
         double a = secs.Min(s => s.Deceleration);
         if (a <= 0) return double.PositiveInfinity;
-        double vEnd = pc.Action == PhotocellAction.SlowDown && !pc.ActsAsTransferStop ? Math.Min(v, secs.Min(s => s.LowSpeed)) : 0;
-        double brake = Units.MsToS(pc.ResponseTimeMs) * v + (v * v - vEnd * vEnd) / (2 * a);
+        double vEnd = toLowSpeed ? Math.Min(v, secs.Min(s => s.LowSpeed)) : 0;
+        double brake = Units.MsToS(responseMs) * v + (v * v - vEnd * vEnd) / (2 * a);
         return Math.Max(MinDistanceToTargetMm, Math.Ceiling((brake * 1000 + p.Simulation.MinSafetyDistanceMm) / 10) * 10);
     }
+
+    /// <summary>Tempo di risposta di riferimento delle fotocellule di arresto aggiunte in automatico.</summary>
+    public const double DefaultResponseMs = 20;
 
     /// <summary>Distanza entro cui uscita legatura e arresto davanti al trasferitore vengono unite.</summary>
     public const double MergeDistanceMm = 1000;
