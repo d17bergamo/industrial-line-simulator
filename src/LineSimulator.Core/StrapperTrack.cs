@@ -27,7 +27,8 @@ public static class StrapperTrack
     {
         var last = LastStrapper(p);
         if (last == null) return 0;
-        var sec = SectionAt(p, last.PositionMm);
+        // le legatrici non escono dalla via di legatura (la prima): se l'ultima è costretta a valle, la fine della via la segue
+        var sec = p.Sections.OrderBy(x => x.StartMm).FirstOrDefault();
         if (sec == null) return 0;
         double deficit = MinRollersAfterLastStrapper * sec.RollerPitchMm - (sec.EndMm - last.PositionMm);
         // tolleranza: allungando la via il passo viene ricalcolato di poco (le giunzioni hanno la precedenza)
