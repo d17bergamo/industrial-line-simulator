@@ -252,6 +252,12 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Selezione e spostamento col mouse (layout e simulazione)
 
+    private void PackageListThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        => PackageListColumn.Width = new GridLength(Math.Clamp(PackageListColumn.ActualWidth + e.HorizontalChange, 200, 700));
+
+    private void PackagePropsThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        => _vm.PackagePropsWidth = Math.Clamp(_vm.PackagePropsWidth + e.HorizontalChange, 240, 800);
+
     private void LibraryThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
         => _vm.LibraryWidth = Math.Clamp(_vm.LibraryWidth + e.HorizontalChange, 180, 600);
 

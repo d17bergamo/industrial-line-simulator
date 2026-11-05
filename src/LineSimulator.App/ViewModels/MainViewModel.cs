@@ -240,6 +240,9 @@ public sealed partial class MainViewModel : ObservableObject
     public bool ShowInspector { get => _showInspector; set => Set(ref _showInspector, value); }
     private bool _showPackageProps = true;
     /// <summary>Colonna "Caratteristiche del pacco" nella schermata Pacchi: si chiude e si riapre.</summary>
+    private double _packagePropsWidth = 340;
+    /// <summary>Larghezza della colonna "Caratteristiche" nella schermata Pacchi.</summary>
+    public double PackagePropsWidth { get => _packagePropsWidth; set => Set(ref _packagePropsWidth, value); }
     private double _libraryWidth = 264, _inspectorWidth = 360;
     /// <summary>Larghezza dei pannelli laterali: si regola trascinando il bordo.</summary>
     public double LibraryWidth { get => _libraryWidth; set => Set(ref _libraryWidth, value); }
@@ -1137,6 +1140,7 @@ public sealed partial class MainViewModel : ObservableObject
                 st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), st.PositionMm + dxMm);   // almeno 1 m dall'inizio della via
                 st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
                 StrappingAreaRules.SpreadStrappers(_project, st);   // stesso lato: almeno 2 m, le altre macchine vengono spinte
+                StrapperTrack.EnsureMinimumTrack(_project);         // l'ultima legatrice spinta a valle porta con sé la fine della via di legatura
                 break;
             }
             case BundleClampConfig k: k.PositionMm += dxMm; break;

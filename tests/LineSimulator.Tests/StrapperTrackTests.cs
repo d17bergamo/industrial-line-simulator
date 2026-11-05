@@ -270,4 +270,19 @@ public class StrapperTrackTests
             if (name.Contains("6/9/12 m")) Assert.DoesNotContain(p.PackageTypes, t => t.LengthMm > 12000);
         }
     }
+
+    [Fact]
+    public void LastStrapperPushedDownstream_ExtendsTheEndOfTheStrappingTrack()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var m1 = M(p, "M1");
+        double end = m1.EndMm, trf = p.Transfer.PositionMm;
+        var last = p.Strappers.OrderBy(x => x.PositionMm).Last();
+        last.PositionMm = end + 3000;                       // spinta oltre la fine della via di legatura
+        double added = StrapperTrack.EnsureMinimumTrack(p);
+        Assert.True(added > 3000);
+        Assert.True(m1.EndMm - last.PositionMm >= 2000);
+        Assert.Equal(trf + (m1.EndMm - end), p.Transfer.PositionMm, 6);
+        Assert.Equal(m1.EndMm, M(p, "M2").StartMm, 6);
+    }
 }

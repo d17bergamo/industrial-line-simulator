@@ -726,7 +726,7 @@
                 </Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="270" MinWidth="200"/>
+                        <ColumnDefinition x:Name="PackageListColumn" Width="270" MinWidth="200"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
@@ -776,9 +776,14 @@
                             </ListBox>
                         </DockPanel>
                     </Border>
+                    <Thumb Grid.Column="0" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20"
+                           DragDelta="PackageListThumb_DragDelta" ToolTip="Trascina per allargare o stringere l'elenco pacchi"/>
+                    <Thumb Grid.Column="1" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20"
+                           DragDelta="PackagePropsThumb_DragDelta" ToolTip="Trascina per allargare o stringere le caratteristiche"
+                           Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}"/>
                     <!-- Colonna delle caratteristiche: si chiude e si riapre -->
                     <Grid Grid.Column="1">
-                        <Border Width="340" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0" Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}">
+                        <Border Width="{Binding PackagePropsWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0" Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="14,12,8,4">
                                     <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="«" FontSize="16" Command="{Binding TogglePackagePropsCommand}" ToolTip="Chiudi le caratteristiche"/>

@@ -27,14 +27,17 @@ public static class StrapperTrack
     {
         var last = LastStrapper(p);
         if (last == null) return 0;
-        var sec = SectionAt(p, last.PositionMm);
+        // le legatrici non escono dalla via di legatura (la prima): se l'ultima è costretta a valle, la fine della via la segue
+        var sec = p.Sections.OrderBy(x => x.StartMm).FirstOrDefault();
         if (sec == null) return 0;
         double deficit = MinRollersAfterLastStrapper * sec.RollerPitchMm - (sec.EndMm - last.PositionMm);
         // tolleranza: allungando la via il passo viene ricalcolato di poco (le giunzioni hanno la precedenza)
         if (deficit <= Math.Max(0.5, 0.1 * sec.RollerPitchMm)) return 0;
         double oldEnd = sec.EndMm;
+        var saved = p.Strappers.Select(x => (x, x.PositionMm)).ToList();     // le legatrici non seguono lo spostamento a valle: è la via che raggiunge loro
         LineReflow.Fit(sec, sec.StartMm, oldEnd + deficit);
         LineReflow.AfterResize(p, sec, oldEnd);
+        foreach (var (x, pos) in saved) x.PositionMm = pos;
         return deficit;
     }
 

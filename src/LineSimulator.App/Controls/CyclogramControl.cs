@@ -217,13 +217,32 @@ public sealed class CyclogramControl : FrameworkElement
         FollowCursor = false;
         CursorTime = t;
         TimeSelected?.Invoke(this, t);
+        _scrubbing = true;                       // tenendo premuto e trascinando ci si sposta avanti e indietro nel ciclo
+        CaptureMouse();
         e.Handled = true;
+    }
+
+    private bool _scrubbing;
+
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        if (!_scrubbing) return;
+        _scrubbing = false;
+        ReleaseMouseCapture();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
         var rec = Recorder;
+        if (_scrubbing && e.LeftButton == MouseButtonState.Pressed)
+        {
+            double ts = Math.Clamp(XToTime(e.GetPosition(this).X), 0, Math.Max(0, MaxTime));
+            CursorTime = ts;
+            TimeSelected?.Invoke(this, ts);
+            return;
+        }
         if (rec == null) return;
         var p = e.GetPosition(this);
         int row = (int)((p.Y - HeaderHeight) / RowHeight);
