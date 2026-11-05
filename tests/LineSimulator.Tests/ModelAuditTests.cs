@@ -200,4 +200,25 @@ public class ModelAuditTests
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
         Assert.Equal(0, e.Collisions);
     }
+
+    [Fact]
+    public void RequiredDistance_Is2m_OrMoreWhenTheBrakingSpaceNeedsIt()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var slow = p.Photocells.Single(x => x.Action == PhotocellAction.SlowDown);
+        var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
+        // default 1,5 m/s, 1 m/s²: lo spazio di frenata (circa 1,4 m con la sicurezza) è sotto i 2 m → vale il minimo
+        Assert.Equal(2000, PhotocellRules.RequiredDistanceMm(p, slow), 6);
+        Assert.Equal(2000, PhotocellRules.RequiredDistanceMm(p, stop), 6);
+        // velocità massima 2,5 m/s e decelerazione 0,5 m/s² sulla via del trasferitore: 6,25 m per fermarsi
+        var m3 = p.Sections.Single(x => x.Id == "M3");
+        m3.OverrideGroup = true; m3.MaxSpeed = 2.5; m3.Deceleration = 0.5;
+        double needStop = 0.02 * 2.5 * 1000 + 2.5 * 2.5 / (2 * 0.5) * 1000 + p.Simulation.MinSafetyDistanceMm;
+        double needSlow = 0.02 * 2.5 * 1000 + (2.5 * 2.5 - m3.LowSpeed * m3.LowSpeed) / (2 * 0.5) * 1000 + p.Simulation.MinSafetyDistanceMm;
+        Assert.Equal(Math.Ceiling(needSlow / 10) * 10, PhotocellRules.RequiredDistanceMm(p, slow), 6);
+        Assert.Contains(PhotocellRules.TooCloseToTarget(p), x => x.Pc == slow);
+        PhotocellRules.KeepDistanceFromTarget(p);
+        Assert.True(p.Stopper.PositionMm - slow.PositionMm >= needSlow - 1e-6);
+        Assert.True(needStop > needSlow);
+    }
 }

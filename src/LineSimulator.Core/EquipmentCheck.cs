@@ -129,7 +129,7 @@ public static class EquipmentCheck
         if (PhotocellRules.TooCloseToTarget(p).Any())
         {
             var moved = fix ? PhotocellRules.KeepDistanceFromTarget(p) : PhotocellRules.TooCloseToTarget(p).Select(x => $"{x.Pc.Id} a {x.DistanceMm:0} mm").ToList();
-            r.Add(new("PC_TARGET_DIST", $"Le fotocellule che rallentano o fermano devono stare ad almeno 2 m dal punto di arresto: {string.Join("; ", moved)}.", fix, true));
+            r.Add(new("PC_TARGET_DIST", $"Le fotocellule che rallentano o fermano devono stare ad almeno 2 m dal punto di arresto (di più se la velocità massima lo richiede): {string.Join("; ", moved)}.", fix, true));
         }
         if (StrappingAreaRules.SameSideConflicts(p).Any())
         {
