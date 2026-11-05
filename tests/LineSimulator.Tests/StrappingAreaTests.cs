@@ -65,9 +65,11 @@ public class StrappingAreaTests
         Assert.Same(topo.Zone("M1"), topo.Zone("M2"));
         Assert.True(StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > p.Sections.Single(s => s.Id == "M1").EndMm);
 
-        // Solo pacchi da 6 m: la legatura sta tutta sulla via di legatura → svincolo con un inverter proprio
+        // Solo pacchi da 6 m nella simulazione (non basta toglierli dall'ingresso: si guardano tutte le tipologie)
         var q = SampleProjects.CreateTwoStrappers12m();
         q.Infeed.TypeSequence = new List<string> { "P6 (Wire)" };
+        Assert.Empty(StrappingAreaRules.DecideReleaseInverters(q));
+        q.PackageTypes.RemoveAll(t => t.Id != "P6 (Wire)");
         var changes = StrappingAreaRules.DecideReleaseInverters(q);
         Assert.Contains(changes, c => c.Contains("inverter proprio", StringComparison.Ordinal));
         var tq = new LineTopology(q);
@@ -79,6 +81,7 @@ public class StrappingAreaTests
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
 
         // Tornando ai pacchi da 12 m il software li riunisce (anche dalla preparazione all'avvio)
+        q.PackageTypes.Add(SampleProjects.Package(12));
         q.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
         var r = SimulationPreparation.Prepare(q);
         Assert.Contains(r.Changes, c => c.Contains("stesso inverter", StringComparison.Ordinal));

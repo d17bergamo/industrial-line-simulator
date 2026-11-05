@@ -99,15 +99,14 @@ public static class StrappingAreaRules
     /// <summary>
     /// Posizione massima della testa del pacco durante la legatura: la legatura più lontana dalla testa (di solito quella di
     /// coda) si fa al più presto sotto la prima macchina, quindi la testa arriva almeno a prima macchina + distanza di quella
-    /// legatura dalla testa. Si considerano le tipologie in ingresso (tutte se la sequenza è vuota).
+    /// legatura dalla testa. Si considerano tutte le tipologie di pacco della simulazione: la configurazione di inverter
+    /// e fotocellule deve andare bene per tutti i pacchi.
     /// </summary>
     public static double RequiredStrappingHeadMaxMm(LineProject p)
     {
         var first = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).FirstOrDefault();
         if (first == null) return double.NegativeInfinity;
-        var ids = p.Infeed.TypeSequence.ToHashSet();
-        var types = p.PackageTypes.Where(t => ids.Count == 0 || ids.Contains(t.Id)).ToList();
-        if (types.Count == 0) types = p.PackageTypes;
+        var types = p.PackageTypes;
         double rear = types.Where(t => t.StrapPositionsMm.Count > 0).Select(t => t.StrapPositionsMm.Max()).DefaultIfEmpty(0).Max();
         return first.PositionMm + rear;
     }
