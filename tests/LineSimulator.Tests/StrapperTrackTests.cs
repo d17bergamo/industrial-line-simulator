@@ -281,7 +281,7 @@ public class StrapperTrackTests
         last.PositionMm = end + 3000;                       // spinta oltre la fine della via di legatura
         double added = StrapperTrack.EnsureMinimumTrack(p);
         Assert.True(added > 3000);
-        Assert.True(m1.EndMm - last.PositionMm >= 2 * m1.RollerPitchMm * 0.9);
+        Assert.True(m1.EndMm - last.PositionMm >= 2000);
         Assert.Equal(trf + (m1.EndMm - end), p.Transfer.PositionMm, 6);
         Assert.Equal(m1.EndMm, M(p, "M2").StartMm, 6);
     }
