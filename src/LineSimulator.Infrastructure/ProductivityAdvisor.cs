@@ -118,31 +118,26 @@ public static class ProductivityAdvisor
     private static IEnumerable<Candidate> Candidates(LineProject p)
     {
         var st = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).ToList();
+        // Legatrici: modifiche minime. Si possono solo aggiungere, sullo stesso lato delle altre, al passo di default
+        // (o allo stesso passo delle due già presenti); mai spostare le esistenti né metterle sul lato opposto.
         if (st.Count > 0 && p.Strappers.Count < LineProject.MaxStrappers)
+        {
+            double pitch = st.Count >= 2 ? st[^1].PositionMm - st[^2].PositionMm : SampleProjects.StrapperSpacingMm;
             yield return new Candidate("ADD_STRAPPER", "Aggiungi una legatrice",
-                $"Una legatrice in più (stesso tipo) a 2500 mm dall'ultima, con il suo stringifascio; la via di legatura si allunga se servono i due rulli dopo l'ultima.",
+                $"Una legatrice in più (stesso tipo e stesso lato) a {pitch.ToString("0", It)} mm dall'ultima, con il suo stringifascio; le legatrici esistenti non si spostano. La via di legatura si allunga se servono i due rulli dopo l'ultima.",
                 q =>
                 {
                     var last = q.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).Last();
                     var n = ProjectSerializer.Clone(q).Strappers.First(s => s.Id == last.Id);
                     int k = 1; while (q.Strappers.Any(s => s.Id == "L" + k)) k++;
                     n.Id = "L" + k; n.Name = (last.MachineType == StrapperMachineType.SMA ? "Reggettatrice SMA " : "Legatrice KNCA ") + k;
-                    n.PositionMm = last.PositionMm + SampleProjects.StrapperSpacingMm;
+                    n.PositionMm = last.PositionMm + pitch;
+                    n.Side = last.Side;
                     q.Strappers.Add(n);
                     StrapperTrack.EnsureMinimumTrack(q);
                     return true;
                 });
-        if (st.Count >= 2 && st.Zip(st.Skip(1), (a, b) => b.PositionMm - a.PositionMm).Any(d => d > StrappingAreaRules.MinSameSideDistanceMm + 1)
-            && st.Select(s => s.Side).Distinct().Count() == 1)
-            yield return new Candidate("SPACING_2M", "Legatrici a 2 m",
-                "Legatrici sullo stesso lato alla distanza minima ammessa (2000 mm): il pacco percorre meno strada tra una fermata e l'altra.",
-                q => Respace(q, StrappingAreaRules.MinSameSideDistanceMm, alternate: false));
-        bool alternated = st.Count >= 2 && st.Select((s, i) => s.Side == (i % 2 == 0 ? st[0].Side : (st[0].Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left))).All(x => x)
-                          && st.Zip(st.Skip(1), (a, b) => b.PositionMm - a.PositionMm).All(d => Math.Abs(d - RollerSection.DefaultPitchMm) < 1);
-        if (st.Count >= 2 && !alternated)
-            yield return new Candidate("ALTERNATE_SIDES", "Legatrici alternate sui due lati",
-                "Legatrici una per lato a 1250 mm (un passo rulli): su lati opposti non c'è distanza minima, sullo stesso lato restano a 2500 mm.",
-                q => Respace(q, RollerSection.DefaultPitchMm, alternate: true));
+        }
         foreach (var m in StrappingAreaRules.ReleaseModules(p).Where(m => !m.FollowsStrapping)
                      .Where(m => StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > (StrappingAreaRules.StrappingModule(p)?.EndMm ?? double.MaxValue) + 1e-6))
             yield return new Candidate("SWITCHABLE_" + m.Id, $"Motori commutabili sullo svincolo {m.Id}",
@@ -177,22 +172,6 @@ public static class ProductivityAdvisor
             yield return new Candidate("DELAY_0", "Nessun ritardo di creazione del nuovo pacco",
                 "Il nuovo pacco si crea appena la coda del precedente ha liberato la fotocellula di ingresso.",
                 q => { q.Infeed.NewPackageDelayS = 0; return true; });
-    }
-
-    /// <summary>Riposiziona le legatrici dalla prima con il passo indicato (alternate: lati alterni).</summary>
-    private static bool Respace(LineProject q, double stepMm, bool alternate)
-    {
-        var list = q.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).ToList();
-        if (list.Count < 2) return false;
-        var side = list[0].Side;
-        var other = side == LateralSide.Left ? LateralSide.Right : LateralSide.Left;
-        double x0 = list[0].PositionMm;
-        for (int i = 0; i < list.Count; i++)
-        {
-            list[i].PositionMm = x0 + i * stepMm;
-            list[i].Side = alternate && i % 2 == 1 ? other : side;
-        }
-        return true;
     }
 
     // ------------------------------------------------------------------ Testo del rapporto

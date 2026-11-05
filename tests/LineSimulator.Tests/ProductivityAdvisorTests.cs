@@ -84,4 +84,27 @@ public class ProductivityAdvisorTests
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Contains(ControlLogicGenerator.Generate(p).Rules, r => r.Id == "M2.COMMUTA_MOTORI");
     }
+
+    [Fact]
+    public void Strappers_AreOnlyAdded_SameSide_AtTheExistingPitch()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        p.Strappers[1].PositionMm = p.Strappers[0].PositionMm + 3000;      // passo attuale 3000 mm
+        var before = p.Strappers.Select(s => (s.Id, s.PositionMm, s.Side)).ToList();
+        var r = ProductivityAdvisor.Analyze(p, targetTph: 1000, maxSteps: 1);
+        Assert.DoesNotContain(r.Options, o => o.Id is "SPACING_2M" or "ALTERNATE_SIDES");
+        Assert.Contains(r.Options, o => o.Id == "ADD_STRAPPER");
+        Assert.Contains(r.Path, o => o.Id == "ADD_STRAPPER");
+        var q = r.BestProject!;
+        Assert.Equal(3, q.Strappers.Count);
+        foreach (var (id, pos, side) in before)
+        {
+            var s = q.Strappers.Single(x => x.Id == id);
+            Assert.Equal(pos, s.PositionMm, 6);                              // le esistenti non si spostano
+            Assert.Equal(side, s.Side);
+        }
+        var added = q.Strappers.Single(x => before.All(b => b.Id != x.Id));
+        Assert.Equal(before[1].PositionMm + 3000, added.PositionMm, 6);      // stesso passo delle due esistenti
+        Assert.Equal(before[1].Side, added.Side);                            // stesso lato
+    }
 }
