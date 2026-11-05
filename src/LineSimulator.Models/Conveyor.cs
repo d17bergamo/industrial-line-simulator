@@ -86,6 +86,14 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     [UiProperty("Zona di comando / inverter (vuoto = proprio)", "", "Inverter", Order = 26)]
     public string CommandZoneId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Motori commutabili (svincolo): il modulo ha il suo inverter, ma i motori vengono commutati sull'inverter della via di
+    /// legatura mentre il pacco in legatura lo impegna per le legature di coda (stessa velocità e stessi posizionamenti);
+    /// negli altri momenti è indipendente e porta via il pacco già legato. Lo propone l'ottimizzazione della produttività.
+    /// </summary>
+    [UiProperty("Motori commutabili sull'inverter di legatura", "", "Inverter", Order = 27)]
+    public bool FollowsStrapping { get; set; }
+
     /// <summary>Identificativo della zona di comando effettiva (il modulo stesso se non indicata).</summary>
     [JsonIgnore]
     public string EffectiveZoneId => string.IsNullOrWhiteSpace(CommandZoneId) ? Id : CommandZoneId.Trim();

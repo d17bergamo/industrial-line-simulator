@@ -217,6 +217,8 @@ public sealed partial class SimulationEngine : ILogicContext
         ComputeZoneCommands(t0, dt);
         var caps = HandoverSpeedCaps();
         foreach (var z in _zones) z.UpdateDrive(dt, Stopper.Config.AlignmentRollerSpeed, caps.TryGetValue(z, out var cap) ? cap : double.PositiveInfinity);
+        // Motori commutabili: commutati sull'inverter di legatura hanno la sua stessa velocità; il pacco in legatura è noto
+        foreach (var f in _following) { f.ActualSpeed = Station!.Zone.ActualSpeed; f.EmptyTravelM = 0; }
         MovePackages(t0, dt);
 
         _step++;
@@ -232,6 +234,8 @@ public sealed partial class SimulationEngine : ILogicContext
         UpdateTransfer(t1, dt);
         UpdateScales(t1, dt);
         UpdateStatistics(dt);
+        // motori commutati: stessa velocità della via di legatura anche dopo l'arresto a fine posizionamento
+        foreach (var f in _following) f.ActualSpeed = Station!.Zone.ActualSpeed;
         RecordStates();
         if (t1 >= _nextRecordTime - 1e-9)
         {
@@ -675,6 +679,11 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 mode = InverterMode.Stop; reason = $"{Rejector.Id}: ciclo di rigetto in corso ({Rejector.State})";
             }
+            else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning && FollowerBusyFor(Station) is { } busy)
+            {
+                // Lo svincolo che segue la legatura è ancora occupato dal pacco precedente: la legatura aspetta
+                mode = InverterMode.Stop; reason = $"Attesa svincolo {busy.Id} libero per la fermata {Station.StopIndex + 1}";
+            }
             else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning)
             {
                 mode = InverterMode.Position; reason = $"Posizionamento fermata {Station.StopIndex + 1}";
@@ -774,6 +783,58 @@ public sealed partial class SimulationEngine : ILogicContext
                 Emit(SimEventType.InverterCommand, EventSeverity.Trace, $"{z.Id}: {what} - {z.Reason}", z.Id);
             }
         }
+        ApplyFollowers();
+    }
+
+    // ------------------------------------------------------------------ Svincolo che segue la legatura
+
+    private List<ZoneRuntime>? _followers;
+    private IReadOnlyList<ZoneRuntime> Followers => _followers ??= Station == null
+        ? new List<ZoneRuntime>()
+        : _zones.Where(z => z != Station.Zone && z.Info.Sections.Any(s => s.FollowsStrapping)).OrderBy(z => z.Info.StartM).ToList();
+
+    /// <summary>Stati della stazione in cui il pacco è "in legatura" (dal posizionamento all'apertura dei dispositivi).</summary>
+    private static bool StrappingInProgress(StationRuntime st) => st.Package != null && st.State is StationState.Positioning or StationState.Strapping
+        or StationState.Compacting or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers or StationState.Blocked;
+
+    /// <summary>Svincolo che il pacco in legatura deve impegnare (fermata oltre il suo inizio o testa già dentro).</summary>
+    private bool NeedsFollower(StationRuntime st, ZoneRuntime f)
+        => st.Package != null && (st.Package.HeadM > f.Info.StartM - 1e-6 || st.TargetHeadM > f.Info.StartM + 1e-6);
+
+    private bool OthersOn(ZoneRuntime f, PackageRuntime? except)
+        => _active.Any(q => q != except && q.OnRollers && q.HeadM > f.Info.StartM + 1e-9 && q.TailM < f.Info.EndM - 1e-9);
+
+    /// <summary>Primo svincolo da impegnare per la prossima fermata ancora occupato da un altro pacco (null = via libera).</summary>
+    private ZoneRuntime? FollowerBusyFor(StationRuntime st)
+    {
+        foreach (var f in Followers)
+            if (NeedsFollower(st, f) && st.Package!.HeadM <= f.Info.StartM + 1e-6 && OthersOn(f, st.Package)) return f;
+        return null;
+    }
+
+    /// <summary>
+    /// Svincolo che segue la legatura: mentre il pacco in legatura lo impegna, ha gli stessi comandi della via di legatura
+    /// (marcia, posizionamento, arresto); altrimenti resta indipendente e porta via il pacco già legato.
+    /// </summary>
+    private readonly HashSet<ZoneRuntime> _following = new();
+
+    private void ApplyFollowers()
+    {
+        var st = Station;
+        foreach (var f in Followers)
+        {
+            bool engage = st != null && StrappingInProgress(st) && NeedsFollower(st, f) && !OthersOn(f, st.Package);
+            if (!engage) { _following.Remove(f); continue; }
+            var s = st!.Zone;
+            bool was = !_following.Add(f);
+            f.Mode = s.Mode;
+            f.Level = s.Level;
+            f.PositionCommand = s.PositionCommand;
+            f.AutoStopped = false;
+            f.Reason = $"Motori commutati sull'inverter di legatura ({s.Id}: {s.Reason})";
+            if (!was)
+                Emit(SimEventType.InverterCommand, EventSeverity.Info, $"{f.Id}: motori commutati sull'inverter di legatura {s.Id} ({st.Package!.Id} in legatura)", f.Id, st.Package.Id);
+        }
     }
 
     /// <summary>
@@ -785,6 +846,9 @@ public sealed partial class SimulationEngine : ILogicContext
     /// </summary>
     private bool ShouldAutoStop(ZoneRuntime z)
     {
+        // Svincolo con motori commutabili: parte con il consenso "pacco legato in uscita" della stazione, così è già in
+        // marcia quando il pacco arriva (la fotocellula di uscita legatura sta proprio sul confine e non darebbe il tempo di accelerare)
+        if (Station != null && Station.State == StationState.Releasing && Station.Package != null && Followers.Contains(z)) return false;
         if (!z.SensorsEmpty) return false;
         // Il primo modulo resta in marcia per accogliere il pacco che ha il consenso ad avanzare dall'ingresso
         if (z.Info.StartM <= Topology.LineStartM + 1e-6 && _active.Any(p => p.InfeedReleased && p.OnRollers && p.TailM < z.Info.StartM + 1e-6 && p.HeadM <= z.Info.EndM))

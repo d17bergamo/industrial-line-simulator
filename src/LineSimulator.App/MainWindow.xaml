@@ -107,6 +107,7 @@
             </MenuItem>
             <MenuItem Header="_Ottimizzazione">
                 <MenuItem Header="Ottimizza zone di comando (minimo numero di inverter)..." Command="{Binding OptimizeCommandZonesCommand}"/>
+                <MenuItem Header="Raggiungi l'obiettivo di produttività..." Command="{Binding ReachTargetCommand}"/>
             </MenuItem>
         </Menu>
         <!-- Barra di stato -->
@@ -180,6 +181,8 @@
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.TonnesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.CycleTimeMeanS, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Obiettivo t/h"/><TextBox Width="60" Text="{Binding SimTargetTph, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.#}}" ToolTip="Obiettivo di produttività in tonnellate/ora sul mix di pacchi in ingresso"/></StackPanel>
+                        <Button Style="{StaticResource ToolButton}" Margin="8,0,0,0" VerticalAlignment="Center" Content="Raggiungi l'obiettivo" Command="{Binding ReachTargetCommand}" ToolTip="Simula, trova il collo di bottiglia e propone le modifiche (layout, macchine, logiche, motori commutabili) per arrivare all'obiettivo"/>
             
                 </StackPanel>
             </DockPanel>

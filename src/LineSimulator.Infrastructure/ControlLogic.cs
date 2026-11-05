@@ -203,6 +203,21 @@ public static class ControlLogicGenerator
             }
         }
 
+        // ------------------------------------------------ Svincolo con motori commutabili
+        foreach (var m in p.Sections.Where(x => x.FollowsStrapping).OrderBy(x => x.StartMm))
+        {
+            string st = p.StrappingStation.InverterId;
+            rules.Add(new ControlRule($"{m.Id}.COMMUTA_MOTORI", "Svincolo",
+                $"(DEV(STATION,Positioning) | DEV(STATION,Strapping) | DEV(STATION,Clamping) | DEV(STATION,Unclamping) | DEV(STATION,WaitingStrappers)) & SIG({m.Id}_PACCO_IN_LEGATURA) & !SIG({m.Id}_ALTRO_PACCO)",
+                $"COMMUTA i motori di {m.Id} sull'inverter {st} (marcia, posizionamento, arresto insieme alla via di legatura)", m.Id,
+                "Motori commutabili: inverter proprio, motori commutati sull'inverter di legatura solo mentre il pacco in legatura impegna lo svincolo per le legature di coda; altrimenti porta via il pacco già legato."));
+            rules.Add(new ControlRule($"{st}.ATTESA_{m.Id}", "Svincolo",
+                $"DEV(STATION,Positioning) & SIG({m.Id}_PACCO_IN_LEGATURA) & SIG({m.Id}_ALTRO_PACCO)",
+                $"ARRESTO di {st}: attesa svincolo {m.Id} libero", st, "La fermata successiva porta la testa del pacco sullo svincolo ancora occupato dal pacco precedente."));
+            signals.Add(new ControlSignal($"{m.Id}_PACCO_IN_LEGATURA", $"La testa del pacco in legatura è sullo svincolo {m.Id} o la prossima fermata ce la porta."));
+            signals.Add(new ControlSignal($"{m.Id}_ALTRO_PACCO", $"Sullo svincolo {m.Id} c'è un altro pacco (già legato)."));
+        }
+
         // ------------------------------------------------ Stopper, fermi, trasferitore, bilici
         const string gt = "Accumulo e trasferitore";
         rules.Add(new ControlRule($"{p.Stopper.Id}.ALLINEAMENTO", gt, $"DEV({p.Stopper.Id},Aligning)", $"MARCIA di allineamento a {F(p.Stopper.AlignmentRollerSpeed)} m/s per {F(p.Stopper.AlignmentTimeS + p.Stopper.HeadingTimeS)} s", topo.StopperZone?.Id ?? "",

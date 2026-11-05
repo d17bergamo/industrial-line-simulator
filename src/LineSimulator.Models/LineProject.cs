@@ -9,6 +9,13 @@ public sealed class SimulationSettings
     [UiProperty("Aggiungi in automatico i sensori di processo mancanti", "", "Simulazione", Order = 0)]
     public bool AutoAddProcessSensors { get; set; } = true;
 
+    /// <summary>Obiettivo di produttività in tonnellate/ora sul mix di pacchi in ingresso (0 = nessun obiettivo).</summary>
+    [UiProperty("Obiettivo di produttività", "t/h", "Obiettivo", Order = 1)]
+    public double TargetTonnesPerHour { get; set; }
+
+    /// <summary>Il software decide inverter e inseguimento dello svincolo (spegnere solo per confronti o casi particolari).</summary>
+    public bool AutoReleaseInverters { get; set; } = true;
+
     [UiProperty("Passo di integrazione", "ms", "Simulazione", Order = 1)]
     public double TimeStepMs { get; set; } = 10;
 

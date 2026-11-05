@@ -576,7 +576,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
         // Intestatura di coda solo con un fermo scomparente (sessione B)
         if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo scomparente: impostata di testa";
-        Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading));
+        Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading)); Raise(nameof(SimTargetTph));
         RefreshCheck();
         var selected = SelectedNode?.Model;
         LayoutScene.Build(_project);

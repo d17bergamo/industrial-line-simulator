@@ -125,10 +125,23 @@ public static class StrappingAreaRules
         string zone = strap.EffectiveZoneId;
         double need = RequiredStrappingHeadMaxMm(p);
         double reach = strap.EndMm;
+        if (!p.Simulation.AutoReleaseInverters) return done;
         foreach (var m in ReleaseModules(p))
         {
             bool join = need > reach + 1e-6;
             bool joined = m.EffectiveZoneId == zone;
+            if (!join && m.FollowsStrapping)
+            {
+                m.FollowsStrapping = false;
+                done.Add($"{m.Id} (svincolo): motori commutabili non necessari, la legatura si fa tutta sulla via di legatura {strap.Id}");
+            }
+            if (join && m.FollowsStrapping)
+            {
+                // motori commutabili: inverter proprio, commutato sull'inverter di legatura solo quando serve
+                if (joined && m.Id != zone) { m.CommandZoneId = string.Empty; done.Add($"{m.Id} (svincolo) con inverter proprio e motori commutabili sull'inverter di legatura {strap.Id}"); }
+                reach = m.EndMm;
+                continue;
+            }
             if (join && !joined)
             {
                 m.CommandZoneId = zone;
