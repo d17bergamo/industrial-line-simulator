@@ -86,6 +86,14 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     [UiProperty("Zona di comando / inverter (vuoto = proprio)", "", "Inverter", Order = 26)]
     public string CommandZoneId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Svincolo con inverter proprio che "segue la legatura": è indipendente (porta via il pacco legato), ma quando il pacco
+    /// in legatura deve entrarci per le legature di coda si muove insieme alla via di legatura (stesse velocità e
+    /// posizionamenti). Impostato dal software in base a tutte le tipologie di pacco.
+    /// </summary>
+    [UiProperty("Svincolo: segue la via di legatura durante la legatura", "", "Inverter", ReadOnly = true, Order = 27)]
+    public bool FollowsStrapping { get; set; }
+
     /// <summary>Identificativo della zona di comando effettiva (il modulo stesso se non indicata).</summary>
     [JsonIgnore]
     public string EffectiveZoneId => string.IsNullOrWhiteSpace(CommandZoneId) ? Id : CommandZoneId.Trim();

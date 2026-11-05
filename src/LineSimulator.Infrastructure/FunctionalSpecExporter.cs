@@ -122,6 +122,8 @@ public static class FunctionalSpecExporter
                     logic.StrappingPlans.Select(x => new[] { x.PackageType, x.Stop.ToString(It), N(x.HeadPositionMm, "0.#"), x.Tasks, x.Strategy })));
         }
 
+        foreach (var m in p.Sections.Where(x => x.FollowsStrapping).OrderBy(x => x.StartMm))
+            body.Append(Bullet($"Svincolo {m.Id} ({N(m.LengthMm, "0")} mm): inverter proprio. Mentre il pacco in legatura lo impegna per le legature di coda segue la via di legatura (stessi comandi); altrimenti porta via il pacco già legato. Se la fermata successiva porterebbe la testa sullo svincolo ancora occupato dal pacco precedente, la legatura attende che sia libero."));
         body.Append(Para("3.3 Accumulo sul trasferitore: single e double banking", "Heading2"));
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         double safety = p.Simulation.MinSafetyDistanceMm;

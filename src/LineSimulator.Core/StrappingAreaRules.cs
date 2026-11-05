@@ -99,27 +99,26 @@ public static class StrappingAreaRules
     /// <summary>
     /// Posizione massima della testa del pacco durante la legatura: la legatura più lontana dalla testa (di solito quella di
     /// coda) si fa al più presto sotto la prima macchina, quindi la testa arriva almeno a prima macchina + distanza di quella
-    /// legatura dalla testa. Si considerano le tipologie in ingresso (tutte se la sequenza è vuota).
+    /// legatura dalla testa. Si considerano <b>tutte</b> le tipologie di pacco della simulazione.
     /// </summary>
     public static double RequiredStrappingHeadMaxMm(LineProject p)
     {
         var first = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).FirstOrDefault();
         if (first == null) return double.NegativeInfinity;
-        var ids = p.Infeed.TypeSequence.ToHashSet();
-        var types = p.PackageTypes.Where(t => ids.Count == 0 || ids.Contains(t.Id)).ToList();
-        if (types.Count == 0) types = p.PackageTypes;
-        double rear = types.Where(t => t.StrapPositionsMm.Count > 0).Select(t => t.StrapPositionsMm.Max()).DefaultIfEmpty(0).Max();
+        double rear = p.PackageTypes.Where(t => t.StrapPositionsMm.Count > 0).Select(t => t.StrapPositionsMm.Max()).DefaultIfEmpty(0).Max();
         return first.PositionMm + rear;
     }
 
     /// <summary>
-    /// Decide gli inverter di legatura e svincolo: lo svincolo va sotto lo stesso inverter della via di legatura solo se,
-    /// durante la legatura, la testa del pacco deve entrarci (via di legatura troppo corta per i pacchi lunghi); altrimenti
-    /// resta un inverter a sé e può portare via il pacco già legato mentre il successivo si lega. Restituisce le modifiche.
+    /// Svincolo: sempre con un inverter proprio. Se durante la legatura la testa del pacco deve entrarci (per una qualunque
+    /// tipologia di pacco), lo svincolo "segue la legatura" (<see cref="RollerSection.FollowsStrapping"/>): si muove insieme
+    /// alla via di legatura finché il pacco in legatura lo occupa, altrimenti porta via il pacco già legato.
+    /// Restituisce le modifiche.
     /// </summary>
     public static List<string> DecideReleaseInverters(LineProject p)
     {
         var done = new List<string>();
+        if (!p.Simulation.AutoReleaseInverters) return done;
         var strap = StrappingModule(p);
         if (strap == null || !p.Strappers.Any(s => s.IsEnabled)) return done;
         string zone = strap.EffectiveZoneId;
@@ -127,19 +126,20 @@ public static class StrappingAreaRules
         double reach = strap.EndMm;
         foreach (var m in ReleaseModules(p))
         {
-            bool join = need > reach + 1e-6;
-            bool joined = m.EffectiveZoneId == zone;
-            if (join && !joined)
-            {
-                m.CommandZoneId = zone;
-                done.Add($"{m.Id} (svincolo) sotto lo stesso inverter della via di legatura {strap.Id}: durante la legatura la testa del pacco arriva a {need:0} mm, oltre la fine della via di legatura");
-            }
-            else if (!join && joined)
+            bool follow = need > reach + 1e-6;
+            if (m.EffectiveZoneId == zone && m.Id != zone)
             {
                 m.CommandZoneId = string.Empty;
-                done.Add($"{m.Id} (svincolo) con un inverter proprio: la legatura si fa tutta sulla via di legatura {strap.Id}");
+                done.Add($"{m.Id} (svincolo) con un inverter proprio");
             }
-            if (join) reach = m.EndMm;
+            if (follow != m.FollowsStrapping)
+            {
+                m.FollowsStrapping = follow;
+                done.Add(follow
+                    ? $"{m.Id} (svincolo) segue la via di legatura {strap.Id} durante la legatura: per le legature di coda la testa del pacco arriva a {need:0} mm, oltre la fine della via di legatura"
+                    : $"{m.Id} (svincolo) indipendente: la legatura si fa tutta sulla via di legatura {strap.Id}");
+            }
+            if (follow) reach = m.EndMm;
         }
         return done;
     }

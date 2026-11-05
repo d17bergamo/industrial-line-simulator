@@ -57,37 +57,80 @@ public class StrappingAreaTests
     }
 
     [Fact]
-    public void ReleaseModule_JoinedWhenStrappingNeedsIt_SeparateWhenTheStrappingTrackIsLongEnough()
+    public void ReleaseModule_HasItsOwnInverter_AndFollowsStrappingOnlyWhenAPackageTypeNeedsIt()
     {
-        // Modello: la legatura di coda del pacco più lungo porta la testa oltre la via di legatura → svincolo sotto lo stesso inverter
+        // Modello: la legatura di coda del pacco più lungo porta la testa oltre la via di legatura → lo svincolo segue la legatura
         var p = SampleProjects.CreateTwoStrappers12m();
         var topo = new LineTopology(p);
-        Assert.Same(topo.Zone("M1"), topo.Zone("M2"));
+        Assert.NotSame(topo.Zone("M1"), topo.Zone("M2"));                       // sempre inverter proprio
+        Assert.True(p.Sections.Single(s => s.Id == "M2").FollowsStrapping);
         Assert.True(StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > p.Sections.Single(s => s.Id == "M1").EndMm);
 
-        // Solo pacchi da 6 m: la legatura sta tutta sulla via di legatura → svincolo con un inverter proprio
+        // Si considerano tutte le tipologie della simulazione, non solo quelle in ingresso
         var q = SampleProjects.CreateTwoStrappers12m();
         q.Infeed.TypeSequence = new List<string> { "P6 (Wire)" };
+        Assert.Empty(StrappingAreaRules.DecideReleaseInverters(q));
+        Assert.True(q.Sections.Single(s => s.Id == "M2").FollowsStrapping);
+
+        // Solo pacchi da 6 m nella simulazione: la legatura sta tutta sulla via di legatura → svincolo indipendente
+        q.PackageTypes.RemoveAll(t => t.Id != "P6 (Wire)");
         var changes = StrappingAreaRules.DecideReleaseInverters(q);
-        Assert.Contains(changes, c => c.Contains("inverter proprio", StringComparison.Ordinal));
-        var tq = new LineTopology(q);
-        Assert.NotSame(tq.Zone("M1"), tq.Zone("M2"));
+        Assert.Contains(changes, c => c.Contains("indipendente", StringComparison.Ordinal));
+        Assert.False(q.Sections.Single(s => s.Id == "M2").FollowsStrapping);
         q.Infeed.PackageCount = 4;
         var e = new SimulationEngine(q);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
-
-        // Tornando ai pacchi da 12 m il software li riunisce (anche dalla preparazione all'avvio)
-        q.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
-        var r = SimulationPreparation.Prepare(q);
-        Assert.Contains(r.Changes, c => c.Contains("stesso inverter", StringComparison.Ordinal));
-        var tq2 = new LineTopology(q);
-        Assert.Same(tq2.Zone("M1"), tq2.Zone("M2"));
+        Assert.DoesNotContain(e.Events, x => x.Message.Contains("segue la via di legatura", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void JoinedInverter_NextPackageStartsAfterExitPhotocell_PreviousMayStopOnTheReleaseModule()
+    public void Follower_MovesWithTheStrappingTrack_WhileThePackageIsOnIt_AndCarriesAwayThePreviousOtherwise()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        p.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
+        p.Infeed.PackageCount = 4;
+        var e = new SimulationEngine(p);
+        bool followed = false, carriedWhileStrapping = false;
+        while (e.Step())
+        {
+            var m2 = e.Zone("M2")!; var m1 = e.Zone("M1")!;
+            if (m2.Reason.StartsWith("Segue la legatura", StringComparison.Ordinal))
+            {
+                followed = true;
+                Assert.Equal(m1.Mode, m2.Mode);
+            }
+            // pacco già legato che si muove sullo svincolo mentre la via di legatura è ferma per legare il successivo
+            if (m1.Mode == InverterMode.Stop && m1.Reason.StartsWith("Legatura", StringComparison.Ordinal)
+                && e.Packages.Any(k => k.StrapStatus == StrapStatus.Done && k.OnRollers && k.TailM < 16.25 && k.HeadM > 11.25 && k.Velocity > 0.05))
+                carriedWhileStrapping = true;
+        }
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.True(followed, "lo svincolo non ha mai seguito la legatura");
+        Assert.True(carriedWhileStrapping, "lo svincolo non ha mai portato via il pacco legato durante la legatura del successivo");
+        Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
+        Assert.Equal(0, e.Collisions);
+    }
+
+    [Theory]
+    [MemberData(nameof(Models))]
+    public void Follower_ProductivityIsNotWorseThanTheSingleInverter(string name)
+    {
+        var a = Model(name);
+        var b = Model(name);
+        // soluzione precedente: svincolo sotto lo stesso inverter della via di legatura
+        b.Simulation.AutoReleaseInverters = false;
+        foreach (var m in StrappingAreaRules.ReleaseModules(b)) { m.FollowsStrapping = false; m.CommandZoneId = "M1"; }
+        var ea = new SimulationEngine(a); ea.RunToCompletion();
+        var eb = new SimulationEngine(b); eb.RunToCompletion();
+        Assert.True(ea.CompletedNormally && eb.CompletedNormally, Diag(ea) + "\n" + Diag(eb));
+        double pa = ea.ComputeResults().PackagesPerHour ?? 0, pb = eb.ComputeResults().PackagesPerHour ?? 0;
+        Assert.True(pa >= pb * 0.995, $"{name}: inseguimento {pa:0.0} pacchi/h < inverter unico {pb:0.0}");
+    }
+
+    [Fact]
+    public void StrappingWithFollower_NoOverfillNoCollisions()
     {
         var p = SampleProjects.CreateTwoStrappers12m();
         p.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };

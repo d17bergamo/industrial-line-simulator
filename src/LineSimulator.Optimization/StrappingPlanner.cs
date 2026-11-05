@@ -49,6 +49,9 @@ public static class StrappingPlanner
         // (fuori dalla simulazione, sul trasporto di alimentazione): basta che la testa sia sulla via di legatura.
         bool firstZone = zone.StartM <= topo.LineStartM + 1e-6;
         double headMin = firstZone ? zone.StartM : zone.StartM + L, headMax = zone.EndM;
+        // Svincoli che seguono la legatura: la testa può avanzare anche su di essi
+        foreach (var s in project.Sections.OrderBy(x => x.StartMm))
+            if (s.FollowsStrapping && Math.Abs(Units.MmToM(s.StartMm) - headMax) < 1e-3) headMax = Units.MmToM(s.EndMm);
         // Il pacco deve trovarsi sotto stringifascio e compattatore a ogni fermata: H − L ≤ X ≤ H
         if (project.StrappingStation.IsEnabled && project.BundleClamp.IsEnabled)
         {
