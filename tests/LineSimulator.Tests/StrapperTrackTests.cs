@@ -291,7 +291,8 @@ public class StrapperTrackTests
     {
         // solo pacchi da 6 m: la legatura non impegna lo svincolo (5 m), il pacco non ci sta → unito alla via finale
         var p = SampleProjects.CreateTwoStrappers12m();
-        p.Infeed.TypeSequence = p.PackageTypes.Where(t => t.LengthMm == 6000).Select(t => t.Id).ToList();
+        p.PackageTypes.RemoveAll(t => t.LengthMm != 6000);
+        p.Infeed.TypeSequence = p.PackageTypes.Select(t => t.Id).ToList();
         p.Simulation.AutoReleaseInverters = true;
         var rel = StrappingAreaRules.ReleaseModules(p).Single();
         var trf = LayoutRules.TransferModule(p)!;

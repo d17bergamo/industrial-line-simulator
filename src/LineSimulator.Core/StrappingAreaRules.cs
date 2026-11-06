@@ -174,14 +174,8 @@ public static class StrappingAreaRules
     public const double ParkingSafetyMm = 500;
     public static double ParkingMarginMm => PhotocellRules.MinDistanceToTargetMm + ParkingSafetyMm;
 
-    /// <summary>Pacco più corto della sequenza di ingresso (o di tutte le tipologie se la sequenza è vuota).</summary>
-    public static double ShortestPackageMm(LineProject p)
-    {
-        var ids = p.Infeed.TypeSequence.ToHashSet();
-        var types = p.PackageTypes.Where(t => ids.Contains(t.Id)).ToList();
-        if (types.Count == 0) types = p.PackageTypes;
-        return types.Count == 0 ? 0 : types.Min(t => t.LengthMm);
-    }
+    /// <summary>Pacco più corto fra le tipologie del progetto (come la decisione sulla legatura, si guardano tutte).</summary>
+    public static double ShortestPackageMm(LineProject p) => p.PackageTypes.Count == 0 ? 0 : p.PackageTypes.Min(t => t.LengthMm);
 
     /// <summary>Lo svincolo può fare da parcheggio: ci sta il pacco più corto con frenata e margine di manovra.</summary>
     public static bool CanPark(LineProject p, RollerSection release)
