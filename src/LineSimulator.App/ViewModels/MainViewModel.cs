@@ -295,7 +295,7 @@ public sealed partial class MainViewModel : ObservableObject
     public string Title => $"Industrial Line Simulator - {_project.Name}{(_modified ? " *" : "")}" + (_filePath != null ? $" [{Path.GetFileName(_filePath)}]" : "");
     public LineProject Project => _project;
     public SimulationRecorder? Recorder => _engine?.Recorder;
-    public SimulationResults? Results { get => _results; private set { Set(ref _results, value); Raise(nameof(HasResults)); } }
+    public SimulationResults? Results { get => _results; private set { Set(ref _results, value); Raise(nameof(HasResults)); Raise(nameof(TargetProgress)); } }
     public bool HasResults => _results != null;
 
     public TreeNodeViewModel? SelectedNode

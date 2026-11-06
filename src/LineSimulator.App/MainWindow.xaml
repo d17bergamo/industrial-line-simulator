@@ -10,6 +10,7 @@
     <Window.Resources>
         <mvvm:EqualsToVisibilityConverter x:Key="EqVis"/>
         <mvvm:NullToCollapsedConverter x:Key="NullVis"/>
+        <mvvm:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
         <mvvm:RatioToWidthConverter x:Key="RatioWidth"/>
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
                                     <DataTemplate x:Key="PropEditor" DataType="{x:Type vm:PropertyItemViewModel}">
@@ -167,15 +168,10 @@
                 <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
                 <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,16,0">
                     <TextBlock Text="{Binding Project.Name}" FontWeight="Bold" FontSize="14" Foreground="#1B2430"/>
-                    <TextBlock Text="Layout e simulazione" Foreground="#5B6673"/>
+                    <TextBlock Text="Layout, ciclo e simulazione" Foreground="#5B6673"/>
                 </StackPanel>
-                <Border DockPanel.Dock="Left" Background="#EEF0F3" CornerRadius="10" Padding="3" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal">
-                        <Border Background="White" CornerRadius="7" Padding="14,6"><TextBlock Text="Layout e simulazione" FontWeight="SemiBold"/></Border>
-                        <Button Style="{StaticResource SegmentButton}" Content="Pacchi" Command="{Binding GoSectionCommand}" CommandParameter="Packages"/>
-                    </StackPanel>
-                </Border>
-                <Button DockPanel.Dock="Left" x:Name="AddMenuButton" Style="{StaticResource ToolButton}" Content="＋  Aggiungi  ▾" Margin="16,0,0,0" Click="AddMenu_Click" ToolTip="Aggiunge un componente al progetto (le macchine si trascinano anche dalla libreria)">
+                <Border DockPanel.Dock="Left" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Layout" Command="{Binding GoStepCommand}" CommandParameter="Layout" Tag="{Binding IsStepLayout}"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Ciclo" Command="{Binding GoStepCommand}" CommandParameter="Cycle" Tag="{Binding IsStepCycle}"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="4  Simula e risultati" Command="{Binding GoStepCommand}" CommandParameter="Simulate" Tag="{Binding IsStepSimulate}"/></StackPanel></Border>
+                <Button DockPanel.Dock="Left" x:Name="AddMenuButton" Style="{StaticResource ToolButton}" Content="＋  Aggiungi  ▾" Margin="16,0,0,0" Visibility="{Binding IsStepLayout, Converter={StaticResource BoolVis}}" Click="AddMenu_Click" ToolTip="Aggiunge un componente al progetto (le macchine si trascinano anche dalla libreria)">
                     <Button.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Modulo via a rulli" Command="{Binding AddSectionCommand}"/>
@@ -189,23 +185,98 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-<TextBlock Text="Tipologia di pacco:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ComboBox Width="260" ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" VerticalAlignment="Center"/>
-                        <TextBlock Text="Banking:" VerticalAlignment="Center" Margin="12,0,6,0"/>
-                        <ComboBox Width="130" ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Single banking: un pacco per sezione. Double banking: due pacchi."/>
-                        <TextBlock Text="Intestatura:" VerticalAlignment="Center" Margin="12,0,6,0"/>
-                        <ComboBox Width="90" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" VerticalAlignment="Center" ToolTip="Head = di testa, Tail = di coda (solo con un fermo scomparente: il pacco lo supera, il fermo si solleva e il pacco torna indietro)"/>
-                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
-                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.TonnesPerHour, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
-                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/><TextBlock FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Accent}" Text="{Binding Results.CycleTimeMeanS, StringFormat={}{0:0.0}, FallbackValue=-, TargetNullValue=-}"/></StackPanel>
-                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource KpiLabel}" Text="Obiettivo t/h"/><TextBox Width="60" Text="{Binding SimTargetTph, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.#}}" ToolTip="Obiettivo di produttività in tonnellate/ora sul mix di pacchi in ingresso"/></StackPanel>
-                        <Button Style="{StaticResource ToolButton}" Margin="8,0,0,0" VerticalAlignment="Center" Content="Raggiungi l'obiettivo" Command="{Binding ReachTargetCommand}" ToolTip="Simula, trova il collo di bottiglia e propone le modifiche (layout, macchine, logiche, motori commutabili) per arrivare all'obiettivo"/>
-            
-                </StackPanel>
             </DockPanel>
         </Border>
+        <!-- Passo 4: risultati sempre in vista -->
+        <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,8"
+                Visibility="{Binding IsStepSimulate, Converter={StaticResource BoolVis}}">
+            <UniformGrid Rows="1">
+                <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PRODUTTIVITÀ"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.TonnesPerHour, StringFormat='{}{0:0.0} t/h', FallbackValue='—'}"/>
+                    <TextBlock Foreground="#9A5A0E" Text="{Binding TargetProgress}"/></StackPanel>
+                <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PACCHI ALL'ORA"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue='—'}"/></StackPanel>
+                <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="CICLO MEDIO"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.CycleTimeMeanS, StringFormat='{}{0:0.0} s', FallbackValue='—'}"/></StackPanel>
+                <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="COLLO DI BOTTIGLIA"/><TextBlock FontSize="16" FontWeight="Bold" Text="{Binding Results.BottleneckName, FallbackValue='—'}"/>
+                    <Button Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Content="Proponi modifiche per l'obiettivo" Command="{Binding ReachTargetCommand}"/></StackPanel>
+            </UniformGrid>
+        </Border>
         <Grid>
+        <!-- Passo 3: tutto il ciclo in una pagina -->
+        <ScrollViewer Visibility="{Binding IsStepCycle, Converter={StaticResource BoolVis}}" Background="#F4F5F7" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,18" MaxWidth="1100">
+                <UniformGrid Columns="2">
+                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,8,16">
+                        <StackPanel>
+                            <TextBlock Text="1 · Pacchi in ingresso" FontSize="16" FontWeight="Bold"/>
+                            <TextBlock Text="Sequenza delle tipologie (Id separati da ;), ripetuta durante la simulazione" Foreground="#5B6673" Margin="0,2,0,8" TextWrapping="Wrap"/>
+                            <ItemsControl ItemsSource="{Binding CycleInfeed}" ItemTemplate="{StaticResource PropEditor}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="8,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="2 · Come si carica il trasferitore" FontSize="16" FontWeight="Bold"/>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="0.55*"/><ColumnDefinition Width="0.45*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <TextBlock Text="Pacchi per trasferimento (banking)" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" Margin="0,2"/>
+                                <TextBlock Grid.Row="1" Text="Battuta (intestatura)" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" Margin="0,2"/>
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Foreground="#7B8794" TextWrapping="Wrap" Margin="0,6,0,0" Text="«Tail» (di coda) richiede un fermo scomparente sul trasferitore."/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="White" BorderBrush="#B9D4F5" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,8,16">
+                        <StackPanel>
+                            <TextBlock Text="3 · Obiettivo" FontSize="16" FontWeight="Bold"/>
+                            <DockPanel Margin="0,10,0,0">
+                                <TextBox DockPanel.Dock="Left" Width="90" FontSize="18" FontWeight="Bold" Text="{Binding SimTargetTph, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.#}}"/>
+                                <TextBlock DockPanel.Dock="Left" Text="t/h" Margin="6,0,12,0" VerticalAlignment="Center"/>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Raggiungi l'obiettivo" Command="{Binding ReachTargetCommand}"/>
+                                <TextBlock Foreground="#5B6673" TextWrapping="Wrap" VerticalAlignment="Center" Text="Il software simula e propone modifiche al layout e alle logiche per arrivarci."/>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="8,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="4 · Azionamenti (decisi dal software)" FontSize="16" FontWeight="Bold"/>
+                            <ItemsControl ItemsSource="{Binding DriveRows}" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock FontWeight="SemiBold"><Run Text="{Binding Module, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Role, Mode=OneWay}"/></TextBlock>
+                                            <TextBlock Grid.Column="1" Text="{Binding Drive}" Foreground="#34465C" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+                <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="5 · Tempi delle macchine, per famiglia" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock Text="Valgono per tutte le macchine della famiglia; le eccezioni si sbloccano dalla singola macchina (Personalizza) nel passo Layout." Foreground="#5B6673" TextWrapping="Wrap" Margin="0,2,0,8"/>
+                        <ItemsControl ItemsSource="{Binding CycleFamilies}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,6,16,10">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,0,0,4"/>
+                                        <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource PropEditor}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                    <Button Style="{StaticResource ToolButton}" Content="Indietro: Layout" Command="{Binding GoStepCommand}" CommandParameter="Layout"/>
+                    <Button Style="{StaticResource PrimaryButton}" Content="▶  Simula" Margin="8,2,2,2" Command="{Binding GoStepCommand}" CommandParameter="Simulate"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Visibility="{Binding IsStepCycle, Converter={StaticResource InvBoolVis}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
@@ -742,6 +813,7 @@
                 </DockPanel>
             </Border>
         </Grid>
+        </Grid>
     </DockPanel>
             <DockPanel Background="#F4F5F7" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
                 <!-- Barra superiore -->
@@ -754,12 +826,7 @@
                             <TextBlock Text="Tipologie di pacco" FontWeight="Bold" FontSize="14"/>
                             <TextBlock Text="Indipendenti dal layout della linea" Foreground="#5B6673" FontSize="12"/>
                         </StackPanel>
-                        <Border DockPanel.Dock="Left" Background="#EEF0F3" CornerRadius="10" Padding="3" VerticalAlignment="Center" Margin="24,0,12,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Button Style="{StaticResource SegmentButton}" Content="Layout e simulazione" Command="{Binding GoSectionCommand}" CommandParameter="Layout"/>
-                                <Border Background="White" CornerRadius="7" Padding="14,6"><TextBlock Text="Pacchi" FontWeight="SemiBold"/></Border>
-                            </StackPanel>
-                        </Border>
+                        <Border DockPanel.Dock="Left" VerticalAlignment="Center" Margin="24,0,12,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages" Tag="True"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Layout" Command="{Binding GoStepCommand}" CommandParameter="Layout"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Ciclo" Command="{Binding GoStepCommand}" CommandParameter="Cycle"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="4  Simula e risultati" Command="{Binding GoStepCommand}" CommandParameter="Simulate"/></StackPanel></Border>
                         <Grid/>
                     </DockPanel>
                 </Border>
