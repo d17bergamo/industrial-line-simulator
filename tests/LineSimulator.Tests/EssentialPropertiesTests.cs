@@ -10,7 +10,7 @@ public class EssentialPropertiesTests
     [Fact]
     public void EveryEssentialName_IsAnEditablePropertyOfItsType()
     {
-        var types = typeof(LineProject).Assembly.GetTypes().ToDictionary(t => t.Name);
+        var types = typeof(LineProject).Assembly.GetTypes().Where(t => t.IsClass && !t.IsNested).GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
         foreach (var (typeName, names) in EssentialProperties.All)
         {
             Assert.True(types.ContainsKey(typeName), typeName);
