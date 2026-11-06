@@ -302,7 +302,9 @@ public class StrapperTrackTests
         Assert.Contains("via finale", StrappingAreaRules.DescribeDrive(p, rel));
         // svincolo lungo abbastanza (6000 + 2000 + 500): parcheggio con inverter proprio
         Assert.False(StrappingAreaRules.CanPark(p, rel));
-        rel.LengthMm = 8750; rel.RollerCount = 7;
+        double oldEnd = rel.EndMm;
+        LineReflow.Fit(rel, rel.StartMm, rel.StartMm + 8750);
+        LineReflow.AfterResize(p, rel, oldEnd);      // il resto della linea avanza: le vie restano unite
         Assert.True(StrappingAreaRules.CanPark(p, rel));
         StrappingAreaRules.DecideReleaseInverters(p);
         Assert.Equal(rel.Id, rel.EffectiveZoneId);
