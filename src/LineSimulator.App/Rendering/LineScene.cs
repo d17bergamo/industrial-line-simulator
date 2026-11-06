@@ -46,6 +46,15 @@ public sealed class LineScene
     private readonly Dictionary<string, (GeometryModel3D Model, TranslateTransform3D T, bool Strapped)> _packages = new();
     private readonly Dictionary<string, GeometryModel3D> _packageStraps = new();
     private static readonly Color StrapColor = Color.FromRgb(0x1A, 0x1D, 0x21);
+    /// <summary>Macchina ferma in attesa di un consenso.</summary>
+    public static readonly Color WaitAmber = Color.FromRgb(0xF2, 0xA9, 0x00);
+    private static readonly Color[] PackagePalette =
+    {
+        Color.FromRgb(0x2F, 0x6F, 0xD0), Color.FromRgb(0xD9, 0x82, 0x2B), Color.FromRgb(0x7A, 0x52, 0xB3),
+        Color.FromRgb(0x11, 0x76, 0x6A), Color.FromRgb(0xC2, 0x41, 0x7A), Color.FromRgb(0x6B, 0x7F, 0x1A)
+    };
+    /// <summary>Colore del pacco in simulazione secondo la posizione della tipologia nell'elenco (stessa legenda della barra risultati).</summary>
+    public static Color PackageColor(int typeIndex) => typeIndex < 0 ? Color.FromRgb(0x85, 0x92, 0x9E) : PackagePalette[typeIndex % PackagePalette.Length];
     private readonly Dictionary<string, (MeshGeometry3D Plain, MeshGeometry3D Strapped)> _packageMeshes = new();
     private readonly List<string> _zoneOrder = new();
     private Model3DGroup _packagesGroup = new();
@@ -664,7 +673,7 @@ public sealed class LineScene
                 var meshes = PackageMeshes(ps);
                 if (!_packages.TryGetValue(ps.Id, out var entry))
                 {
-                    var model = MeshFactory.Model(meshes.Plain, Color.FromRgb(0x85, 0x92, 0x9E), out _);
+                    var model = MeshFactory.Model(meshes.Plain, PackageColor(p.PackageTypes.FindIndex(t => t.Id == ps.TypeId)), out _);   // colore per tipologia
                     var t = new TranslateTransform3D();
                     model.Transform = t;
                     _packagesGroup.Children.Add(model);
@@ -749,6 +758,13 @@ public sealed class LineScene
             _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? MachWorking : Color.FromRgb(0xC0, 0x39, 0x2B);
         if (_transferBrush != null && !IsHighlighted(p.Transfer))
             _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? MachWorking : Color.FromRgb(0xF1, 0xC4, 0x0F);
+
+        // Legatrici in attesa del consenso (stringifascio): giallo ambra
+        for (int i = 0; i < p.Strappers.Count; i++)
+        {
+            if (f == null || i >= f.StrapperProcessStates.Length || f.StrapperProcessStates[i] != StrapperProcessState.WaitingClampConsent) continue;
+            if (_strapperBrushes.TryGetValue(p.Strappers[i].Id, out var b) && !IsHighlighted(p.Strappers[i])) b.Color = WaitAmber;
+        }
 
         // Legatrici KNCA in guasto: rosso
         for (int i = 0; i < p.Strappers.Count; i++)

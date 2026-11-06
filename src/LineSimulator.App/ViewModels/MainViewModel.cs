@@ -885,6 +885,7 @@ public sealed partial class MainViewModel : ObservableObject
         var items = EquipmentCheck.Run(_project, fix: false);
         foreach (var i in items) CheckItems.Add(new CheckRow(i.IsProblem ? "⚠" : "✔", i.Message, i.IsProblem));
         CheckProblems = items.Count(i => i.IsProblem);
+        Raise(nameof(HasCheckProblems)); Raise(nameof(CheckProblemsLine));
     }
 
     /// <summary>Applica le correzioni automatiche all'elenco del controllo equipaggiamenti.</summary>

@@ -285,4 +285,27 @@ public class StrapperTrackTests
         Assert.Equal(trf + (m1.EndMm - end), p.Transfer.PositionMm, 6);
         Assert.Equal(m1.EndMm, M(p, "M2").StartMm, 6);
     }
+
+    [Fact]
+    public void ReleaseDrive_FrontAccumulationAlwaysOwn_ReleaseParksOnlyIfShortestPackageFits()
+    {
+        // solo pacchi da 6 m: la legatura non impegna lo svincolo (5 m), il pacco non ci sta → unito alla via finale
+        var p = SampleProjects.CreateTwoStrappers12m();
+        p.Infeed.TypeSequence = p.PackageTypes.Where(t => t.LengthMm == 6000).Select(t => t.Id).ToList();
+        p.Simulation.AutoReleaseInverters = true;
+        var rel = StrappingAreaRules.ReleaseModules(p).Single();
+        var trf = LayoutRules.TransferModule(p)!;
+        StrappingAreaRules.DecideReleaseInverters(p);
+        Assert.Equal(trf.Id, trf.EffectiveZoneId);
+        Assert.Equal(trf.Id, rel.EffectiveZoneId);
+        Assert.Contains("via finale", StrappingAreaRules.DescribeDrive(p, rel));
+        // svincolo lungo abbastanza (6000 + 2000 + 500): parcheggio con inverter proprio
+        Assert.False(StrappingAreaRules.CanPark(p, rel));
+        rel.LengthMm = 8750; rel.RollerCount = 7;
+        Assert.True(StrappingAreaRules.CanPark(p, rel));
+        StrappingAreaRules.DecideReleaseInverters(p);
+        Assert.Equal(rel.Id, rel.EffectiveZoneId);
+        Assert.Contains("parcheggio", StrappingAreaRules.DescribeDrive(p, rel));
+        Assert.Equal(trf.Id, trf.EffectiveZoneId);
+    }
 }
