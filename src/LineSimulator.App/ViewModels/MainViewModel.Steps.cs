@@ -12,6 +12,9 @@ public enum WorkStep { Layout, Cycle, Simulate }
 /// <summary>Famiglia di macchine nella pagina Ciclo: titolo e parametri essenziali modificabili.</summary>
 public sealed record CycleFamily(string Title, IReadOnlyList<PropertyItemViewModel> Items);
 
+/// <summary>Voce della legenda dei pacchi nel passo Simula.</summary>
+public sealed record LegendItem(string Name, System.Windows.Media.Brush Brush);
+
 /// <summary>Riga degli azionamenti nella pagina Ciclo.</summary>
 public sealed record DriveRow(string Module, string Role, string Drive);
 
@@ -36,6 +39,7 @@ public sealed partial class MainViewModel
             ShowInspector = value == WorkStep.Layout;
             ShowCyclogram = value == WorkStep.Simulate;
             if (value == WorkStep.Cycle) BuildCyclePage();
+            if (value == WorkStep.Simulate) Raise(nameof(PackageLegend));
         }
     }
     public bool IsStepLayout => _step == WorkStep.Layout;
@@ -78,9 +82,7 @@ public sealed partial class MainViewModel
         {
             var s = secs[i];
             string role = i == 0 ? "via di legatura" : ReferenceEquals(s, trfMod) ? "fronte accumulo" : "svincolo";
-            string drive = s.FollowsStrapping ? "inverter proprio, motori commutabili sull'inverter di legatura"
-                : s.EffectiveZoneId != s.Id ? $"unito all'inverter di {s.EffectiveZoneId}"
-                : "inverter proprio";
+            string drive = StrappingAreaRules.DescribeDrive(_project, s);
             DriveRows.Add(new DriveRow(s.Id, role, drive));
         }
     }
@@ -99,6 +101,35 @@ public sealed partial class MainViewModel
         if (item.Name == nameof(RollerGroup.RollerTopElevationMm)) RollerGroups.SyncElevation(_project, fromGroup: true);
         ProjectChanged(structural: true);
     }
+
+    /// <summary>Legenda dei colori dei pacchi (uno per tipologia).</summary>
+    public IReadOnlyList<LegendItem> PackageLegend => _project.PackageTypes
+        .Select((t, i) => new LegendItem(t.Id, new System.Windows.Media.SolidColorBrush(Rendering.LineScene.PackageColor(i)))).ToList();
+
+    private int _inspectorTab;
+    /// <summary>Scheda attiva dell'ispettore: 0 Proprietà, 1 Struttura, 2 Controllo, 3 Stato.</summary>
+    public int InspectorTab { get => _inspectorTab; set => Set(ref _inspectorTab, value); }
+    public bool HasCheckProblems => CheckProblems > 0;
+    public string CheckProblemsLine => string.Join(" · ", CheckItems.Where(c => c.IsProblem).Take(2).Select(c => c.Message));
+    private ICommand? _showCheckCommand, _goToBottleneckCommand;
+    /// <summary>Apre la scheda Controllo dell'ispettore.</summary>
+    public ICommand ShowCheckCommand => _showCheckCommand ??= new RelayCommand(() => { ShowInspector = true; InspectorTab = 2; });
+
+    /// <summary>Porta il ciclo nel punto in cui il collo di bottiglia aspetta di più (o lavora più a lungo).</summary>
+    public ICommand GoToBottleneckCommand => _goToBottleneckCommand ??= new RelayCommand(() =>
+    {
+        var id = Results?.BottleneckId;
+        var rec = Recorder;
+        if (string.IsNullOrEmpty(id) || rec == null) return;
+        var track = rec.Tracks.FirstOrDefault(t => t.Key == id || t.Key.EndsWith(":" + id, StringComparison.Ordinal));
+        if (track == null || track.Segments.Count == 0) { Status = $"Collo di bottiglia {Results!.BottleneckName}: nessuna traccia nel ciclogramma."; return; }
+        var seg = track.Segments.Where(s => s.State == Engine.CycleState.Waiting).OrderByDescending(s => s.DurationS).FirstOrDefault()
+                  ?? track.Segments.OrderByDescending(s => s.DurationS).First();
+        if (IsPlaying) Pause();
+        ShowCyclogram = true;
+        DisplayTime = seg.StartS;
+        Status = $"{track.Label}: {(seg.State == Engine.CycleState.Waiting ? "attesa" : "fase")} più lunga a {seg.StartS:0.0} s ({seg.DurationS:0.0} s).";
+    }, () => Results != null);
 
     /// <summary>Riga dei risultati del passo Simula.</summary>
     public string TargetProgress => Results?.TonnesPerHour is not double tph || SimTargetTph <= 0 ? "" :

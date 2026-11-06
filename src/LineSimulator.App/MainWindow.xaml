@@ -190,14 +190,49 @@
         <!-- Passo 4: risultati sempre in vista -->
         <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,8"
                 Visibility="{Binding IsStepSimulate, Converter={StaticResource BoolVis}}">
-            <UniformGrid Rows="1">
+            <UniformGrid Rows="1" Columns="5">
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PRODUTTIVITÀ"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.TonnesPerHour, StringFormat='{}{0:0.0} t/h', FallbackValue='—'}"/>
                     <TextBlock Foreground="#9A5A0E" Text="{Binding TargetProgress}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PACCHI ALL'ORA"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="CICLO MEDIO"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.CycleTimeMeanS, StringFormat='{}{0:0.0} s', FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="COLLO DI BOTTIGLIA"/><TextBlock FontSize="16" FontWeight="Bold" Text="{Binding Results.BottleneckName, FallbackValue='—'}"/>
-                    <Button Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Content="Proponi modifiche per l'obiettivo" Command="{Binding ReachTargetCommand}"/></StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource ToolButton}" Content="Vai al punto nel ciclo" Command="{Binding GoToBottleneckCommand}" ToolTip="Ferma la simulazione dove il collo di bottiglia aspetta di più"/>
+                        <Button Style="{StaticResource ToolButton}" Content="Proponi modifiche" Command="{Binding ReachTargetCommand}"/>
+                    </StackPanel></StackPanel>
+                <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PACCHI (COLORE PER TIPOLOGIA)"/>
+                    <ItemsControl ItemsSource="{Binding PackageLegend}" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Margin="0,2,12,2">
+                            <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Brush}" Margin="0,0,5,0"/><TextBlock Text="{Binding Name}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"><Border Width="12" Height="12" CornerRadius="3" Background="#F2A900" Margin="0,0,5,0"/><TextBlock Text="macchina in attesa di consenso" Foreground="#5B6673"/></StackPanel>
+                </StackPanel>
             </UniformGrid>
+        </Border>
+        <!-- Passo 2: problemi del layout sempre in vista, con la correzione automatica -->
+        <Border DockPanel.Dock="Bottom" Background="#FFF8EE" BorderBrush="#F2C27C" BorderThickness="0,1,0,0" Padding="16,8">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsStepLayout}" Value="True"/>
+                                <Condition Binding="{Binding HasCheckProblems}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel>
+                <Border DockPanel.Dock="Left" Background="#E08A1E" CornerRadius="10" MinWidth="22" Height="22" Padding="6,0" Margin="0,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CheckProblems}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Sistema automaticamente" Command="{Binding CheckEquipmentCommand}" Margin="6,0,0,0"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="Mostra" Command="{Binding ShowCheckCommand}"/>
+                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><Run Text="{Binding CheckSummary, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  "/><Run Text="{Binding CheckProblemsLine, Mode=OneWay}"/></TextBlock>
+            </DockPanel>
         </Border>
         <Grid>
         <!-- Passo 3: tutto il ciclo in una pagina -->
@@ -660,7 +695,7 @@
                     Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}">
                 <DockPanel>
                     <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Content="✕" Margin="0,6,8,0" ToolTip="Nascondi il pannello" Command="{Binding ToggleInspectorCommand}"/>
-                    <TabControl BorderThickness="0" Padding="0" Style="{StaticResource FlatTabs}">
+                    <TabControl BorderThickness="0" Padding="0" Style="{StaticResource FlatTabs}" SelectedIndex="{Binding InspectorTab, Mode=TwoWay}">
                         <TabItem Header="Proprietà"><DockPanel Background="White">
                     <TextBlock DockPanel.Dock="Top" Foreground="#5B6673" Margin="12,8,12,2" TextWrapping="Wrap" Text="Ogni modifica riporta la simulazione a zero."/>
                     <StackPanel DockPanel.Dock="Top" Margin="4,0,4,4" Visibility="{Binding TransferSectionsVisible, Converter={StaticResource BoolVis}}">

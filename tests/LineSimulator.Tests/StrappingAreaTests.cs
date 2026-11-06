@@ -71,9 +71,12 @@ public class StrappingAreaTests
         Assert.Empty(StrappingAreaRules.DecideReleaseInverters(q));
         q.PackageTypes.RemoveAll(t => t.Id != "P6 (Wire)");
         var changes = StrappingAreaRules.DecideReleaseInverters(q);
-        Assert.Contains(changes, c => c.Contains("inverter proprio", StringComparison.Ordinal));
+        // regola dell'utente (2026-11-06): lo svincolo non impegnato dalla legatura fa da parcheggio solo se ci sta il pacco
+        // più corto con i margini; qui (5 m < 6 m + 2,5 m) va con la via finale, che resta sempre con il suo inverter
+        Assert.Contains(changes, c => c.Contains("via finale", StringComparison.Ordinal));
         var tq = new LineTopology(q);
         Assert.NotSame(tq.Zone("M1"), tq.Zone("M2"));
+        Assert.Same(tq.Zone("M2"), tq.Zone("M3"));
         q.Infeed.PackageCount = 4;
         var e = new SimulationEngine(q);
         e.RunToCompletion();
