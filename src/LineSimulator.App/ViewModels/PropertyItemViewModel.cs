@@ -57,9 +57,15 @@ public sealed class PropertyItemViewModel : ObservableObject
     public bool Locked
     {
         get => _locked;
-        set { if (_locked == value) return; _locked = value; Raise(nameof(IsReadOnly)); Raise(nameof(IsEditable)); }
+        set { if (_locked == value) return; _locked = value; Raise(nameof(IsReadOnly)); Raise(nameof(IsEditable)); Raise(nameof(IsInherited)); }
     }
     public bool IsReadOnly => Meta.ReadOnly || !_prop.CanWrite || _locked;
+    /// <summary>Valore calcolato dal programma: mostrato come testo, non come casella.</summary>
+    public bool IsCalculated => Meta.ReadOnly || !_prop.CanWrite;
+    /// <summary>Valore ereditato dalla famiglia o fissato da una regola (casella grigia).</summary>
+    public bool IsInherited => _locked && !IsCalculated;
+    /// <summary>Parametro secondario: visibile solo aprendo "Avanzate".</summary>
+    public bool IsAdvanced { get; set; }
     public bool IsEditable => !IsReadOnly;
     public EditorKind Kind { get; }
     public IReadOnlyList<string>? Options { get; }

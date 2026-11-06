@@ -74,6 +74,8 @@ public sealed partial class MainViewModel : ObservableObject
         _project = SampleProjects.CreateStandardLine();
         PropertiesView = CollectionViewSource.GetDefaultView(Properties);
         PropertiesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(PropertyItemViewModel.Category)));
+        PropertiesView.Filter = o => o is not PropertyItemViewModel pi || !pi.IsAdvanced || ShowAdvanced;
+        ToggleAdvancedCommand = new RelayCommand(() => ShowAdvanced = !ShowAdvanced);
 
         _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(30) };
         _timer.Tick += (_, _) => OnTick();
@@ -271,6 +273,17 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<TreeNodeViewModel> Tree { get; } = new();
     public ObservableCollection<PropertyItemViewModel> Properties { get; } = new();
     public ICollectionView PropertiesView { get; }
+
+    private bool _showAdvanced;
+    /// <summary>Mostra anche i parametri secondari ("Avanzate") del componente selezionato.</summary>
+    public bool ShowAdvanced
+    {
+        get => _showAdvanced;
+        set { if (Set(ref _showAdvanced, value)) { PropertiesView.Refresh(); Raise(nameof(AdvancedLabel)); } }
+    }
+    public int AdvancedCount => Properties.Count(p => p.IsAdvanced);
+    public string AdvancedLabel => ShowAdvanced ? "▾  Nascondi avanzate" : $"▸  Avanzate ({AdvancedCount})";
+    public RelayCommand ToggleAdvancedCommand { get; }
     public ObservableCollection<ValidationIssue> Issues { get; } = new();
     public ObservableCollection<SimEvent> EventLog { get; } = new();
     public ObservableCollection<ResourceUsage> Resources { get; } = new();
@@ -769,9 +782,16 @@ public sealed partial class MainViewModel : ObservableObject
         Properties.Clear();
         var model = SelectedNode?.Model;
         if (model == null) return;
+        string typeName = model.GetType().Name;
         foreach (var item in PropertyItemViewModel.For(model, OnPropertyEdited, IdOptions))
+        {
+            item.IsAdvanced = EssentialProperties.IsAdvanced(typeName, item.Name);
             Properties.Add(item);
+        }
         ApplyPropertyLocks();
+        _showAdvanced = false;                 // ogni nuova selezione riparte dalla scheda breve
+        PropertiesView.Refresh();
+        Raise(nameof(ShowAdvanced)); Raise(nameof(AdvancedCount)); Raise(nameof(AdvancedLabel));
     }
 
     /// <summary>Blocca le proprietà ereditate dal padre (finché il modulo non è personalizzato) e le posizioni fisse.</summary>

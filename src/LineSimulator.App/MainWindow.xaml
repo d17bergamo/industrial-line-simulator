@@ -24,7 +24,25 @@
                                         </Grid.RowDefinitions>
                                         <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="{Binding Name}"/>
                                         <TextBox Grid.Column="1" Text="{Binding TextValue, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsReadOnly}"
-                                                 Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Text}" KeyDown="PropertyBox_KeyDown"/>
+                                                 Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Text}" KeyDown="PropertyBox_KeyDown">
+                                            <TextBox.Style>
+                                                <Style TargetType="TextBox">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsInherited}" Value="True">
+                                                            <Setter Property="Background" Value="#F4F5F7"/>
+                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="ToolTip" Value="Valore della famiglia: spunta «Personalizza» per cambiarlo solo qui"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsCalculated}" Value="True">
+                                                            <Setter Property="BorderThickness" Value="0"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="ToolTip" Value="Calcolato automaticamente"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBox.Style>
+                                        </TextBox>
                                         <CheckBox Grid.Column="1" IsChecked="{Binding BoolValue}" IsEnabled="{Binding IsEditable}" VerticalAlignment="Center"
                                                   Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Bool}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding Options}" SelectedItem="{Binding ChoiceValue}" IsEnabled="{Binding IsEditable}"
@@ -589,6 +607,9 @@
                                     CommandParameter="{Binding SelectedItem, ElementName=TransferSectionsGrid}"/>
                         </StackPanel>
                     </StackPanel>
+                    <Button DockPanel.Dock="Bottom" Style="{StaticResource ToolButton}" Margin="8,4,8,8" HorizontalAlignment="Left"
+                            Content="{Binding AdvancedLabel}" Command="{Binding ToggleAdvancedCommand}"
+                            ToolTip="Tempi di dettaglio, consensi, diagnostica e grafica"/>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding PropertiesView}" Margin="4,0,4,8">
                             <ItemsControl.GroupStyle>
@@ -613,7 +634,25 @@
                                         </Grid.RowDefinitions>
                                         <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="{Binding Name}"/>
                                         <TextBox Grid.Column="1" Text="{Binding TextValue, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsReadOnly}"
-                                                 Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Text}" KeyDown="PropertyBox_KeyDown"/>
+                                                 Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Text}" KeyDown="PropertyBox_KeyDown">
+                                            <TextBox.Style>
+                                                <Style TargetType="TextBox">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsInherited}" Value="True">
+                                                            <Setter Property="Background" Value="#F4F5F7"/>
+                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="ToolTip" Value="Valore della famiglia: spunta «Personalizza» per cambiarlo solo qui"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsCalculated}" Value="True">
+                                                            <Setter Property="BorderThickness" Value="0"/>
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="ToolTip" Value="Calcolato automaticamente"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBox.Style>
+                                        </TextBox>
                                         <CheckBox Grid.Column="1" IsChecked="{Binding BoolValue}" IsEnabled="{Binding IsEditable}" VerticalAlignment="Center"
                                                   Visibility="{Binding Kind, Converter={StaticResource EqVis}, ConverterParameter=Bool}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding Options}" SelectedItem="{Binding ChoiceValue}" IsEnabled="{Binding IsEditable}"
