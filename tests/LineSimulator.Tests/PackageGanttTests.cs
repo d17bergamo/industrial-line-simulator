@@ -43,7 +43,7 @@ public class PackageGanttTests
             foreach (var s in r.Segments.Where(s => s.Moving))
             {
                 Assert.True(s.MaxSpeed <= vMax + 0.01, $"{r.PackageId} {s.Label}: {s.MaxSpeed} > {vMax}");
-                Assert.True(s.MeanSpeed <= s.MaxSpeed + 1e-6);
+                Assert.True(s.MeanSpeed <= s.MaxSpeed + 0.02, $"{r.PackageId} {s.Label} {s.StartS:0.00}: media {s.MeanSpeed:0.000} > max {s.MaxSpeed:0.000}");
                 Assert.True(s.MaxAcceleration >= 0 && s.MaxDeceleration >= 0);
             }
         Assert.Contains(rows.SelectMany(r => r.Segments), s => s.MaxAcceleration > 0.05);

@@ -84,7 +84,7 @@ public static class PackageGantt
                 if (cur == null || cur.Moving != moving || cur.State != p.State)
                 {
                     // il tratto precedente arriva fino a questo fotogramma: tempi e posizioni restano contigui
-                    if (cur != null) { cur.EndS = f.TimeS; if (cur.Moving) cur.ToM = p.HeadM; }
+                    if (cur != null) { cur.EndS = f.TimeS; if (cur.Moving) { cur.ToM = p.HeadM; cur.MaxSpeed = Math.Max(cur.MaxSpeed, Math.Abs(p.Velocity)); } }
                     cur = new GanttSegment { StartS = f.TimeS, EndS = f.TimeS, Moving = moving, State = p.State, FromM = p.HeadM, ToM = p.HeadM };
                     row.Segments.Add(cur);
                 }
