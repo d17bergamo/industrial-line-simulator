@@ -12,7 +12,10 @@ public static class StepCyclogramPdf
     public static void Save(string path, IReadOnlyList<StepRow> rows, string title)
         => File.WriteAllBytes(path, Build(rows, title));
 
-    public static byte[] Build(IReadOnlyList<StepRow> rows, string title)
+    public static byte[] Build(IReadOnlyList<StepRow> rows, string title) => Assemble(Pages(rows, title));
+
+    /// <summary>Pagine del ciclogramma a gradini (contenuto PDF), riusate dall'export unico con il Gantt dei pacchi.</summary>
+    internal static List<string> Pages(IReadOnlyList<StepRow> rows, string title)
     {
         double total = Math.Max(StepCyclogram.RoundingS, StepCyclogram.TotalS(rows));
         int perPage = Math.Max(1, (int)((PageH - Top - Margin - 20) / RowH));
@@ -57,15 +60,15 @@ public static class StepCyclogramPdf
             }
             pages.Add(c.ToString());
         }
-        return Assemble(pages);
+        return pages;
     }
 
-    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+    internal static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Trim(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + ".";
-    private static void Line(StringBuilder c, double x1, double y1, double x2, double y2)
+    internal static void Line(StringBuilder c, double x1, double y1, double x2, double y2)
         => c.Append(F(x1)).Append(' ').Append(F(y1)).Append(" m ").Append(F(x2)).Append(' ').Append(F(y2)).Append(" l S\n");
 
-    private static void Text(StringBuilder c, double x, double y, double size, string s)
+    internal static void Text(StringBuilder c, double x, double y, double size, string s)
     {
         var sb = new StringBuilder();
         foreach (var ch in s)
@@ -78,7 +81,7 @@ public static class StepCyclogramPdf
         c.Append("BT /F1 ").Append(F(size)).Append(" Tf ").Append(F(x)).Append(' ').Append(F(y)).Append(" Td (").Append(sb).Append(") Tj ET\n");
     }
 
-    private static byte[] Assemble(List<string> pages)
+    internal static byte[] Assemble(List<string> pages)
     {
         var objs = new List<string>();
         // 1 catalogo, 2 pagine, 3 font, poi per ogni pagina: oggetto pagina + contenuto

@@ -1,0 +1,46 @@
+name: Pulizia artefatti
+
+# Tiene sempre gli ultimi 5 artefatti per ciascun nome (es. 5 eseguibili Windows e 5 risultati dei test)
+# e cancella i più vecchi. Parte dopo ogni build/verifica, ogni giorno e a richiesta.
+on:
+  workflow_run:
+    workflows: ["Build, test e pubblicazione", "Verifica rapida (motore e test)"]
+    types: [completed]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: pulizia-artefatti
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancella gli artefatti oltre gli ultimi 5 per nome
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: '5'
+        run: |
+          set -euo pipefail
+          repo="${{ github.repository }}"
+          : > all.tsv
+          page=1
+          while :; do
+            n=$(gh api "repos/$repo/actions/artifacts?per_page=100&page=$page" \
+                  -q '.artifacts[] | [.id, .name, .created_at] | @tsv' | tee -a all.tsv | wc -l)
+            [ "$n" -lt 100 ] && break
+            page=$((page+1))
+          done
+          echo "Artefatti trovati: $(wc -l < all.tsv)"
+          # per ciascun nome, dal più recente: tiene i primi KEEP, cancella il resto
+          sort -t$'\t' -k2,2 -k3,3r all.tsv | awk -F'\t' -v keep="$KEEP" '{ c[$2]++; if (c[$2] > keep) print $1 "\t" $2 "\t" $3 }' > old.tsv
+          echo "Da cancellare: $(wc -l < old.tsv)"
+          while IFS=$'\t' read -r id name created; do
+            echo "cancello $name ($created)"
+            gh api -X DELETE "repos/$repo/actions/artifacts/$id" || echo "non cancellato: $id"
+          done < old.tsv

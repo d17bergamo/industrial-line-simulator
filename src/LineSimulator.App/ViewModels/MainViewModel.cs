@@ -415,12 +415,13 @@ public sealed partial class MainViewModel : ObservableObject
     {
         RefreshStep();
         if (StepRows == null || StepRows.Count == 0) { Status = "Esegui prima una simulazione."; return; }
-        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = "ciclogramma-a-gradini.pdf" };
+        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = "ciclogramma-gantt.pdf" };
         if (dlg.ShowDialog() != true) return;
         try
         {
-            StepCyclogramPdf.Save(dlg.FileName, StepRows, _project.Name.Length > 0 ? _project.Name : "Linea di legatura");
-            Status = "Ciclogramma a gradini esportato: " + dlg.FileName;
+            var gantt = PackageGantt.Build(_engine!.Recorder);
+            PackageGanttPdf.Save(dlg.FileName, gantt, StepRows, _project.Name.Length > 0 ? _project.Name : "Linea di legatura");
+            Status = $"Ciclogramma esportato (Gantt di {gantt.Count} pacchi + gradini delle utenze): " + dlg.FileName;
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Esportazione PDF", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
