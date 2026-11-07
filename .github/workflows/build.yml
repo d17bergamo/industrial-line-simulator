@@ -36,9 +36,11 @@ jobs:
       - name: Pubblica risultati dei test
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: test-results
           path: TestResults
+          retention-days: 14
 
       - name: Publish EXE self-contained (win-x64, file singolo)
         run: >
@@ -62,12 +64,26 @@ jobs:
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.3.0 /DSourceDir="$pwd\publish\IndustrialLineSimulator" /O"$pwd\publish" installer\LineSimulator.iss
 
+      # Artefatto della run (può mancare se la quota di archiviazione è piena: il programma resta nella release "ultima-build")
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: IndustrialLineSimulator-win-x64
           path: |
             publish/IndustrialLineSimulator-win-x64.zip
             publish/*Setup*.exe
+          retention-days: 14
+
+      # Release fissa con l'ultimo programma di main: sempre scaricabile, non pesa sulla quota degli artefatti
+      - name: Release "ultima-build" (solo main)
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ultima-build --yes --cleanup-tag 2>$null
+          $files = @("publish/IndustrialLineSimulator-win-x64.zip") + (Get-ChildItem publish/*Setup*.exe -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+          gh release create ultima-build $files --target "${{ github.sha }}" --prerelease --title "Ultima build di main" --notes "Programma generato automaticamente da main, commit ${{ github.sha }}. Scarica lo ZIP (exe portabile) o il Setup."
 
       - name: Release (solo sui tag v*)
         if: startsWith(github.ref, 'refs/tags/v')
