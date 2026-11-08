@@ -160,7 +160,8 @@ public class BankingHeadingTests
             Assert.Equal(2, l.Count);
             var o = l.OrderByDescending(x => x.Head).ToList();
             Assert.InRange(o[0].Head, 55.0 - 0.003, 55.0 + 1e-6);            // primo in battuta sullo stopper
-            Assert.InRange(o[1].Head, 48.8 - 0.004, 48.8 + 0.001);           // secondo 200 mm dietro (posizionamento)
+            double second = 55.0 - 6.0 - TransferConfig.DefaultDoubleBankingGapMm / 1000.0;   // secondo 500 mm dietro (posizionamento)
+            Assert.InRange(o[1].Head, second - 0.004, second + 0.001);
             Assert.True(o[1].Tail >= 43.0 - 0.5 - 1e-6);                     // sbalzo entro 500 mm
         });
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
