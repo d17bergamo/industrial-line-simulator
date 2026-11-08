@@ -70,7 +70,9 @@ public class StrapperTrackTests
         var p = SampleProjects.CreateTwoStrappers12m();
         p.Strappers[0].PositionMm = 200;
         Assert.True(StrapperTrack.ClampStrappersToTrackStart(p));
-        Assert.Equal(1000, p.Strappers[0].PositionMm, 6);
+        // almeno 1 m dall'inizio e spazio per la regola dell'encoder: FC0 + 100 (riferimento) + 300 (encoder) + 1000 = 1400 mm
+        Assert.Equal(1400, p.Strappers[0].PositionMm, 6);
+        Assert.Empty(EncoderRule.Problems(p).Where(m => m.Contains("troppo vicina")));
         Assert.False(StrapperTrack.ClampStrappersToTrackStart(p));
     }
 
