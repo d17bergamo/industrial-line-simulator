@@ -40,9 +40,9 @@ public static class LayoutTopViewPdf
 
     // ================================================================== dati comuni
 
-    internal sealed record Zone(string Id, string Label, List<RollerSection> Sections, double StartMm, double EndMm, (double R, double G, double B) Color);
+    public sealed record Zone(string Id, string Label, List<RollerSection> Sections, double StartMm, double EndMm, (double R, double G, double B) Color);
 
-    internal static List<Zone> Zones(LineProject p)
+    public static List<Zone> Zones(LineProject p)
     {
         var secs = p.Sections.OrderBy(s => s.StartMm).ToList();
         var zones = new List<Zone>();
