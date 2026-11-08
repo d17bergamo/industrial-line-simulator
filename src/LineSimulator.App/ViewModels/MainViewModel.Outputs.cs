@@ -76,6 +76,8 @@ public sealed partial class MainViewModel
 
     public ICommand ExportControlLogicCommand => _exportControlLogicCommand ??= new RelayCommand(ExportControlLogic);
     public ICommand ExportFunctionalSpecCommand => _exportFunctionalSpecCommand ??= new RelayCommand(ExportFunctionalSpec);
+    private ICommand? _exportTopViewCommand;
+    public ICommand ExportTopViewPdfCommand => _exportTopViewCommand ??= new RelayCommand(ExportTopViewPdf);
     public ICommand OptimizeCommandZonesCommand => _optimizeCommandZonesCommand ??= new RelayCommand(OptimizeCommandZones, () => !_optimizing);
 
     private void ExportControlLogic()
@@ -99,6 +101,19 @@ public sealed partial class MainViewModel
         {
             FunctionalSpecExporter.Export(_project, Results ?? _engine?.ComputeResults(), dlg.FileName);
             Status = "Specifica tecnica funzionale salvata: " + dlg.FileName;
+        }
+        catch (Exception ex) { MessageBox.Show("Esportazione non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    /// <summary>PDF della vista dall'alto: sezioni inverter a colori, motori commutabili, quote tra fotocellule, fermi e legatrici.</summary>
+    private void ExportTopViewPdf()
+    {
+        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = SafeName(_project.Name) + "_vista_dall_alto.pdf" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            LayoutTopViewPdf.Save(dlg.FileName, _project);
+            Status = "Vista dall'alto esportata: " + dlg.FileName;
         }
         catch (Exception ex) { MessageBox.Show("Esportazione non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
     }

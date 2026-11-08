@@ -105,6 +105,7 @@
                 <MenuItem Header="Esporta risultati _Excel..." Command="{Binding ExportExcelCommand}"/>
                 <MenuItem Header="Esporta _logica di controllo (JSON/CSV)..." Command="{Binding ExportControlLogicCommand}"/>
                 <MenuItem Header="Esporta specifica _funzionale (Word)..." Command="{Binding ExportFunctionalSpecCommand}"/>
+                <MenuItem Header="Esporta _vista dall'alto (PDF)..." Command="{Binding ExportTopViewPdfCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Esci" Click="Exit_Click"/>
             </MenuItem>
