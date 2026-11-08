@@ -107,4 +107,31 @@ public class TwoPickTransferTests
         p.Transfer.MaxOverhangMm = 2000;
         Assert.DoesNotContain(ProjectValidator.Validate(p).Warnings, w => w.Code == "TRF_OVERHANG_MAX");
     }
+
+    /// <summary>Confronto di produttività due prese / corsa intera sui modelli (solo per le anteprime della CI).</summary>
+    [Fact]
+    public void ProductivityReport_ForThePreviews()
+    {
+        string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
+        if (string.IsNullOrWhiteSpace(dir)) return;
+        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese;cicli trasferitore corsa intera;cicli due prese" };
+        foreach (var (name, create) in SampleProjects.All)
+        {
+            double Tph(bool twoPick, out int cycles)
+            {
+                var p = create();
+                p.Transfer.ScaleAtMidStroke = twoPick;
+                var e = new SimulationEngine(p);
+                e.RunToCompletion();
+                cycles = e.Transfer.Cycles;
+                var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
+                double span = exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS);
+                return span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
+            }
+            double a = Tph(false, out int ca), b = Tph(true, out int cb);
+            lines.Add($"{name};{a:0.0};{b:0.0};{ca};{cb}");
+        }
+        Directory.CreateDirectory(dir);
+        File.WriteAllLines(Path.Combine(dir, "confronto-due-prese.csv"), lines);
+    }
 }

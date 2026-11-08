@@ -32,10 +32,10 @@ jobs:
 
       # PDF di prova (vista dall'alto, ciclogramma Gantt) degli esempi: release "anteprime-pdf", non pesa sulla quota artefatti
       - name: Pubblica le anteprime PDF
-        if: always() && hashFiles('anteprime/*.pdf') != ''
+        if: always() && hashFiles('anteprime/*') != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete anteprime-pdf --yes --cleanup-tag || true
-          gh release create anteprime-pdf anteprime/*.pdf --target "${{ github.sha }}" --prerelease \
+          gh release create anteprime-pdf anteprime/* --target "${{ github.sha }}" --prerelease \
             --title "Anteprime PDF (${{ github.ref_name }})" --notes "PDF di prova generati dai test sugli esempi, ramo ${{ github.ref_name }}, commit ${{ github.sha }}."
