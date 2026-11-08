@@ -60,7 +60,7 @@ public static class LayoutTopViewPdf
         {
             StartMm = z.Sections.Min(s => s.StartMm),
             EndMm = z.Sections.Max(s => s.EndMm),
-            Label = "Inverter " + Nm(z.Sections[0]) + (z.Sections.Count > 1 ? " (" + string.Join(" + ", z.Sections.Select(Nm)) + ")" : "")
+            Label = "Inverter " + Short(z.Sections[0]) + ": " + string.Join(" + ", z.Sections.Select(Nm))
         }).ToList();
     }
 
@@ -75,6 +75,8 @@ public static class LayoutTopViewPdf
     }
 
     private static string Nm(ComponentBase c) => string.IsNullOrWhiteSpace(c.Name) ? c.Id : c.Name;
+    /// <summary>Sigla breve per il disegno (Id), il nome completo va nelle tabelle.</summary>
+    private static string Short(ComponentBase c) => string.IsNullOrWhiteSpace(c.Id) ? c.Name : c.Id;
 
     private static string Purpose(PhotocellConfig pc)
     {
@@ -134,7 +136,8 @@ public static class LayoutTopViewPdf
             if (lx > PageW - 160) { lx = Margin + 64; ly -= 11; }
         }
         ly -= 12;
-        Text(c, Margin, ly, 6.5, "Simboli: linea verticale = fotocellula (rossa = arresto/rallentamento, blu = ingresso/riferimento, viola = uscita legatura, grigia = segnale); barra nera = fermo; rombo blu = encoder; arancio sopra/sotto = legatrice lato sinistro/destro; verde = trasferitore; righe oblique = motori commutabili");
+        Text(c, Margin, ly, 6.5, "Simboli: linea verticale = fotocellula (rossa = arresto/rallentamento, blu = ingresso/riferimento, viola = uscita legatura, grigia = segnale); barra nera = fermo; rombo blu = encoder.");
+        Text(c, Margin, ly - 9, 6.5, "Rettangoli arancio sopra/sotto la via = legatrici sul lato sinistro/destro (tratteggio = piano di legatura); verde = trasferitore; tratteggio verde = bilico; righe oblique = motori commutabili.");
 
         // ---------------- fascia via rulli: moduli colorati per inverter
         var strappingZoneColor = zones.FirstOrDefault(z => z.Sections.Any(s => StrappingAreaRules.StrappingModule(p)?.Id == s.Id))?.Color ?? (0.95, 0.62, 0.20);
@@ -188,7 +191,7 @@ public static class LayoutTopViewPdf
             Stroke(c, (0.20, 0.45, 0.25)); c.Append("0.8 w [3 2] 0 d\n");
             Rect(c, xa, BandY + 2, xb - xa, BandH - 4, false);
             c.Append("[] 0 d\n"); Gray(c, 0);
-            Text(c, xa + 2, BandY + 4, 6, "Bilico " + Nm(sc));
+            Text(c, xa + 2, BandY + 4, 6, Nm(sc));
         }
 
         // ---------------- legatrici
@@ -201,7 +204,7 @@ public static class LayoutTopViewPdf
             Stroke(c, (0.80, 0.45, 0.10)); c.Append("0.8 w\n"); Rect(c, xa, y0, Math.Max(3, xb - xa), 24, false);
             double xs = X(st.PositionMm);
             c.Append("[2 1.5] 0 d\n"); Line(c, xs, BandY, xs, BandY + BandH); c.Append("[] 0 d\n");
-            Gray(c, 0); Text(c, xa + 1, y0 + (left ? 26 : -8), 6.5, Nm(st) + (left ? " (sin.)" : " (des.)"));
+            Gray(c, 0); Text(c, xa + 1, y0 + (left ? 26 : -8), 6.5, Short(st) + (left ? " sin." : " des."));
         }
 
         // ---------------- encoder, fermi
@@ -217,7 +220,9 @@ public static class LayoutTopViewPdf
             if (name == "Inizio trasferitore") continue;
             double sx = X(pos);
             Gray(c, 0.1); Rect(c, sx - 1.8, BandY - 4, 3.6, BandH + 8, true);
-            Text(c, sx - 4, BandY - 13, 6, name.Replace("Fermo scomparente ", "FS "));
+            bool trfBelow = p.Transfer.LengthMm > 0 && p.Transfer.DestinationSide == LateralSide.Right && pos >= p.Transfer.PositionMm - 1 && pos <= p.Transfer.EndMm + 1;
+            string sl = name.Replace("Fermo scomparente ", "");
+            Text(c, Math.Min(sx - 4, PageW - Margin - sl.Length * 3.1), trfBelow ? BandY - 57 : BandY - 13, 6, sl);
         }
 
         // ---------------- fotocellule
@@ -232,30 +237,30 @@ public static class LayoutTopViewPdf
             Line(c, px, BandY - 3, px, BandY + BandH + 3);
             double ty = BandY + BandH + 34 + (i % 3) * 9;
             c.Append("0.4 w\n"); Line(c, px, BandY + BandH + 3, px, ty - 1);
-            Fill(c, col); Text(c, px - 4, ty + 1, 6.5, Nm(pc));
+            Fill(c, col); Text(c, px - 4, ty + 1, 6.5, Short(pc));
             i++;
         }
         Gray(c, 0);
 
         // ---------------- catene di quote
         double y = BandY - 70;
-        var chainPc = pcs.Select(x => (Nm(x), x.PositionMm)).ToList();
-        Chain(c, X, y, "Fotocellule tra loro", chainPc); y -= 34;
+        var chainPc = pcs.Select(x => (Short(x), x.PositionMm)).ToList();
+        Chain(c, X, y, "Fotocellule tra loro", chainPc); y -= 42;
 
-        var chainStop = pcs.Where(x => PhotocellRules.TargetMm(p, x) != null).Select(x => (Nm(x), x.PositionMm))
-            .Concat(stops).OrderBy(x => x.Item2).ToList();
-        Chain(c, X, y, "Fotocellule e fermi", chainStop); y -= 34;
+        var chainStop = pcs.Where(x => PhotocellRules.TargetMm(p, x) != null).Select(x => (Short(x), x.PositionMm))
+            .Concat(stops.Select(x => (x.Name.Replace("Fermo scomparente ", "").Replace("Inizio trasferitore", "Trasf."), x.PosMm))).OrderBy(x => x.Item2).ToList();
+        Chain(c, X, y, "Fotocellule e fermi", chainStop); y -= 42;
 
         var chainStr = new List<(string, double)>();
         var refPc = pcs.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingReference);
         var entry = pcs.FirstOrDefault(x => x.IsEntryPhotocell);
         var exit = pcs.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingExit);
-        if (entry != null) chainStr.Add((Nm(entry), entry.PositionMm));
-        if (refPc != null && refPc != entry) chainStr.Add((Nm(refPc), refPc.PositionMm));
+        if (entry != null) chainStr.Add((Short(entry), entry.PositionMm));
+        if (refPc != null && refPc != entry) chainStr.Add((Short(refPc), refPc.PositionMm));
         if (p.StrappingEncoder.IsEnabled) chainStr.Add(("Enc", p.StrappingEncoder.PositionMm));
-        chainStr.AddRange(strappers.Select(s => (Nm(s), s.PositionMm)));
-        if (exit != null) chainStr.Add((Nm(exit), exit.PositionMm));
-        Chain(c, X, y, "Area di legatura", chainStr.OrderBy(x => x.Item2).ToList()); y -= 34;
+        chainStr.AddRange(strappers.Select(s => (Short(s), s.PositionMm)));
+        if (exit != null) chainStr.Add((Short(exit), exit.PositionMm));
+        Chain(c, X, y, "Area di legatura", chainStr.OrderBy(x => x.Item2).ToList()); y -= 42;
 
         var chainZone = new List<(string, double)>();
         foreach (var z in zones) { chainZone.Add(("", z.StartMm)); }
@@ -306,7 +311,7 @@ public static class LayoutTopViewPdf
         var strapModule = StrappingAreaRules.StrappingModule(p);
         var strapZone = strapModule == null ? null : zones.FirstOrDefault(z => z.Sections.Contains(strapModule));
 
-        t.Table("Sezioni inverter", new[] { ("Inverter", 90.0), ("Moduli", 120.0), ("Da [mm]", 55.0), ("A [mm]", 55.0), ("Lunghezza [mm]", 65.0),
+        t.Table("Sezioni inverter", new[] { ("Inverter", 60.0), ("Moduli", 150.0), ("Da [mm]", 55.0), ("A [mm]", 55.0), ("Lunghezza [mm]", 65.0),
             ("V min/nom/max [m/s]", 85.0), ("Acc/Dec [m/s²]", 65.0), ("Note", 235.0) },
             zones.Select(z =>
             {
@@ -319,7 +324,7 @@ public static class LayoutTopViewPdf
                 if (!s0.AutoStopWhenEmpty) notes.Add("senza arresto automatico");
                 return new[]
                 {
-                    "Inverter " + Nm(s0), string.Join(" + ", z.Sections.Select(Nm)), Mm(z.StartMm), Mm(z.EndMm), Mm(z.EndMm - z.StartMm),
+                    "Inverter " + Short(s0), string.Join(" + ", z.Sections.Select(Nm)), Mm(z.StartMm), Mm(z.EndMm), Mm(z.EndMm - z.StartMm),
                     $"{N2(s0.LowSpeed)} / {N2(s0.HighSpeed)} / {N2(s0.MaxSpeed)}", $"{N2(s0.Acceleration)} / {N2(s0.Deceleration)}", string.Join("; ", notes)
                 };
             }));
@@ -327,8 +332,8 @@ public static class LayoutTopViewPdf
         var pcs = p.Photocells.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).ToList();
         var strappers = p.Strappers.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).ToList();
         var stops = Stops(p);
-        t.Table("Fotocellule", new[] { ("Fotocellula", 55.0), ("Posizione [mm]", 60.0), ("Funzione", 150.0), ("Dalla precedente [mm]", 80.0),
-            ("Punto di arresto", 110.0), ("Distanza [mm]", 55.0), ("Richiesta [mm]", 58.0), ("Fermo più vicino a valle", 110.0), ("Legatrice più vicina", 92.0) },
+        t.Table("Fotocellule", new[] { ("Sigla", 30.0), ("Nome", 110.0), ("Posizione [mm]", 52.0), ("Funzione", 120.0), ("Dalla precedente", 62.0),
+            ("Punto di arresto", 95.0), ("Distanza [mm]", 50.0), ("Richiesta [mm]", 53.0), ("Fermo più vicino a valle", 105.0), ("Legatrice più vicina", 93.0) },
             pcs.Select((pc, k) =>
             {
                 double? target = PhotocellRules.TargetMm(p, pc);
@@ -337,21 +342,21 @@ public static class LayoutTopViewPdf
                 var nearStr = strappers.OrderBy(s => Math.Abs(s.PositionMm - pc.PositionMm)).FirstOrDefault();
                 return new[]
                 {
-                    Nm(pc), Mm(pc.PositionMm), Purpose(pc), k == 0 ? "-" : Mm(pc.PositionMm - pcs[k - 1].PositionMm),
+                    Short(pc), Nm(pc), Mm(pc.PositionMm), Purpose(pc), k == 0 ? "-" : Mm(pc.PositionMm - pcs[k - 1].PositionMm),
                     targetName, target == null ? "-" : Mm(target.Value - pc.PositionMm),
                     target == null ? "-" : Mm(PhotocellRules.RequiredDistanceMm(p, pc)),
                     nextStop == null ? "-" : $"{nextStop.Value.Item1}: {Mm(nextStop.Value.Item2 - pc.PositionMm)}",
-                    nearStr == null ? "-" : $"{Nm(nearStr)}: {SignedMm(nearStr.PositionMm - pc.PositionMm)}"
+                    nearStr == null ? "-" : $"{Short(nearStr)}: {SignedMm(nearStr.PositionMm - pc.PositionMm)}"
                 };
             }));
 
         var refPc = pcs.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingReference);
         var exit = pcs.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingExit);
-        t.Table("Legatrici", new[] { ("Legatrice", 60.0), ("Piano di legatura [mm]", 85.0), ("Lato", 45.0), ("Ingombro [mm]", 60.0),
-            ("Dalla precedente [mm]", 85.0), ("Da fotocellula di riferimento [mm]", 130.0), ("Da inizio via di legatura [mm]", 115.0), ("A uscita legatura [mm]", 100.0), ("Al trasferitore [mm]", 90.0) },
+        t.Table("Legatrici", new[] { ("Sigla", 30.0), ("Nome", 90.0), ("Piano di legatura [mm]", 80.0), ("Lato", 40.0), ("Ingombro [mm]", 55.0),
+            ("Dalla precedente [mm]", 80.0), ("Da fotocellula di riferimento [mm]", 120.0), ("Da inizio via di legatura [mm]", 105.0), ("A uscita legatura [mm]", 90.0), ("Al trasferitore [mm]", 80.0) },
             strappers.Select((s, k) => new[]
             {
-                Nm(s), Mm(s.PositionMm), s.Side == LateralSide.Left ? "sinistro" : "destro", Mm(s.FootprintLengthMm),
+                Short(s), Nm(s), Mm(s.PositionMm), s.Side == LateralSide.Left ? "sinistro" : "destro", Mm(s.FootprintLengthMm),
                 k == 0 ? "-" : Mm(s.PositionMm - strappers[k - 1].PositionMm),
                 refPc == null ? "-" : Mm(s.PositionMm - refPc.PositionMm),
                 strapModule == null ? "-" : Mm(s.PositionMm - strapModule.StartMm),
@@ -381,7 +386,7 @@ public static class LayoutTopViewPdf
         var s = stops.FirstOrDefault(x => Math.Abs(x.PosMm - mm) < 1);
         if (s.Name != null) return s.Name;
         var z = zones.FirstOrDefault(x => Math.Abs(x.EndMm - mm) < 1);
-        return z != null ? "Fine " + z.Label.Split(" (")[0].ToLowerInvariant() : Mm(mm);
+        return z != null ? "Fine " + z.Label.Split(':')[0].ToLowerInvariant() : Mm(mm);
     }
 
     /// <summary>Tabelle impaginate su più pagine A4 orizzontali.</summary>

@@ -47,9 +47,9 @@ public class LayoutTopViewPdfTests
         PhotocellRules.BeforeSimulation(q);
         SimulationPreparation.Prepare(q);
         foreach (var pc in q.Photocells.Where(x => x.IsEnabled))
-            Assert.Contains("(" + (string.IsNullOrWhiteSpace(pc.Name) ? pc.Id : pc.Name), text);
+            Assert.Contains("(" + pc.Id + ")", text);
         foreach (var s in q.Strappers.Where(x => x.IsEnabled))
-            Assert.Contains(string.IsNullOrWhiteSpace(s.Name) ? s.Id : s.Name, text);
+            Assert.Contains("(" + s.Id + " ", text);
     }
 
     [Fact]
