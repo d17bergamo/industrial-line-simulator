@@ -32,7 +32,7 @@ jobs:
 
       # PDF di prova (vista dall'alto, ciclogramma Gantt) degli esempi: release "anteprime-pdf", non pesa sulla quota artefatti
       - name: Pubblica le anteprime PDF
-        if: success() && hashFiles('anteprime/*.pdf') != ''
+        if: always() && hashFiles('anteprime/*.pdf') != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

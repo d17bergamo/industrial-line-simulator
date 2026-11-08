@@ -42,9 +42,13 @@ public class LayoutTopViewPdfTests
         Assert.Contains("Sezioni inverter", text);
         Assert.Contains("Fotocellule tra loro", text);
         Assert.True(System.Text.RegularExpressions.Regex.Matches(text, "/Type /Page /Parent").Count >= 2);
-        foreach (var pc in p.Photocells.Where(x => x.IsEnabled))
+        // i nomi sono quelli della simulazione (stesse correzioni automatiche dell'avvio)
+        var q = ProjectSerializer.Clone(p);
+        PhotocellRules.BeforeSimulation(q);
+        SimulationPreparation.Prepare(q);
+        foreach (var pc in q.Photocells.Where(x => x.IsEnabled))
             Assert.Contains("(" + (string.IsNullOrWhiteSpace(pc.Name) ? pc.Id : pc.Name), text);
-        foreach (var s in p.Strappers.Where(x => x.IsEnabled))
+        foreach (var s in q.Strappers.Where(x => x.IsEnabled))
             Assert.Contains(string.IsNullOrWhiteSpace(s.Name) ? s.Id : s.Name, text);
     }
 
