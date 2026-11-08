@@ -231,7 +231,7 @@ public static class ControlLogicGenerator
         if (dbl && stops.Count == 0 && topo.StopperZone != null)
             rules.Add(new ControlRule($"{p.Transfer.Id}.SECONDO_PACCO", gt, $"DEV({p.Stopper.Id},Aligned) | DEV({p.Stopper.Id},Aligning)",
                 $"POSIZIONA il secondo pacco con la testa {F(p.Transfer.DoubleBankingGapMm, "0")} mm dietro la coda del primo (encoder)", topo.StopperZone.Id,
-                "Double banking senza fermo scomparente: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.MaxOverhangMm, "0") + " mm."));
+                "Double banking senza fermo scomparente: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.EffectiveMaxOverhangMm, "0") + " mm."));
         foreach (var s in stops)
         {
             if (tail)
@@ -261,7 +261,25 @@ public static class ControlLogicGenerator
             $"{(dbl ? "Double" : "Single")} banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
         signals.Add(new ControlSignal($"{p.Transfer.Id}_GRUPPO_COMPLETO", $"Pacchi allineati = {batch}, oppure il pacco successivo non può entrare, oppure attesa scaduta."));
         var scales = p.Scales.Where(s => s.IsEnabled).OrderBy(s => s.StartMm).ToList();
-        if (scales.Count > 0)
+        if (scales.Count > 0 && p.Transfer.ScaleAtMidStroke && p.Transfer.Kind == TransferKind.Lifting)
+        {
+            // Trasferitore a due prese: via rulli → bilico (metà corsa) → trasferitore d'accumulo, nello stesso ciclo
+            string weighing = string.Join(" | ", scales.Select(b => $"(DEV({b.Id},Busy) & !DEV({b.Id},Completed))"));
+            bool acc = p.AccumulationTransfer.IsEnabled;
+            rules.Add(new ControlRule($"{p.Transfer.Id}.CICLO_DUE_PRESE", gt,
+                $"TRANSFER_HOME & !({weighing})" + (acc ? $" & !RUN({p.AccumulationTransfer.Id})" : "") + $" & (SIG({p.Transfer.Id}_GRUPPO_COMPLETO) | SIG({p.Transfer.Id}_PESATO_DA_SCARICARE))",
+                $"SOLLEVA, AVANZA di mezza corsa ({F(p.Transfer.TranslationStrokeMm / 2, "0")} mm, {F(p.Transfer.EffectiveTranslationTimeS / 2)} s), ABBASSA e deposita, poi TORNA", p.Transfer.Id,
+                $"Il pacco della via rulli va sul bilico a metà corsa; il pacco già pesato va dal bilico {(acc ? "al trasferitore d'accumulo" : "alla stazione successiva")}. Al primo ciclo solo la via rulli; senza pacchi in arrivo (o dopo {F(p.Transfer.BatchWaitTimeoutS)} s) il pacco pesato parte da solo."));
+            signals.Add(new ControlSignal($"{p.Transfer.Id}_PESATO_DA_SCARICARE", "Sul bilico c'è un pacco con la pesatura completata e non arrivano pacchi sulla via rulli (o è scaduta l'attesa)."));
+            foreach (var b in scales)
+                rules.Add(new ControlRule($"{b.Id}.PESATURA", "Bilici", $"DEV({b.Id},PositionCheck)", $"PESATURA: stabilizzazione {F(b.StabilizationTimeS)} s + acquisizione {F(b.AcquisitionTimeS)} s", b.Id,
+                    "Il pacco resta sul bilico finché il trasferitore non lo porta via con il ciclo successivo."));
+            if (acc)
+                rules.Add(new ControlRule($"{p.AccumulationTransfer.Id}.PASSO", gt, $"DEV({p.Transfer.Id},Depositing) fronte di discesa con pacco dal bilico",
+                    $"AVANZA di larghezza pacco + {F(p.AccumulationTransfer.StepGapMm, "0")} mm a {F(p.AccumulationTransfer.StepSpeed)} m/s", p.AccumulationTransfer.Id,
+                    $"Libera il punto di deposito; i pacchi che arrivano in fondo ({F(p.AccumulationTransfer.WidthMm, "0")} mm) vengono scaricati."));
+        }
+        else if (scales.Count > 0)
         {
             rules.Add(new ControlRule($"{p.Transfer.Id}.ABBASSA", gt, $"DEV({p.Transfer.Id},Translating) & " + string.Join(" & ", scales.Select(b => $"!DEV({b.Id})")),
                 "ABBASSA e deposita sui bilici", p.Transfer.Id, "Interblocco: il trasferitore deposita solo su bilici liberi."));

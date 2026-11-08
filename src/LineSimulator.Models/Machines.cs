@@ -265,11 +265,26 @@ public sealed class TransferConfig : ComponentBase
 
     /// <summary>Double banking senza fermo scomparente: distanza tra coda del primo pacco e testa del secondo, fermato per posizionamento (encoder).</summary>
     [UiProperty("Distanza tra i pacchi in double banking (senza fermo)", "mm", "Funzionamento", Order = 24)]
-    public double DoubleBankingGapMm { get; set; } = 200;
+    public double DoubleBankingGapMm { get; set; } = DefaultDoubleBankingGapMm;
 
-    /// <summary>Sbalzo massimo ammesso del pacco a monte oltre l'inizio del trasferitore (catene).</summary>
-    [UiProperty("Sbalzo ammesso del pacco oltre il trasferitore", "mm", "Funzionamento", Order = 25)]
+    /// <summary>Sbalzo massimo ammesso del pacco a monte oltre l'inizio del trasferitore: mai oltre 2 m.</summary>
+    [UiProperty("Sbalzo ammesso del pacco oltre il trasferitore (max 2000)", "mm", "Funzionamento", Order = 25)]
     public double MaxOverhangMm { get; set; } = 500;
+
+    /// <summary>Valori del double banking senza fermo scomparente (decisi con l'utente il 2026-11-08).</summary>
+    public const double DefaultDoubleBankingGapMm = 500, OverhangLimitMm = 2000;
+
+    /// <summary>Sbalzo usato dal motore e dai controlli: quello impostato, mai oltre 2 m.</summary>
+    [JsonIgnore]
+    public double EffectiveMaxOverhangMm => Math.Clamp(MaxOverhangMm, 0, OverhangLimitMm);
+
+    /// <summary>
+    /// Bilico a metà corsa (trasferitore sollevabile a due prese): a ogni ciclo il trasferitore avanza di mezza corsa e porta
+    /// insieme il pacco nuovo dalla via rulli al bilico e quello già pesato dal bilico al trasferitore d'accumulo.
+    /// Al primo ciclo c'è solo il pacco della via rulli.
+    /// </summary>
+    [UiProperty("Bilico a metà corsa (due prese: via rulli → bilico → accumulo)", "", "Funzionamento", Order = 26)]
+    public bool ScaleAtMidStroke { get; set; }
 
     [UiProperty("Attesa massima per completare il gruppo", "s", "Funzionamento", Order = 22)]
     public double BatchWaitTimeoutS { get; set; } = 60;
@@ -316,4 +331,26 @@ public sealed class StrapperGroup : ComponentBase
 
     [UiProperty("Tempo di ripristino dopo guasto", "s", "Diagnostica", Order = 41)]
     public double FaultResetTimeS { get; set; } = 30;
+}
+
+/// <summary>
+/// Trasferitore d'accumulo in uscita dal trasferitore sollevabile: riceve i pacchi pesati e, a ogni deposito, avanza di un
+/// passo pari alla larghezza del pacco + <see cref="StepGapMm"/>, liberando il punto di deposito. I pacchi che arrivano in
+/// fondo (larghezza utile <see cref="WidthMm"/>) vengono scaricati.
+/// </summary>
+public sealed class AccumulationTransferConfig : ComponentBase
+{
+    public AccumulationTransferConfig() { Id = "TRA"; Name = "Trasferitore d'accumulo"; }
+
+    [UiProperty("Presente", "", "Funzionamento", Order = 1)]
+    public bool IsEnabled { get; set; }
+
+    [UiProperty("Larghezza utile (verso di accumulo)", "mm", "Geometria", Order = 10)]
+    public double WidthMm { get; set; } = 5000;
+
+    [UiProperty("Distanza tra i pacchi (passo = larghezza pacco + distanza)", "mm", "Geometria", Order = 11)]
+    public double StepGapMm { get; set; } = 50;
+
+    [UiProperty("Velocità di avanzamento", "m/s", "Tempi", Order = 20)]
+    public double StepSpeed { get; set; } = 0.2;
 }

@@ -289,7 +289,17 @@ public sealed class TransferRuntime
     public double BusyTimeS { get; internal set; }
     public int Cycles { get; internal set; }
 
-    public double PhaseDuration(TransferState s) => s switch
+    /// <summary>Pacchi presi dal bilico nel ciclo in corso (trasferitore a due prese).</summary>
+    public List<PackageRuntime> FromScale { get; } = new();
+
+    /// <summary>Trasferitore a due prese (bilico a metà corsa): ogni traslazione è di mezza corsa.</summary>
+    public bool TwoPick { get; internal set; }
+
+    public double PhaseDuration(TransferState s) => TwoPick && s is TransferState.Translating or TransferState.Returning
+        ? Config.EffectiveTranslationTimeS / 2
+        : PhaseDurationFull(s);
+
+    private double PhaseDurationFull(TransferState s) => s switch
     {
         TransferState.Lifting => Config.LiftTimeS,
         TransferState.Translating => Config.EffectiveTranslationTimeS,
@@ -298,4 +308,26 @@ public sealed class TransferRuntime
         TransferState.Returning => Config.EffectiveTranslationTimeS,
         _ => 0
     };
+}
+
+/// <summary>Pacco sul trasferitore d'accumulo: scostamento del centro dal punto di deposito (m).</summary>
+public sealed class AccumulationItem
+{
+    public required PackageRuntime Package { get; init; }
+    public double OffsetM { get; internal set; }
+    public double WidthM { get; init; }
+}
+
+/// <summary>Trasferitore d'accumulo: a ogni deposito avanza di larghezza pacco + distanza, i pacchi in fondo vengono scaricati.</summary>
+public sealed class AccumulationRuntime
+{
+    public AccumulationRuntime(AccumulationTransferConfig config) { Config = config; }
+    public AccumulationTransferConfig Config { get; }
+    public List<AccumulationItem> Items { get; } = new();
+    public bool Stepping => StepRemainingM > 1e-9;
+    public double StepRemainingM { get; internal set; }
+    public int Received { get; internal set; }
+    public int Unloaded { get; internal set; }
+    public double BusyTimeS { get; internal set; }
+    public double WidthM => Config.WidthMm / 1000.0;
 }

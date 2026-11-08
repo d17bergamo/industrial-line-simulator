@@ -132,8 +132,10 @@ public static class SampleProjects
         {
             Id = "TRF", Name = "Trasferitore sollevabile", Kind = TransferKind.Lifting, PositionMm = trfStart, LengthMm = trfLen,
             LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
-            BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60
+            BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60,
+            ScaleAtMidStroke = true          // due prese: via rulli → bilico (metà corsa) → trasferitore d'accumulo
         };
+        p.AccumulationTransfer = new AccumulationTransferConfig { IsEnabled = true, WidthMm = 5000, StepGapMm = 50, StepSpeed = 0.2 };
         // Bilici: lunghezza automatica (trasferitore / numero di bilici), vedi StrappingAreaRules.LayoutScales
         if (maxLengthM <= 12)    // modelli 6/9/12 m: un solo bilico lungo come il trasferitore
             p.Scales.Add(new WeighingScaleConfig { Id = "B1", Name = "Bilico 1", Placement = DevicePlacement.Center, StartMm = trfStart, LengthMm = trfLen });

@@ -785,7 +785,7 @@ public sealed partial class SimulationEngine
         {
             // Senza fermo: serve il primo pacco già destinato allo stopper; il secondo può sbalzare un poco oltre il trasferitore
             if ((Stopper.Package ?? _finalAssigned) == null) return false;
-            return tail >= Math.Max(zi.StartM, Transfer.StartM - Math.Max(0, Project.Transfer.MaxOverhangMm) / 1000.0) - 1e-6;
+            return tail >= Math.Max(zi.StartM, Transfer.StartM - Project.Transfer.EffectiveMaxOverhangMm / 1000.0) - 1e-6;
         }
         if (tail < Math.Max(zi.StartM, Transfer.StartM) - 1e-6) return false;
         if (reach > Stopper.PositionM + 1e-6) return false;
@@ -990,7 +990,13 @@ public sealed partial class SimulationEngine
     // ================================================================== Bilici di pesatura
 
     /// <summary>Pianifica i bilici di destinazione: false se un bilico necessario è ancora occupato (interblocco).</summary>
-    private bool TryPlanScales(List<PackageRuntime> pkgs)
+    private bool TryPlanScales(List<PackageRuntime> pkgs) => TryPlanScales(pkgs, Array.Empty<PackageRuntime>());
+
+    /// <summary>
+    /// Bilici di destinazione dei pacchi. <paramref name="leaving"/>: pacchi pesati che lasciano il bilico nello stesso ciclo
+    /// (trasferitore a due prese): i loro bilici contano come liberi.
+    /// </summary>
+    private bool TryPlanScales(List<PackageRuntime> pkgs, IReadOnlyCollection<PackageRuntime> leaving)
     {
         _scalePlan.Clear();
         var used = new HashSet<ScaleRuntime>();
@@ -1014,7 +1020,7 @@ public sealed partial class SimulationEngine
             foreach (var s in cover) used.Add(s);
             _scalePlan[p] = cover;
         }
-        if (used.Any(s => s.Busy)) { _scalePlan.Clear(); return false; }
+        if (used.Any(s => s.Busy && !(s.Package != null && leaving.Contains(s.Package)))) { _scalePlan.Clear(); return false; }
         return true;
     }
 
@@ -1163,6 +1169,7 @@ public sealed partial class SimulationEngine
                     }
                     break;
                 case ScaleState.Completed:
+                    if (Transfer.TwoPick) break;                // a due prese il pacco pesato lo porta via il trasferitore
                     if (!hold && Consent(cfg))
                     {
                         lead.State = ScaleState.Releasing;

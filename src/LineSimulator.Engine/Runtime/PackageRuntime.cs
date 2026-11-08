@@ -25,7 +25,9 @@ public enum PackageState
     /// <summary>Rigettato: fuori linea.</summary>
     Rejected,
     /// <summary>Sul bilico di pesatura.</summary>
-    OnScale
+    OnScale,
+    /// <summary>Sul trasferitore d'accumulo (solo nelle istantanee: per il motore il pacco è già uscito).</summary>
+    OnAccumulation
 }
 
 public enum StrapStatus
@@ -117,7 +119,7 @@ public sealed class PackageRuntime
     internal bool TransferInterference;
 
     public bool OnRollers => State is not (PackageState.OnTransfer or PackageState.Exited or PackageState.Rejecting
-        or PackageState.Rejected or PackageState.OnScale);
+        or PackageState.Rejected or PackageState.OnScale or PackageState.OnAccumulation);
     public bool IsStopped => Math.Abs(Velocity) < 1e-4;
     public double? LeadTimeS => ExitTimeS.HasValue ? ExitTimeS.Value - EntryTimeS : null;
 

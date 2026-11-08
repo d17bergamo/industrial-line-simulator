@@ -709,6 +709,7 @@ public sealed partial class MainViewModel : ObservableObject
         root.Children.Add(Group("Fermi scomparenti", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel("Stopper", p.Stopper, "Stopper"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore", p.Transfer, "Transfer"));
+        root.Children.Add(new TreeNodeViewModel("Trasferitore d'accumulo", p.AccumulationTransfer, "AccumulationTransfer"));
         root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm), p.ScaleDefaults));
         root.Children.Add(Group("Tipologie pacco", "PackageType", p.PackageTypes));
         root.Children.Add(new TreeNodeViewModel("Ingresso pacchi", p.Infeed, "Infeed"));

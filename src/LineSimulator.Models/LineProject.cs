@@ -93,6 +93,8 @@ public sealed class LineProject
     public StrappingStationConfig StrappingStation { get; set; } = new();
     public StopperConfig Stopper { get; set; } = new() { Id = "STP", Name = "Stopper" };
     public TransferConfig Transfer { get; set; } = new() { Id = "TRF", Name = "Trasferitore" };
+    /// <summary>Trasferitore d'accumulo in uscita dal trasferitore sollevabile (con il bilico a metà corsa).</summary>
+    public AccumulationTransferConfig AccumulationTransfer { get; set; } = new();
     public BundleClampConfig BundleClamp { get; set; } = new();
     public SideCompactorConfig Compactor { get; set; } = new();
     public RejectorConfig Rejector { get; set; } = new();

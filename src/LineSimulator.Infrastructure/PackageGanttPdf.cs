@@ -33,6 +33,8 @@ public static class PackageGanttPdf
     {
         PackageState.Strapping => (0.93, 0.55, 0.13),
         PackageState.OnTransfer => (0.30, 0.68, 0.35),
+        PackageState.OnScale => (0.15, 0.55, 0.50),
+        PackageState.OnAccumulation => (0.60, 0.80, 0.55),
         PackageState.Aligning or PackageState.Aligned when !s.Moving => (0.62, 0.45, 0.80),
         PackageState.Positioning when s.Moving => (0.45, 0.66, 0.95),
         _ when s.Moving => (0.18, 0.42, 0.78),
@@ -42,7 +44,8 @@ public static class PackageGanttPdf
     private static readonly (string Label, (double, double, double) Rgb)[] Legend =
     {
         ("Trasporto", (0.18, 0.42, 0.78)), ("Posizionamento", (0.45, 0.66, 0.95)), ("Legatura", (0.93, 0.55, 0.13)),
-        ("Intestatura / attesa trasferitore", (0.62, 0.45, 0.80)), ("Sul trasferitore", (0.30, 0.68, 0.35)), ("Fermo / attesa", (0.74, 0.74, 0.74))
+        ("Intestatura / attesa trasferitore", (0.62, 0.45, 0.80)), ("Sul trasferitore", (0.30, 0.68, 0.35)),
+        ("Bilico", (0.15, 0.55, 0.50)), ("Accumulo", (0.60, 0.80, 0.55)), ("Fermo / attesa", (0.74, 0.74, 0.74))
     };
 
     // ------------------------------------------------------------------ Pagine del Gantt

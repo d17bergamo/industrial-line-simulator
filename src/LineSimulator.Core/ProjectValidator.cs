@@ -475,6 +475,16 @@ public static class ProjectValidator
         var tr = p.Transfer;
         if (tr.DoubleBankingGapMm < 0) r.Error("TRF_GAP", "Distanza tra i pacchi in double banking negativa.", tr.Id);
         if (tr.MaxOverhangMm < 0) r.Error("TRF_OVERHANG", "Sbalzo ammesso negativo.", tr.Id);
+        if (tr.ScaleAtMidStroke && (tr.Kind != TransferKind.Lifting || !p.Scales.Any(s => s.IsEnabled)))
+            r.Warn("TRF_TWO_PICK", "Bilico a metà corsa: serve un trasferitore sollevabile con almeno un bilico, altrimenti il trasferitore fa la corsa intera.", tr.Id);
+        var acc = p.AccumulationTransfer;
+        if (acc.IsEnabled && !tr.ScaleAtMidStroke)
+            r.Info("ACC_UNUSED", "Il trasferitore d'accumulo riceve i pacchi solo con il bilico a metà corsa (trasferitore a due prese).", acc.Id);
+        if (acc.IsEnabled && p.PackageTypes.Count > 0 && acc.WidthMm < p.PackageTypes.Max(t => t.GraphicWidthMm) + acc.StepGapMm)
+            r.Error("ACC_WIDTH", $"Trasferitore d'accumulo largo {F(acc.WidthMm)} mm: non ci sta nemmeno un pacco ({F(p.PackageTypes.Max(t => t.GraphicWidthMm))} mm + {F(acc.StepGapMm)} mm).", acc.Id);
+        if (acc.IsEnabled && acc.StepSpeed <= 0) r.Error("ACC_SPEED", "Velocità di avanzamento del trasferitore d'accumulo non valida.", acc.Id);
+        if (tr.MaxOverhangMm > TransferConfig.OverhangLimitMm + 1e-6)
+            r.Warn("TRF_OVERHANG_MAX", $"Sbalzo ammesso oltre il trasferitore {F(tr.MaxOverhangMm)} mm: non si va oltre {F(TransferConfig.OverhangLimitMm)} mm (la simulazione usa {F(TransferConfig.OverhangLimitMm)} mm).", tr.Id);
         if (stops.Count == 0 && p.Simulation.Heading == StopReference.Tail)
             r.Warn("HEADING_TAIL", "Intestatura di coda scelta ma nessun fermo scomparente abilitato: si simula con intestatura di testa.", tr.Id);
         if (tr.BatchWaitTimeoutS < 0) r.Error("TRF_BATCH", "Attesa gruppo negativa.", tr.Id);

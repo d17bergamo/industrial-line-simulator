@@ -50,6 +50,8 @@ public static class GanttLabels
         PackageState.OnTransfer => "Sul trasferitore",
         PackageState.Accumulated => "Attesa (accumulo)",
         PackageState.Rejecting => "Espulsione",
+        PackageState.OnScale => "Sul bilico (pesatura)",
+        PackageState.OnAccumulation => "Sul trasferitore d'accumulo",
         _ => moving ? "Trasporto" : "Fermo"
     };
 }
@@ -78,7 +80,8 @@ public static class PackageGantt
                     rows[p.Id] = row;
                     order.Add(p.Id);
                 }
-                bool onRollers = p.State is not (PackageState.OnTransfer or PackageState.Exited or PackageState.Rejecting or PackageState.Rejected);
+                bool onRollers = p.State is not (PackageState.OnTransfer or PackageState.Exited or PackageState.Rejecting or PackageState.Rejected
+                                                 or PackageState.OnScale or PackageState.OnAccumulation);
                 bool moving = onRollers && Math.Abs(p.Velocity) > StillSpeed;
                 var cur = row.Segments.Count > 0 ? row.Segments[^1] : null;
                 if (cur == null || cur.Moving != moving || cur.State != p.State)

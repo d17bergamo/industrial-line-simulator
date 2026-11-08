@@ -115,6 +115,7 @@ public sealed partial class SimulationEngine : ILogicContext
         }
 
         InitDevices();
+        InitTwoPick();
 
         foreach (var id in project.Infeed.TypeSequence)
         {
@@ -232,6 +233,7 @@ public sealed partial class SimulationEngine : ILogicContext
         UpdateStopper(t1, dt);
         UpdateIntermediateStops(dt);
         UpdateTransfer(t1, dt);
+        UpdateAccumulation(t1, dt);
         UpdateScales(t1, dt);
         UpdateStatistics(dt);
         // motori commutati: stessa velocità della via di legatura anche dopo l'arresto a fine posizionamento
@@ -308,7 +310,7 @@ public sealed partial class SimulationEngine : ILogicContext
     {
         TimeS = Time,
         Packages = _active.Select(p => new PackageSnapshot(p.Id, p.Type.Id, p.HeadM, p.LengthM, p.Velocity, p.State,
-            p.LiftM, p.LateralM, p.StrapsDone, p.StrapsTotal, p.Type.GraphicWidthMm, p.Type.GraphicHeightMm)).ToArray(),
+            p.LiftM, p.LateralM, p.StrapsDone, p.StrapsTotal, p.Type.GraphicWidthMm, p.Type.GraphicHeightMm)).Concat(AccumulationSnapshots()).ToArray(),
         ZoneSpeeds = _zones.Select(z => z.ActualSpeed).ToArray(),
         ZoneStates = _zones.Select(z => z.CycleStateCode).ToArray(),
         PhotocellOutputs = _photocells.Select(p => p.Output).ToArray(),
@@ -1194,6 +1196,7 @@ public sealed partial class SimulationEngine : ILogicContext
 
     private void UpdateTransfer(double t, double dt)
     {
+        if (Transfer.TwoPick) { UpdateTwoPickTransfer(t, dt); return; }   // bilico a metà corsa (SimulationEngine.TwoPick.cs)
         var tr = Transfer;
         var cfg = tr.Config;
         if (tr.State == TransferState.Home)
@@ -1359,6 +1362,7 @@ public sealed partial class SimulationEngine : ILogicContext
         foreach (var s in _stops) Recorder.Track("STOP:" + s.Id, s.Config.Name.Length > 0 ? s.Config.Name : s.Id, TrackGroup.Stop);
         Recorder.Track("TRANSFER", Project.Transfer.Name.Length > 0 ? Project.Transfer.Name : "Trasferitore", TrackGroup.Transfer);
         foreach (var s in _scales) Recorder.Track("SCALE:" + s.Id, Label(s.Config), TrackGroup.Scale);
+        if (Accumulation != null) Recorder.Track("TRA_ACC", Project.AccumulationTransfer.Name.Length > 0 ? Project.AccumulationTransfer.Name : "Trasferitore d'accumulo", TrackGroup.Transfer);
         foreach (var z in Topology.Zones) Recorder.Track("ACC:" + z.Id, "Consenso ingresso " + z.Id, TrackGroup.Interlock);
     }
 
@@ -1418,6 +1422,8 @@ public sealed partial class SimulationEngine : ILogicContext
                 StopState.Aligned => CycleState.Aligned,
                 _ => CycleState.Idle
             }, (s.Package?.Id ?? "") + (s.Reference == StopReference.Tail ? " (coda)" : " (testa)"));
+        if (Accumulation != null)
+            Recorder.Set("TRA_ACC", t, Accumulation.Stepping ? CycleState.Translating : CycleState.Idle, Accumulation.Items.Count > 0 ? $"{Accumulation.Items.Count} pacchi" : "");
         Recorder.Set("TRANSFER", t, Transfer.State switch
         {
             TransferState.Lifting => CycleState.Lifting,
@@ -1477,7 +1483,7 @@ public sealed partial class SimulationEngine : ILogicContext
         bool devicesIdle = !_strappers.Any(s => s.Busy) && (Rejector == null || !Rejector.Busy) && !_scales.Any(s => s.Busy)
                            && (BundleClamp == null || BundleClamp.IsOpen) && (Compactor == null || Compactor.IsOpen);
         // Fine: tutti i pacchi usciti/rigettati E macchine tornate a riposo (ultimo ritorno del trasferitore incluso).
-        if (allIn && _active.Count == 0 && Transfer.State == TransferState.Home && devicesIdle)
+        if (allIn && _active.Count == 0 && Transfer.State == TransferState.Home && devicesIdle && (Accumulation == null || !Accumulation.Stepping))
         {
             string rej = RejectedPackages > 0 ? $", {RejectedPackages} rigettati" : "";
             Emit(SimEventType.Completed, EventSeverity.Info, $"Simulazione completata: {_packages.Count - RejectedPackages} pacchi usciti{rej}.");

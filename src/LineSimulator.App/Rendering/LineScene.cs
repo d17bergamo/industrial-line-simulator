@@ -240,6 +240,7 @@ public sealed class LineScene
         foreach (var st in p.Strappers) AddStrapper(st);
         AddStopper(p.Stopper);
         AddTransfer(p.Transfer);
+        if (p.Transfer.ScaleAtMidStroke && p.AccumulationTransfer.IsEnabled) AddAccumulation(p.AccumulationTransfer, p.Transfer);
         // Uno stringifascio per ogni legatrice/reggettatrice (se previsto) oppure quello unico; si chiudono insieme
         foreach (var (_, xMm) in LayoutRules.BundleClampPositions(p)) AddBundleClamp(p.BundleClamp, xMm);
         if (p.Compactor.IsEnabled) AddCompactor(p.Compactor);
@@ -626,7 +627,8 @@ public sealed class LineScene
     {
         double x0 = sc.StartMm / 1000.0, len = Math.Max(0.3, sc.LengthMm / 1000.0);
         double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
-        double y = sign * t.TranslationStrokeMm / 1000.0;
+        // con il trasferitore a due prese il bilico sta a metà corsa
+        double y = sign * t.TranslationStrokeMm / 1000.0 * (t.ScaleAtMidStroke ? 0.5 : 1.0);
         var color = Color.FromRgb(0x17, 0xA5, 0x89);
         var f = new MeshFactory();
         f.AddBox(new Point3D(x0 + len / 2, y, _zTop - 0.08), len - 0.05, _lineWidth * 0.9, 0.06);
@@ -635,6 +637,31 @@ public sealed class LineScene
         _group.Children.Add(m);
         Register(m, sc, b, color);
         _scaleVisuals.Add((b, sc));
+    }
+
+    /// <summary>
+    /// Trasferitore d'accumulo: catene trasversali che partono dal punto di deposito (fine corsa del trasferitore sollevabile)
+    /// e si allungano per la larghezza utile, lungo tutto il trasferitore.
+    /// </summary>
+    private void AddAccumulation(AccumulationTransferConfig a, TransferConfig t)
+    {
+        double x0 = t.PositionMm / 1000.0, len = Math.Max(0.5, t.LengthMm / 1000.0);
+        double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
+        double y0 = t.TranslationStrokeMm / 1000.0 - _lineWidth / 2, w = Math.Max(0.5, a.WidthMm / 1000.0);
+        var color = Color.FromRgb(0x5D, 0x6D, 0x7E);
+        var f = new MeshFactory();
+        int n = Math.Max(2, (int)Math.Round(len / 2.0) + 1);
+        for (int i = 0; i < n; i++)
+        {
+            double x = x0 + 0.15 + (len - 0.3) * i / (n - 1);
+            f.AddBox(new Point3D(x, sign * (y0 + w / 2), _zTop - 0.05), 0.08, w, 0.05);                 // catena trasversale
+            f.AddBox(new Point3D(x, sign * (y0 + w / 2), (_zTop - 0.1) / 2), 0.12, 0.12, _zTop - 0.1);   // gamba centrale
+        }
+        f.AddBox(new Point3D(x0 + len / 2, sign * y0, _zTop - 0.12), len, 0.08, 0.06);                  // longheroni
+        f.AddBox(new Point3D(x0 + len / 2, sign * (y0 + w), _zTop - 0.12), len, 0.08, 0.06);
+        var m = MeshFactory.Model(f.ToMesh(), color, out var b);
+        _group.Children.Add(m);
+        Register(m, a, b, color);
     }
 
     private (MeshGeometry3D Plain, MeshGeometry3D Strapped) PackageMeshes(PackageSnapshot ps)
