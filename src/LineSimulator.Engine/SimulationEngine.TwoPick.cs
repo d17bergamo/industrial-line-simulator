@@ -9,7 +9,7 @@ namespace LineSimulator.Engine;
 /// <list type="bullet">
 /// <item>a ogni ciclo il trasferitore solleva, avanza di mezza corsa, abbassa e deposita, poi torna indietro di mezza corsa;</item>
 /// <item>il pacco nuovo va dalla via rulli al bilico; quello già pesato va dal bilico al trasferitore d'accumulo, nello stesso ciclo;</item>
-/// <item>al primo ciclo c'è solo il pacco della via rulli; a fine produzione l'ultimo pacco pesato parte da solo;</item>
+/// <item>al primo ciclo c'è solo il pacco della via rulli; il pacco pesato parte da solo solo quando sulla via rulli non arrivano più pacchi;</item>
 /// <item>il trasferitore d'accumulo, a ogni deposito, avanza di larghezza pacco + 50 mm; i pacchi in fondo vengono scaricati.</item>
 /// </list>
 /// Per i risultati il pacco esce dalla linea quando arriva sul trasferitore d'accumulo.
@@ -54,8 +54,9 @@ public sealed partial class SimulationEngine
 
             var batch = ReadyBatch(t);
             if (batch != null && !TryPlanScales(batch, weighed)) batch = null;
-            bool aloneFromScale = batch == null && weighed.Count > 0
-                && (!_active.Any(p => p.OnRollers) || t - _scaleReadySince!.Value >= cfg.BatchWaitTimeoutS - 1e-9);
+            // Il pacco pesato parte da solo solo se sulla via rulli non c'è più nessun pacco (fine produzione):
+            // altrimenti aspetta il pacco successivo e partono insieme (mai con un pacco in arrivo nell'area del trasferitore)
+            bool aloneFromScale = batch == null && weighed.Count > 0 && !_active.Any(p => p.OnRollers);
             if (batch == null && !aloneFromScale) return;
 
             tr.Packages.Clear();

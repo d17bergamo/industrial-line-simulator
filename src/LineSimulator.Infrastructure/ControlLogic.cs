@@ -269,8 +269,8 @@ public static class ControlLogicGenerator
             rules.Add(new ControlRule($"{p.Transfer.Id}.CICLO_DUE_PRESE", gt,
                 $"TRANSFER_HOME & !({weighing})" + (acc ? $" & !RUN({p.AccumulationTransfer.Id})" : "") + $" & (SIG({p.Transfer.Id}_GRUPPO_COMPLETO) | SIG({p.Transfer.Id}_PESATO_DA_SCARICARE))",
                 $"SOLLEVA, AVANZA di mezza corsa ({F(p.Transfer.TranslationStrokeMm / 2, "0")} mm, {F(p.Transfer.EffectiveTranslationTimeS / 2)} s), ABBASSA e deposita, poi TORNA", p.Transfer.Id,
-                $"Il pacco della via rulli va sul bilico a metà corsa; il pacco già pesato va dal bilico {(acc ? "al trasferitore d'accumulo" : "alla stazione successiva")}. Al primo ciclo solo la via rulli; senza pacchi in arrivo (o dopo {F(p.Transfer.BatchWaitTimeoutS)} s) il pacco pesato parte da solo."));
-            signals.Add(new ControlSignal($"{p.Transfer.Id}_PESATO_DA_SCARICARE", "Sul bilico c'è un pacco con la pesatura completata e non arrivano pacchi sulla via rulli (o è scaduta l'attesa)."));
+                $"Il pacco della via rulli va sul bilico a metà corsa; il pacco già pesato va dal bilico {(acc ? "al trasferitore d'accumulo" : "alla stazione successiva")}. Al primo ciclo solo la via rulli; il pacco pesato parte da solo solo se sulla via rulli non ci sono più pacchi."));
+            signals.Add(new ControlSignal($"{p.Transfer.Id}_PESATO_DA_SCARICARE", "Sul bilico c'è un pacco con la pesatura completata e sulla via rulli non ci sono più pacchi."));
             foreach (var b in scales)
                 rules.Add(new ControlRule($"{b.Id}.PESATURA", "Bilici", $"DEV({b.Id},PositionCheck)", $"PESATURA: stabilizzazione {F(b.StabilizationTimeS)} s + acquisizione {F(b.AcquisitionTimeS)} s", b.Id,
                     "Il pacco resta sul bilico finché il trasferitore non lo porta via con il ciclo successivo."));
