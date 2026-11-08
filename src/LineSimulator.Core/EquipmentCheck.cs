@@ -84,7 +84,7 @@ public static class EquipmentCheck
         if (StrapperTrack.MinStrapperPositionMm(p) is var minPos && p.Strappers.Any(x => x.PositionMm < minPos - 1e-6))
         {
             if (fix) StrapperTrack.ClampStrappersToTrackStart(p);
-            r.Add(new("STRAPPER_START", $"Una legatrice era a meno di 1 m dall'inizio della via rulli: {(fix ? "portata" : "da portare")} ad almeno {minPos:0} mm.", fix, true));
+            r.Add(new("STRAPPER_START", $"Una legatrice era troppo vicina all'inizio della via rulli (servono almeno 1 m dall'inizio e lo spazio per encoder e fotocellula di riferimento): {(fix ? "portata" : "da portare")} a {minPos:0} mm.", fix, true));
         }
         if (LayoutRules.StrappersTooCloseToTransfer(p).Any())
         {

@@ -62,8 +62,14 @@ public class RuleReviewTests
     [Fact]
     public void BundleClamps_OnlyTheOnesWithThePackageUnderneathClose()
     {
+        // tre legatrici a 4 m di passo e solo pacchi da 6 m: gli stringifascio coprono 8 m, il pacco al massimo due
         var p = SampleProjects.All.Single(m => m.Name.StartsWith("3 legatrici")).Factory();
         Assert.True(p.BundleClamp.PerMachine);
+        var st = p.Strappers.OrderBy(s => s.PositionMm).ToList();
+        for (int i = 1; i < st.Count; i++) st[i].PositionMm = st[0].PositionMm + 4000 * i;
+        var six = p.PackageTypes.OrderBy(t => t.LengthMm).First();
+        p.Infeed.TypeSequence = Enumerable.Repeat(six.Id, 3).ToList();
+        p.Infeed.PackageCount = 3;
         var e = new SimulationEngine(p);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, e.FinishReason);

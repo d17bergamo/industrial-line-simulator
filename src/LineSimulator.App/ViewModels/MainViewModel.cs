@@ -1198,7 +1198,7 @@ public sealed partial class MainViewModel : ObservableObject
             case PhotocellConfig pc: pc.PositionMm += dxMm; break;
             case StrapperConfig st:
             {
-                st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), st.PositionMm + dxMm);   // almeno 1 m dall'inizio della via
+                st.PositionMm = Math.Max(StrapperTrack.MinStrapperPositionMm(_project), st.PositionMm + dxMm);   // almeno 1 m dall'inizio della via e spazio per l'encoder
                 st.Side = yM >= 0 ? LateralSide.Left : LateralSide.Right;
                 StrappingAreaRules.SpreadStrappers(_project, st);   // stesso lato: almeno 2 m, le altre macchine vengono spinte
                 StrapperTrack.EnsureMinimumTrack(_project);         // l'ultima legatrice spinta a valle porta con sé la fine della via di legatura
