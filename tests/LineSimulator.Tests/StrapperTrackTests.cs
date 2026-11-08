@@ -241,7 +241,9 @@ public class StrapperTrackTests
         var first = p.Strappers.OrderBy(x => x.PositionMm).First();
         first.PositionMm = p.StrappingEncoder.PositionMm + 400;
         Assert.True(StrapperTrack.KeepEncoderBehindFirstStrapper(p));
-        Assert.Equal(1000, first.PositionMm - p.StrappingEncoder.PositionMm, 6);
+        // regola unica: primo rullo a monte dell'ingombro (metà ingombro + passo), comunque almeno 1 m prima
+        Assert.True(first.PositionMm - p.StrappingEncoder.PositionMm >= 1000 - 1e-6);
+        Assert.Equal(EncoderRule.TargetMm(p)!.Value, p.StrappingEncoder.PositionMm, 6);
         var rif = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingReference);
         Assert.Equal(p.StrappingEncoder.PositionMm - 300, rif.PositionMm, 6);
     }

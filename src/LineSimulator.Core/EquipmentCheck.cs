@@ -101,20 +101,18 @@ public static class EquipmentCheck
             if (fix) LayoutRules.AlignStrappingExit(p);
             r.Add(new("EXIT_PC", $"La fotocellula di uscita legatura deve stare mezzo passo dopo l'ultimo rullo della via di legatura: {(fix ? "spostata" : "da spostare")}.", fix, true));
         }
-        if (p.StrappingEncoder.IsEnabled && p.Strappers.Any(x => x.IsEnabled) && p.Strappers.Where(x => x.IsEnabled).Min(x => x.PositionMm) - p.StrappingEncoder.PositionMm < StrapperTrack.MinEncoderToStrapperMm - 1e-6)
-        {
-            if (fix) StrapperTrack.KeepEncoderBehindFirstStrapper(p);
-            r.Add(new("ENCODER_DIST", $"Encoder e fotocellula di legatura devono stare ad almeno 1 m prima della prima legatrice: {(fix ? "spostati" : "da spostare")}.", fix, true));
-        }
         if (LayoutRules.StopsOutOfPlace(p).Any())
         {
             if (fix) LayoutRules.SnapIntermediateStops(p);
             r.Add(new("STOP_POS", $"Il fermo scomparente senza spunta \"Spostamento manuale\" deve stare al centro o all'estremità del trasferitore, come scelto: {(fix ? "spostato" : "da spostare")}.", fix, true));
         }
-        if (StrappingAreaRules.ReferencePhotocellsBeforeEntry(p).Any())
+        // Regola unica dell'encoder: primo rullo a monte della prima legatrice, almeno 1 m prima di essa; riferimento 300 mm prima, mai a monte di FC0 + 100 mm
+        var encProblems = EncoderRule.Problems(p);
+        if (encProblems.Count > 0)
         {
-            if (fix) StrappingAreaRules.KeepReferenceAfterEntry(p);
-            r.Add(new("REF_PC_ENTRY", $"La fotocellula di riferimento prima della prima legatrice non può stare a monte di FC0: deve stare almeno 100 mm dopo FC0, con l'encoder 300 mm dopo di lei: {(fix ? "spostate" : "da spostare")}.", fix, true));
+            if (fix) EncoderRule.Apply(p);
+            bool tooClose = EncoderRule.StrapperTooCloseToStart(p);
+            r.Add(new("ENCODER_RULE", $"Encoder e fotocellula di riferimento: {string.Join("; ", encProblems)}{(fix && !tooClose ? " (spostati)" : "")}.", fix && !tooClose, true));
         }
         if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
         {

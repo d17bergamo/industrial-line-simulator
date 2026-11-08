@@ -290,23 +290,7 @@ public static class StrappingAreaRules
     /// Regola 1: la fotocellula di riferimento non va mai più a monte di FC0: se è prima di FC0 + 100 mm viene riportata lì e
     /// l'encoder resta 300 mm dopo di essa. Restituisce le correzioni.
     /// </summary>
-    public static List<string> KeepReferenceAfterEntry(LineProject p)
-    {
-        var done = new List<string>();
-        double min = MinReferencePhotocellMm(p);
-        foreach (var pc in ReferencePhotocellsBeforeEntry(p).ToList())
-        {
-            done.Add($"{pc.Id}: {pc.PositionMm:0} → {min:0} mm (la fotocellula di riferimento non può stare a monte di FC0)");
-            pc.PositionMm = min;
-            double enc = min + ProjectNormalizer.ReferencePhotocellOffsetMm;
-            if (p.StrappingEncoder.IsEnabled && p.StrappingEncoder.PositionMm < enc - 0.5)
-            {
-                done.Add($"{p.StrappingEncoder.Id}: encoder {p.StrappingEncoder.PositionMm:0} → {enc:0} mm (300 mm dopo la fotocellula di riferimento)");
-                p.StrappingEncoder.PositionMm = enc;
-            }
-        }
-        return done;
-    }
+    public static List<string> KeepReferenceAfterEntry(LineProject p) => EncoderRule.Apply(p);   // regola unica dell'encoder
 
     /// <summary>Distanza tra la fine della via di legatura (fotocellula di uscita legatura) e l'inizio del trasferitore.</summary>
     public static double ExitToTransferMm(LineProject p)

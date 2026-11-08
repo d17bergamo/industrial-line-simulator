@@ -20,6 +20,13 @@ public sealed partial class SimulationEngine
     private double? _batchWaitSince;
 
     public ClampRuntime? BundleClamp { get; private set; }
+    /// <summary>
+    /// Stringifascio comandati nell'ultima chiusura, uno per posizione (<see cref="LayoutRules.BundleClampPositions"/>):
+    /// si chiude solo lo stringifascio che ha il pacco sotto, gli altri restano aperti.
+    /// </summary>
+    public IReadOnlyList<bool> BundleClampActive => _clampActive;
+    private bool[] _clampActive = Array.Empty<bool>();
+    private readonly Dictionary<string, int> _clampOfStrapper = new();
     public ClampRuntime? Compactor { get; private set; }
     public RejectorRuntime? Rejector { get; private set; }
     public IReadOnlyList<StopRuntime> IntermediateStops => _stops;
@@ -41,7 +48,15 @@ public sealed partial class SimulationEngine
     {
         var p = Project;
         if (Station != null && p.BundleClamp.IsEnabled)
+        {
             BundleClamp = new ClampRuntime(p.BundleClamp, p.BundleClamp.CloseTimeS, p.BundleClamp.OpenTimeS, p.BundleClamp.HoldTimeS);
+            _clampActive = new bool[LayoutRules.BundleClampPositions(p).Count];
+            if (p.BundleClamp.PerMachine)
+            {
+                var machines = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).ToList();
+                for (int i = 0; i < machines.Count; i++) _clampOfStrapper[machines[i].Id] = i;
+            }
+        }
         if (Station != null && p.Compactor.IsEnabled)
             Compactor = new ClampRuntime(p.Compactor, p.Compactor.CloseTimeS, p.Compactor.OpenTimeS, p.Compactor.HoldTimeS);
         if (p.Rejector.IsEnabled)
@@ -267,8 +282,9 @@ public sealed partial class SimulationEngine
     {
         if (!c.IsOpen) return;
         var type = c == BundleClamp ? SimEventType.BundleClampPhase : SimEventType.CompactorPhase;
-        // Con uno stringifascio per macchina basta che il pacco sia sotto almeno uno di essi (gli altri chiudono a vuoto o sul pacco)
-        bool covers = positionsMm.Any(mm => p.TailM <= mm / 1000.0 + 1e-6 && p.HeadM >= mm / 1000.0 - 1e-6);
+        // Si chiude solo lo stringifascio che ha il pacco sotto: con uno per macchina quelli senza pacco restano aperti
+        var under = positionsMm.Select(mm => p.TailM <= mm / 1000.0 + 1e-6 && p.HeadM >= mm / 1000.0 - 1e-6).ToArray();
+        bool covers = under.Any(x => x);
         double positionMm = positionsMm.Count > 0 ? positionsMm[0] : 0;
         if (!covers)
         {
@@ -296,7 +312,18 @@ public sealed partial class SimulationEngine
         if (c.CommandClose())
         {
             st.InterlockReported = false;
-            Emit(type, EventSeverity.Info, $"{c.Id}: comando di chiusura su {p.Id}", c.Id, p.Id);
+            string which = "";
+            if (c == BundleClamp && under.Length == _clampActive.Length)
+            {
+                Array.Copy(under, _clampActive, under.Length);
+                if (under.Length > 1)
+                {
+                    var ids = LayoutRules.BundleClampPositions(Project).Select(x => x.Id).ToList();
+                    var open = ids.Where((_, i) => !under[i]).ToList();
+                    which = $" ({string.Join(", ", ids.Where((_, i) => under[i]))}" + (open.Count > 0 ? $"; restano aperti {string.Join(", ", open)}: pacco non sotto)" : ")");
+                }
+            }
+            Emit(type, EventSeverity.Info, $"{c.Id}: comando di chiusura su {p.Id}{which}", c.Id, p.Id);
         }
     }
 
@@ -325,6 +352,22 @@ public sealed partial class SimulationEngine
             return false;
         }
         var stop = st.Plan!.Stops[st.StopIndex];
+        // Stringifascio per macchina: ogni macchina della fermata lega solo con il proprio stringifascio chiuso sul pacco
+        if (BundleClamp != null && _clampOfStrapper.Count > 0)
+        {
+            var uncovered = stop.Tasks.Select(k => k.StrapperId).Distinct()
+                .Where(id => _clampOfStrapper.TryGetValue(id, out int i) && i < _clampActive.Length && !_clampActive[i]).ToList();
+            if (uncovered.Count > 0)
+            {
+                if (!st.InterlockReported)
+                {
+                    st.InterlockReported = true;
+                    InterlockEvents++;
+                    Alarm(SimEventType.Interlock, $"Legatura NON avviata su {p.Id}: lo stringifascio di {string.Join(", ", uncovered)} non ha il pacco sotto", BundleClamp.Id, p.Id);
+                }
+                return false;
+            }
+        }
         // Le macchine della fermata devono essere armate (carica del filo KNCA / riarmo SMA)
         var notArmed = stop.Tasks.Select(k => _strappers.First(x => x.Id == k.StrapperId)).Where(x => !x.Busy && !x.IsArmed).ToList();
         if (notArmed.Count > 0)

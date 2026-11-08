@@ -208,6 +208,7 @@ public sealed class LineScene
         _scaleVisuals.Clear();
         _knofBrush = _knofBrushR = _compactorBrush = _smaBrush = null;
         _knofArmBrushes.Clear();
+        _knofs.Clear();
         _highlighted = null;
         _names.Children.Clear();
 
@@ -510,7 +511,8 @@ public sealed class LineScene
         Register(rm, t, rb, railColor);
     }
 
-    private readonly TranslateTransform3D _knofArmL = new(), _knofArmR = new();
+    /// <summary>Bracci di ogni stringifascio (uno per posizione): si chiude solo quello che ha il pacco sotto.</summary>
+    private readonly List<(TranslateTransform3D L, TranslateTransform3D R, List<SolidColorBrush> Brushes)> _knofs = new();
 
     /// <summary>
     /// Stringifascio KNOF (modello semplificato): piastra blu a C aperta verso l'alto su trave a doppio T grigia,
@@ -533,12 +535,14 @@ public sealed class LineScene
         armL.AddBox(new Point3D(x, w / 2 + 0.12, _zTop + 0.55), 0.18, 0.35, 0.14);                    // bracci gialli
         var armR = new MeshFactory();
         armR.AddBox(new Point3D(x, -w / 2 - 0.12, _zTop + 0.55), 0.18, 0.35, 0.14);
-        Part(armL, MachYellow, k, _knofArmL);
+        var knof = (L: new TranslateTransform3D(), R: new TranslateTransform3D(), Brushes: new List<SolidColorBrush>());
+        Part(armL, MachYellow, k, knof.L);
         _knofBrush = _lastPartBrush;
-        if (_knofBrush != null) _knofArmBrushes.Add(_knofBrush);
-        Part(armR, MachYellow, k, _knofArmR);
+        if (_knofBrush != null) { _knofArmBrushes.Add(_knofBrush); knof.Brushes.Add(_knofBrush); }
+        Part(armR, MachYellow, k, knof.R);
         _knofBrushR = _lastPartBrush;
-        if (_knofBrushR != null) _knofArmBrushes.Add(_knofBrushR);
+        if (_knofBrushR != null) { _knofArmBrushes.Add(_knofBrushR); knof.Brushes.Add(_knofBrushR); }
+        _knofs.Add(knof);
         var eye = new MeshFactory();
         eye.AddBox(new Point3D(x, w / 2 + 0.3, zb + 1.6), 0.1, 0.1, 0.1);                              // golfari uniti da un arco
         eye.AddBox(new Point3D(x, -w / 2 - 0.3, zb + 1.6), 0.1, 0.1, 0.1);
@@ -774,13 +778,17 @@ public sealed class LineScene
         }
 
         // Stringifascio: traversa che scende in chiusura
-        double arm = (f?.BundleClampClosed ?? 0) * 0.3;
-        _knofArmL.OffsetY = -arm;
-        _knofArmR.OffsetY = arm;
-        if (_knofBrush != null && !IsHighlighted(p.BundleClamp))
+        // si chiude solo lo stringifascio con il pacco sotto (BundleClampActive); senza informazione si muovono tutti
+        var active = f?.BundleClampActive ?? Array.Empty<bool>();
+        var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
+        for (int i = 0; i < _knofs.Count; i++)
         {
-            var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
-            foreach (var b in _knofArmBrushes) b.Color = kc;
+            bool on = active.Length != _knofs.Count || active[i];
+            double arm = on ? (f?.BundleClampClosed ?? 0) * 0.3 : 0;
+            _knofs[i].L.OffsetY = -arm;
+            _knofs[i].R.OffsetY = arm;
+            if (!IsHighlighted(p.BundleClamp))
+                foreach (var b in _knofs[i].Brushes) b.Color = on ? kc : MachYellow;
         }
 
         // Compattatore: ganasce verso l'asse

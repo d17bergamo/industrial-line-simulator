@@ -134,10 +134,7 @@ public static class ProjectNormalizer
         if (first != null && !p.Photocells.Any(x => x.Purpose == PhotocellPurpose.StrappingReference))
         {
             var station = topo.Zone(p.StrappingStation.InverterId);
-            var host = topo.ZoneAt(Units.MmToM(first.PositionMm));
-            double pitch = host?.Sections.FirstOrDefault()?.RollerPitchMm ?? 300;
-            double enc = Math.Round(first.PositionMm - first.FootprintLengthMm / 2 - pitch);
-            enc = Math.Max(enc, StrappingAreaRules.MinReferencePhotocellMm(p) + ReferencePhotocellOffsetMm);   // fotocellula mai a monte di FC0
+            double enc = EncoderRule.TargetMm(p) ?? Math.Round(first.PositionMm - EncoderRule.MinToStrapperMm);   // regola unica dell'encoder
             if (!p.StrappingEncoder.IsEnabled)
             {
                 p.StrappingEncoder.IsEnabled = true;

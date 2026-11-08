@@ -489,19 +489,10 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Pause();
         _project = p;
-        GroupInheritance.MarkAllCustomized(_project);            // fotocellule, legatrici e bilici con valori propri restano personalizzati
-        RollerGroups.SyncElevation(_project, fromGroup: false);
-        ProjectNormalizer.AlignEntryPhotocell(_project);         // la prima fotocellula sta sullo zero della via rulli
-        RollerGroups.MarkCustomized(_project);                   // progetti precedenti: i moduli diversi dal padre restano personalizzati
-        LineReflow.ApplyDefaultRollerGeometry(_project);         // passo 1250 mm e diametro 268 mm al posto dei vecchi default
-        LineReflow.EnforceOverhang(_project);                    // sporgenza terminale = metà passo rulli
-        PackageNaming.MigrateLegacyIds(_project);                // identificativi pacco "P12 (Wire)"
-        StrapperTrack.ClampStrappersToTrackStart(_project);      // legatrici ad almeno 1 m dall'inizio della via rulli
-        LayoutRules.SnapIntermediateStops(_project);
-        StrapperTrack.EnsureMinimumTrack(_project);              // almeno due rulli di via dopo l'ultima legatrice
+        ProjectUpgrade.Normalize(_project);                      // adeguamenti di apertura (per i file: già mostrati e confermati in Open)
         RememberStrapperPositions();
-        ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo finale sta sempre dopo l'ultimo rullo
         _filePath = path;
+        _upgradedFrom = null;
         _modified = false;
         _engine = null;
         Results = null;
@@ -531,9 +522,36 @@ public sealed partial class MainViewModel : ObservableObject
         if (!ConfirmDiscard()) return;
         var dlg = new OpenFileDialog { Filter = "Progetto linea (*.json)|*.json|Tutti i file|*.*" };
         if (dlg.ShowDialog() != true) return;
-        try { LoadProject(_repo.Load(dlg.FileName), dlg.FileName); }
-        catch (Exception ex) { MessageBox.Show("Impossibile aprire il progetto:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+        UpgradeReport rep;
+        try { rep = ProjectUpgrade.Check(File.ReadAllText(dlg.FileName)); }
+        catch (Exception ex) { MessageBox.Show("Impossibile aprire il progetto:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+        if (!rep.HasChanges) { LoadProject(rep.Project, dlg.FileName); return; }
+
+        // Avviso prima di modificare un progetto salvato: elenco delle modifiche e conferma; il file originale non si sovrascrive
+        var lines = rep.RuleChanges.Take(12).Select(c => "• " + c).ToList();
+        if (rep.RuleChanges.Count > 12) lines.Add($"• … altre {rep.RuleChanges.Count - 12} correzioni");
+        if (rep.ValueChanges.Count > 0)
+        {
+            lines.Add("");
+            lines.Add($"Valori che cambiano ({rep.ValueChanges.Count}):");
+            lines.AddRange(rep.ValueChanges.Take(10).Select(c => "  " + c));
+            if (rep.ValueChanges.Count > 10) lines.Add("  …");
+        }
+        string why = rep.IsOlderSchema ? "è stato salvato con una versione precedente del simulatore" : "non rispetta alcune regole attuali";
+        var answer = MessageBox.Show(
+            $"Il progetto «{Path.GetFileName(dlg.FileName)}» {why}. Per usarlo verrà modificato così:\n\n{string.Join("\n", lines)}\n\n" +
+            "Il file originale non verrà sovrascritto: al salvataggio ti chiederò un nuovo nome.\n\nAprire il progetto aggiornato?",
+            "Aggiornamento del progetto", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) { Status = "Apertura annullata: il progetto non è stato modificato."; return; }
+        LoadProject(rep.Project, null);
+        _upgradedFrom = dlg.FileName;
+        _modified = true;
+        Raise(nameof(Title));
+        Status = $"Progetto aggiornato ({rep.RuleChanges.Count + rep.ValueChanges.Count} modifiche): salvalo con un nuovo nome per conservare l'originale.";
     }
+
+    /// <summary>File originale di un progetto aperto e aggiornato: al salvataggio si propone un nome nuovo accanto ad esso.</summary>
+    private string? _upgradedFrom;
 
     private bool Save(bool saveAs)
     {
@@ -541,13 +559,23 @@ public sealed partial class MainViewModel : ObservableObject
         if (saveAs || path == null)
         {
             var dlg = new SaveFileDialog { Filter = "Progetto linea (*.json)|*.json", FileName = SafeName(_project.Name) + ".json" };
+            if (_upgradedFrom != null)
+            {
+                dlg.InitialDirectory = Path.GetDirectoryName(_upgradedFrom);
+                dlg.FileName = Path.GetFileNameWithoutExtension(_upgradedFrom) + "_aggiornato.json";
+            }
             if (dlg.ShowDialog() != true) return false;
             path = dlg.FileName;
         }
         try
         {
+            if (_upgradedFrom != null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(_upgradedFrom), StringComparison.OrdinalIgnoreCase)
+                && MessageBox.Show("Stai salvando sopra il file originale del progetto aggiornato. Sovrascriverlo?", "Salvataggio",
+                                   MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return false;
             _repo.Save(_project, path);
             _filePath = path;
+            _upgradedFrom = null;
             _modified = false;
             Raise(nameof(Title));
             Status = "Progetto salvato: " + path;
@@ -885,7 +913,18 @@ public sealed partial class MainViewModel : ObservableObject
         CheckItems.Clear();
         var items = EquipmentCheck.Run(_project, fix: false);
         foreach (var i in items) CheckItems.Add(new CheckRow(i.IsProblem ? "⚠" : "✔", i.Message, i.IsProblem));
-        CheckProblems = items.Count(i => i.IsProblem);
+        // Momento unico dei controlli: qui compare anche tutto ciò che verrà corretto all'avvio della simulazione
+        int extra = 0;
+        try
+        {
+            foreach (var c in ProjectAutoFix.Preview(_project).Changes.Where(c => c.Source != ProjectAutoFix.SourceCheck))
+            {
+                CheckItems.Add(new CheckRow("⚠", "All'avvio della simulazione: " + c.Message, true));
+                extra++;
+            }
+        }
+        catch (Exception ex) { CheckItems.Add(new CheckRow("⚠", "Controllo non completato: " + ex.Message, true)); extra++; }
+        CheckProblems = items.Count(i => i.IsProblem) + extra;
         Raise(nameof(HasCheckProblems)); Raise(nameof(CheckProblemsLine));
     }
 
@@ -893,8 +932,8 @@ public sealed partial class MainViewModel : ObservableObject
     private void CheckEquipment()
     {
         if (IsPlaying) Pause();
-        var items = EquipmentCheck.Run(_project);
-        int fixedCount = items.Count(i => i.Fixed);
+        var fixes = ProjectAutoFix.Run(_project);                  // momento unico: le stesse correzioni dell'avvio della simulazione
+        int fixedCount = fixes.Changes.Count;
         if (fixedCount > 0) ProjectChanged(structural: true); else RefreshCheck();
         Status = fixedCount > 0 ? $"Controllo equipaggiamenti: {fixedCount} correzioni applicate." : "Controllo equipaggiamenti: nessuna correzione automatica possibile.";
     }
@@ -1545,18 +1584,24 @@ public sealed partial class MainViewModel : ObservableObject
         // sensori automatici; con le legatrici abilitate ogni pacco deve essere legato (vedi SimulationPreparation).
         // Controlli sulle fotocellule (sessione B): uscita legatura e arresto trasferitore vicine → unite;
         // fotocellule che rallentano o fermano ad almeno 2 m dal punto di arresto.
-        var pcFixes = PhotocellRules.BeforeSimulation(_project);
-        var prep = SimulationPreparation.Prepare(_project);
-        prep.Changes.InsertRange(0, pcFixes);
-        if (prep.Changed)
+        // Momento unico dei controlli (ProjectAutoFix): prima si mostra cosa cambia e si chiede conferma, poi si applica
+        var preview = ProjectAutoFix.Preview(_project);
+        if (preview.Changed)
         {
+            var list = preview.Changes.Take(20).Select(c => "• " + c.Message).ToList();
+            if (preview.Changes.Count > 20) list.Add($"• … altre {preview.Changes.Count - 20}");
+            if (MessageBox.Show("Per simulare un ciclo funzionante il progetto va corretto così (sono le voci della scheda Controllo):\n\n" + string.Join("\n", list) +
+                                "\n\nApplicare le correzioni e avviare la simulazione?", "Preparazione del ciclo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            {
+                Status = "Simulazione non avviata: il progetto non è stato modificato.";
+                return false;
+            }
+            ProjectAutoFix.Run(_project);
             ProjectChanged(structural: true);
-            MessageBox.Show("Prima di simulare ho corretto il progetto per ottenere un ciclo funzionante:\n\n" + string.Join("\n", prep.Changes.Take(20).Select(c => "• " + c)),
-                "Preparazione del ciclo", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        if (prep.HasErrors)
+        if (preview.HasErrors)
         {
-            MessageBox.Show(string.Join("\n\n", prep.Errors.Take(10).Select(e => "• " + e)), "Simulazione non avviabile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(string.Join("\n\n", preview.Errors.Take(10).Select(e => "• " + e)), "Simulazione non avviabile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         var report = ProjectValidator.Validate(_project);

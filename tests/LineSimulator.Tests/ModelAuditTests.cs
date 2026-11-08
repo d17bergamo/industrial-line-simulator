@@ -108,12 +108,14 @@ public class ModelAuditTests
         var p = SampleProjects.CreateTwoStrappers12m();
         var refPc = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.StrappingReference);
         refPc.PositionMm = -500;                                    // spostata a mano prima di FC0
-        Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "REF_PC_ENTRY");
-        Assert.Contains(ProjectValidator.Validate(p).Warnings, x => x.Code == "REF_PC_ENTRY");
+        Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "ENCODER_RULE");
+        Assert.Contains(ProjectValidator.Validate(p).Warnings, x => x.Code == "ENC_RULE");
         var fixes = StrappingAreaRules.KeepReferenceAfterEntry(p);
         Assert.NotEmpty(fixes);
-        Assert.Equal(100, refPc.PositionMm, 6);
-        Assert.True(p.StrappingEncoder.PositionMm >= 400 - 1e-6);
+        // regola unica: la fotocellula torna 300 mm prima dell'encoder, che non si è mosso
+        Assert.Equal(p.StrappingEncoder.PositionMm - 300, refPc.PositionMm, 6);
+        Assert.True(refPc.PositionMm >= 100 - 1e-6);
+        Assert.Empty(EncoderRule.Problems(p));
 
         // Prima legatrice vicinissima all'inizio: encoder e fotocellula automatici non vanno a monte di FC0
         var q = SampleProjects.CreateOneStrapper12m();

@@ -88,9 +88,7 @@ public static class ProductivityAdvisor
     /// <summary>Regole di layout e controlli di avvio applicati come nell'app prima di simulare.</summary>
     private static LineProject Prepared(LineProject p)
     {
-        LayoutRules.Enforce(p);
-        PhotocellRules.BeforeSimulation(p);
-        SimulationPreparation.Prepare(p);
+        ProjectAutoFix.Run(p);                 // momento unico dei controlli, come all'avvio della simulazione
         return p;
     }
 

@@ -33,7 +33,13 @@ public static class ProjectSerializer
         return JsonSerializer.Serialize(project, Options);
     }
 
-    public static LineProject Deserialize(string json)
+    public static LineProject Deserialize(string json) => Deserialize(json, normalize: true);
+
+    /// <summary>
+    /// Legge un progetto. Con <paramref name="normalize"/> = false si applica solo la migrazione dello schema
+    /// (serve a confrontare il file con la versione aggiornata, vedi <see cref="ProjectUpgrade"/>).
+    /// </summary>
+    public static LineProject Deserialize(string json, bool normalize)
     {
         var node = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
         {
@@ -48,10 +54,13 @@ public static class ProjectSerializer
 
         var p = node.Deserialize<LineProject>(Options) ?? throw new InvalidDataException("Progetto vuoto.");
         MigrateBankingSettings(node, p);
-        // v1 → v2: la fotocellula di ingresso è obbligatoria; i nuovi dispositivi restano disabilitati.
-        if (version < 2) ProjectNormalizer.EnsureEntryPhotocell(p);
-        // Sensori di processo obbligatori (arresto davanti al trasferitore, riferimento encoder di legatura)
-        ProjectNormalizer.EnsureProcessSensors(p);
+        if (normalize)
+        {
+            // v1 → v2: la fotocellula di ingresso è obbligatoria; i nuovi dispositivi restano disabilitati.
+            if (version < 2) ProjectNormalizer.EnsureEntryPhotocell(p);
+            // Sensori di processo obbligatori (arresto davanti al trasferitore, riferimento encoder di legatura)
+            ProjectNormalizer.EnsureProcessSensors(p);
+        }
         p.SchemaVersion = LineProject.CurrentSchemaVersion;
         return p;
     }

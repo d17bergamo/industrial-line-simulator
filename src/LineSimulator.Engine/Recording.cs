@@ -129,6 +129,8 @@ public sealed class SimFrame
     public StrapperProcessState[] StrapperProcessStates { get; init; } = Array.Empty<StrapperProcessState>();
     public ClampState BundleClampState { get; init; }
     public double BundleClampClosed { get; init; }
+    /// <summary>Stringifascio chiusi sul pacco (uno per posizione): gli altri restano aperti.</summary>
+    public bool[] BundleClampActive { get; init; } = Array.Empty<bool>();
     public ClampState CompactorState { get; init; }
     public double CompactorClosed { get; init; }
     public RejectorState RejectorState { get; init; }

@@ -225,8 +225,9 @@ public static class ProjectValidator
             r.Warn("PC_TARGET_DIST", $"La fotocellula {pc.Id} rallenta o ferma a {F(Math.Round(d))} mm dal punto di arresto ({F(Math.Round(t))} mm): servono almeno {F(need)} mm (minimo 2000 mm, o lo spazio per fermarsi dalla velocità massima).", pc.Id);
         if (PhotocellRules.MergeCandidate(p) is var (mx, ms))
             r.Info("PC_MERGE", $"Le fotocellule {mx.Id} (uscita legatura) e {ms.Id} (arresto davanti al trasferitore) sono vicine: all'avvio della simulazione vengono unite.", ms.Id);
-        foreach (var pc in StrappingAreaRules.ReferencePhotocellsBeforeEntry(p))
-            r.Warn("REF_PC_ENTRY", $"La fotocellula di riferimento deve stare almeno 100 mm dopo FC0 (minimo {F(Math.Round(StrappingAreaRules.MinReferencePhotocellMm(p)))} mm).", pc.Id);
+        if (p.StrappingEncoder.IsEnabled)
+            foreach (var msg in EncoderRule.Problems(p))
+                r.Warn("ENC_RULE", "Regola dell'encoder di legatura: " + msg + " (si sistema all'avvio della simulazione o con \"Sistema automaticamente\").", p.StrappingEncoder.Id);
         if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
             r.Warn("EXIT_TRF_DIST", $"La fine della via di legatura (fotocellula di uscita) è a {F(Math.Round(StrappingAreaRules.ExitToTransferMm(p)))} mm dal trasferitore: servono almeno 1000 mm (allungare o inserire lo svincolo).", p.Transfer.Id);
         foreach (var (a, b) in StrappingAreaRules.SameSideConflicts(p))
@@ -549,10 +550,7 @@ public static class ProjectValidator
                 r.Warn("ENC_MISSING", "Manca l'encoder incrementale con la fotocellula di riferimento prima della prima macchina di legatura.");
             else
             {
-                if (refPc.PositionMm >= p.StrappingEncoder.PositionMm)
-                    r.Warn("ENC_ORDER", "La fotocellula di riferimento deve trovarsi prima (a monte) dell'encoder.", refPc.Id);
-                if (p.StrappingEncoder.PositionMm >= first.PositionMm)
-                    r.Warn("ENC_POS", $"L'encoder deve trovarsi a monte della prima macchina di legatura {first.Id}.", p.StrappingEncoder.Id);
+                // posizioni: regola unica ENC_RULE (EncoderRule)
             }
             foreach (var s in p.Strappers)
                 if (s.ArmingTimeS < 0) r.Error("STR_ARM", "Tempo di carica filo / riarmo negativo.", s.Id);

@@ -320,6 +320,7 @@ public sealed partial class SimulationEngine : ILogicContext
         StrapperProcessStates = _strappers.Select(s => s.ProcessState).ToArray(),
         BundleClampState = BundleClamp?.State ?? ClampState.Open,
         BundleClampClosed = BundleClamp?.ClosedFraction ?? 0,
+        BundleClampActive = _clampActive.ToArray(),
         CompactorState = Compactor?.State ?? ClampState.Open,
         CompactorClosed = Compactor?.ClosedFraction ?? 0,
         RejectorState = Rejector?.State ?? RejectorState.Idle,

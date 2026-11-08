@@ -30,7 +30,7 @@ public static class LayoutTopViewPdf
     public static byte[] Build(LineProject source)
     {
         var p = ProjectSerializer.Clone(source);
-        try { PhotocellRules.BeforeSimulation(p); SimulationPreparation.Prepare(p); }
+        try { ProjectAutoFix.Run(p); }
         catch { /* progetto incompleto: si disegna com'è */ }
         string title = string.IsNullOrWhiteSpace(p.Name) ? "Linea di legatura" : p.Name;
         var pages = new List<string> { PlanPage(p, title) };

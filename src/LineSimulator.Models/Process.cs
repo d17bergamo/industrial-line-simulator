@@ -115,7 +115,8 @@ public sealed class BundleClampConfig : SequenceDeviceConfig
 
     /// <summary>
     /// Uno stringifascio davanti a ogni legatrice/reggettatrice abilitata (a <see cref="MachineOffsetMm"/> a monte di ciascuna).
-    /// Gli stringifascio si chiudono e si aprono insieme. Con questa opzione <see cref="PositionMm"/> non si usa.
+    /// A ogni fermata si chiudono solo gli stringifascio che hanno il pacco sotto; gli altri restano aperti.
+    /// Con questa opzione <see cref="PositionMm"/> non si usa.
     /// </summary>
     [UiProperty("Uno stringifascio per ogni legatrice/reggettatrice", "", "Geometria", Order = 11)]
     public bool PerMachine { get; set; }
