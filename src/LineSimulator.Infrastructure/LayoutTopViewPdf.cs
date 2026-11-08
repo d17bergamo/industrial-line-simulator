@@ -179,7 +179,9 @@ public static class LayoutTopViewPdf
             Fill(c, (0.83, 0.93, 0.83)); Rect(c, xa, ty, xb - xa, 42, true);
             Stroke(c, (0.30, 0.65, 0.35)); c.Append("1 w\n"); Rect(c, xa, ty, xb - xa, 42, false);
             Gray(c, 0);
-            Text(c, xa + 3, ty + 31, 6.5, $"{Nm(p.Transfer)} ({(p.Transfer.Kind == TransferKind.Lifting ? "sollevabile" : "a catene")}), {M(p.Transfer.LengthMm)} m, corsa {M(p.Transfer.TranslationStrokeMm)} m");
+            string kind = p.Transfer.Kind == TransferKind.Lifting ? "sollevabile" : "a catene";
+            string tn = Nm(p.Transfer).Contains(kind, StringComparison.OrdinalIgnoreCase) ? Nm(p.Transfer) : $"{Nm(p.Transfer)} ({kind})";
+            Text(c, xa + 3, ty + 31, 6.5, $"{tn}, {M(p.Transfer.LengthMm)} m, corsa {M(p.Transfer.TranslationStrokeMm)} m");
             Text(c, xa + 3, ty + 21, 6.5, right ? "scarico verso il lato destro (in basso)" : "scarico verso il lato sinistro (in alto)");
             double ax = (xa + xb) / 2, a0 = right ? ty + 14 : ty + 6, a1 = right ? ty + 4 : ty + 16;
             Stroke(c, (0.30, 0.65, 0.35)); c.Append("1.2 w\n");
@@ -286,7 +288,7 @@ public static class LayoutTopViewPdf
             double x = X(pts[k].PosMm);
             Line(c, x, y - 4, x, y + 4);
             Line(c, x - 2, y - 2, x + 2, y + 2);
-            if (pts[k].Name.Length > 0) { Gray(c, 0.35); Text(c, x - 3, y - 12 - (k % 2) * 7, 5.5, pts[k].Name); }
+            if (pts[k].Name.Length > 0) { Gray(c, 0.35); Text(c, Math.Min(x - 3, PageW - Margin - pts[k].Name.Length * 2.9), y - 12 - (k % 2) * 7, 5.5, pts[k].Name); }
         }
         for (int k = 0; k + 1 < pts.Count; k++)
         {
