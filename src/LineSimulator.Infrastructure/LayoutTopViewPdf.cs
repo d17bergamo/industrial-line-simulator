@@ -184,8 +184,11 @@ public static class LayoutTopViewPdf
             Text(c, xa + 3, ty + 31, 6.5, $"{tn}, {M(p.Transfer.LengthMm)} m, corsa {M(p.Transfer.TranslationStrokeMm)} m");
             Text(c, xa + 3, ty + 21, 6.5, right ? "scarico verso il lato destro (in basso)" : "scarico verso il lato sinistro (in alto)");
             if (p.Transfer.ScaleAtMidStroke)
-                Text(c, xa + 3, ty + 11, 6.5, $"due prese: bilico a metà corsa ({M(p.Transfer.TranslationStrokeMm / 2)} m)" +
-                    (p.AccumulationTransfer.IsEnabled ? $", poi trasferitore d'accumulo {M(p.AccumulationTransfer.WidthMm)} m (passo = larghezza pacco + {p.AccumulationTransfer.StepGapMm:0} mm)" : ""));
+            {
+                Text(c, xa + 3, ty + 11, 6.5, $"due prese: bilico a metà corsa ({M(p.Transfer.TranslationStrokeMm / 2)} m)");
+                if (p.AccumulationTransfer.IsEnabled)
+                    Text(c, xa + 3, ty + 2, 6.5, $"poi accumulo {M(p.AccumulationTransfer.WidthMm)} m, passo = larghezza pacco + {p.AccumulationTransfer.StepGapMm:0} mm");
+            }
             double ax = xb - 14, a0 = right ? ty + 14 : ty + 6, a1 = right ? ty + 4 : ty + 16;
             Stroke(c, (0.30, 0.65, 0.35)); c.Append("1.2 w\n");
             Line(c, ax, a0, ax, a1); Line(c, ax - 3, a1 + (right ? 3 : -3), ax, a1); Line(c, ax + 3, a1 + (right ? 3 : -3), ax, a1);
