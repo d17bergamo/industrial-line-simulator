@@ -32,6 +32,8 @@ public class TwoPickTransferTests
         Assert.True(p.AccumulationTransfer.IsEnabled);
         var e = Run(p);
         Assert.True(e.Transfer.TwoPick);
+        var coll = e.Events.Where(x => x.Type == SimEventType.Collision || x.Severity >= EventSeverity.Warning).Select(x => x.ToString()).Take(12).ToList();
+        Assert.True(coll.Count == 0, string.Join("\n", coll));
         Assert.NotNull(e.Accumulation);
         Assert.Equal(p.Infeed.PackageCount, e.Accumulation!.Received);
         Assert.All(e.Packages, k => Assert.NotNull(k.MeasuredWeightKg));
