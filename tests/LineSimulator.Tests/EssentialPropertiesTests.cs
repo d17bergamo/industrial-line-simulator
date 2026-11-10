@@ -78,4 +78,21 @@ public class EssentialPropertiesTests
         Assert.True(EssentialProperties.IsHidden("PhotocellConfig", "Action"));
         Assert.True(new AccumulationTransferConfig().IsEnabled);
     }
+
+    [Fact]
+    public void Defaults_WireReload6_5_Diameter315_AndDynamicDescription()
+    {
+        Assert.Equal(6.5, new StrapperConfig().ArmingTimeS);
+        Assert.Equal(315, new RollerSection().RollerDiameterMm);
+        var p = SampleProjects.CreateTwoStrappers12m();
+        ProjectDescription.Refresh(p);
+        Assert.Equal("2 legatrici - pacchi 6/9/12 m", p.Name);
+        p.Strappers.RemoveAt(1);
+        ProjectDescription.Refresh(p);
+        Assert.Equal("1 legatrice - pacchi 6/9/12 m", p.Name);
+        Assert.StartsWith("1 legatrice · pacchi 6/9/12 m", p.Description);
+        p.Name = "Impianto cliente";
+        ProjectDescription.Refresh(p);
+        Assert.Equal("Impianto cliente", p.Name);                 // un nome scelto dall'utente non si tocca
+    }
 }

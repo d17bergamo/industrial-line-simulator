@@ -49,8 +49,10 @@ public enum BindingType
 public enum StrapperMachineType
 {
     /// <summary>Legatrice a filo Sund Birsta KNCA 7/800: carica del filo all'arrivo del pacco e tra le legature dello stesso pattern.</summary>
+    [System.ComponentModel.Description("Legatrice (filo)")]
     KNCA = 0,
     /// <summary>Reggettatrice a reggia d'acciaio Sund Birsta SMA: riarmo automatico dopo ogni ciclo (sempre armata).</summary>
+    [System.ComponentModel.Description("Reggettatrice (reggia)")]
     SMA = 1
 }
 
@@ -114,7 +116,7 @@ public sealed class BundleClampConfig : SequenceDeviceConfig
     public BundleClampConfig()
     {
         Id = "KNOF";
-        Name = "Stringifascio KNOF";
+        Name = "Stringifascio";
         Model = "Sund Birsta KNOF";
     }
 

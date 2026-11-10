@@ -128,7 +128,7 @@ public static class ProductivityAdvisor
                     var last = q.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).Last();
                     var n = ProjectSerializer.Clone(q).Strappers.First(s => s.Id == last.Id);
                     int k = 1; while (q.Strappers.Any(s => s.Id == "L" + k)) k++;
-                    n.Id = "L" + k; n.Name = (last.MachineType == StrapperMachineType.SMA ? "Reggettatrice SMA " : "Legatrice KNCA ") + k;
+                    n.Id = "L" + k; n.Name = (last.MachineType == StrapperMachineType.SMA ? "Reggettatrice " : "Legatrice ") + k;
                     n.PositionMm = last.PositionMm + pitch;
                     n.Side = last.Side;
                     q.Strappers.Add(n);

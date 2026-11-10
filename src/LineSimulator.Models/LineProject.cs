@@ -31,7 +31,7 @@ public sealed class SimulationSettings
     [UiProperty("Distanza minima di sicurezza tra pacchi", "mm", "Sicurezza", Order = 10)]
     public double MinSafetyDistanceMm { get; set; } = 300;
 
-    [UiProperty("Decelerazione massima per attrito pacco-rulli", "m/s²", "Fisica", Order = 11)]
+    /// <summary>Decelerazione massima per attrito pacco-rulli: non si mostra più (resta il valore di default).</summary>
     public double MaxFrictionDeceleration { get; set; } = 2.5;
 
     [UiProperty("Arresta la simulazione alla prima collisione", "", "Simulazione", Order = 12)]

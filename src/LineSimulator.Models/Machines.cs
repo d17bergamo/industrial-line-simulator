@@ -9,7 +9,7 @@ namespace LineSimulator.Models;
 /// </summary>
 public sealed class StrapperConfig : ComponentBase, IGroupChild
 {
-    public const double KncaStrappingTimeS = 11.5, KncaArmingTimeS = 3.0, SmaStrappingTimeS = 10.0, SmaArmingTimeS = 5.0;
+    public const double KncaStrappingTimeS = 11.5, KncaArmingTimeS = 6.5, SmaStrappingTimeS = 10.0, SmaArmingTimeS = 5.0;
 
     private StrapperMachineType _machineType = StrapperMachineType.KNCA;
 
@@ -17,7 +17,7 @@ public sealed class StrapperConfig : ComponentBase, IGroupChild
     /// Tipo di macchina. Passando da un tipo all'altro con i tempi di default, vengono proposti i default del nuovo tipo
     /// (KNCA: legatura 11,5 s, carica filo 3 s; SMA: legatura 10 s, riarmo 5 s).
     /// </summary>
-    [UiProperty("Tipo di macchina (KNCA filo / SMA reggia)", "", "Funzionamento", Order = 18)]
+    [UiProperty("Tipo di macchina (legatrice a filo / reggettatrice)", "", "Funzionamento", Order = 18)]
     public StrapperMachineType MachineType
     {
         get => _machineType;
@@ -32,12 +32,12 @@ public sealed class StrapperConfig : ComponentBase, IGroupChild
             bool sma = value == StrapperMachineType.SMA;
             StrappingTimeS = sma ? SmaStrappingTimeS : KncaStrappingTimeS;
             ArmingTimeS = sma ? SmaArmingTimeS : KncaArmingTimeS;
-            Model = sma ? "Sund Birsta SMA" : "Sund Birsta KNCA 7/800";
+            Model = sma ? "Reggettatrice" : "Legatrice a filo";
         }
     }
 
     [UiProperty("Modello", "", "Funzionamento", Order = 19)]
-    public string Model { get; set; } = "Sund Birsta KNCA 7/800";
+    public string Model { get; set; } = "Legatrice a filo";
 
     [UiProperty("Posizione piano di legatura", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
@@ -57,7 +57,7 @@ public sealed class StrapperConfig : ComponentBase, IGroupChild
     /// di riferimento a monte della legatrice e, tra le legature dello stesso pattern, in automatico;
     /// a pattern concluso attende il pacco successivo. SMA: riarmo automatico dopo ogni ciclo (sempre armata).
     /// </summary>
-    [UiProperty("Carica filo (KNCA) / riarmo (SMA)", "s", "Tempi", Order = 9)]
+    [UiProperty("Tempo di ricarica filo / riarmo reggia", "s", "Tempi", Order = 9)]
     public double ArmingTimeS { get; set; } = KncaArmingTimeS;
 
     [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]
@@ -312,7 +312,7 @@ public sealed class StrapperGroup : ComponentBase
     [UiProperty("Ingombro lungo la linea (multipli di 100 mm)", "mm", "Geometria", Order = 2)]
     public double FootprintLengthMm { get; set; } = 1200;
 
-    [UiProperty("Carica filo (KNCA) / riarmo (SMA)", "s", "Tempi", Order = 9)]
+    [UiProperty("Tempo di ricarica filo / riarmo reggia", "s", "Tempi", Order = 9)]
     public double ArmingTimeS { get; set; } = StrapperConfig.KncaArmingTimeS;
 
     [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]

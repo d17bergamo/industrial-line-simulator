@@ -197,8 +197,8 @@
                 <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="💾  Salva" Command="{Binding SaveCommand}" Margin="8,0,0,0"/>
                 <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
                 <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,16,0">
-                    <TextBlock Text="{Binding Project.Name}" FontWeight="Bold" FontSize="14" Foreground="#1B2430"/>
-                    <TextBlock Text="Dati area, layout e simulazione" Foreground="#5B6673"/>
+                    <TextBlock Text="{Binding ProjectTitle}" FontWeight="Bold" FontSize="14" Foreground="#1B2430"/>
+                    <TextBlock Text="{Binding ProjectSubtitle}" Foreground="#5B6673" MaxWidth="520" TextTrimming="CharacterEllipsis" ToolTip="{Binding ProjectSubtitle}"/>
                 </StackPanel>
                 <Border DockPanel.Dock="Left" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Dati area" Command="{Binding GoStepCommand}" CommandParameter="Area" Tag="{Binding IsStepCycle}"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Layout e simulazione" Command="{Binding GoStepCommand}" CommandParameter="Layout" Tag="{Binding IsStepLayout}"/></StackPanel></Border>
                 <Button DockPanel.Dock="Left" x:Name="AddMenuButton" Style="{StaticResource ToolButton}" Content="＋  Aggiungi  ▾" Margin="16,0,0,0" Visibility="{Binding IsStepLayout, Converter={StaticResource BoolVis}}" Click="AddMenu_Click" ToolTip="Aggiunge un componente al progetto (le macchine si trascinano anche dalla libreria)">
@@ -222,7 +222,7 @@
                 Visibility="{Binding IsStepLayout, Converter={StaticResource BoolVis}}">
             <UniformGrid Rows="1" Columns="6">
                 <StackPanel Margin="0,0,12,0"><TextBlock Style="{StaticResource KpiLabel}" Text="COSA SIMULO"/>
-                    <ComboBox ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" ToolTip="Tipologia di pacco da vedere nella simulazione" Margin="0,2"/>
+                    <ComboBox ItemsSource="{Binding PackageTypes}" DisplayMemberPath="Id" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" ToolTip="Tipologia di pacco da vedere nella simulazione (nome della schermata Pacchi)" Margin="0,2"/>
                     <DockPanel Margin="0,2">
                         <ComboBox DockPanel.Dock="Right" Width="80" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" ToolTip="Battuta: di testa o di coda (di coda solo con fermo scomparente)" Margin="4,0,0,0"/>
                         <ComboBox ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" ToolTip="Come si carica il trasferitore: un pacco (single) o due (double)"/>

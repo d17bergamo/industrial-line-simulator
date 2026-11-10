@@ -496,6 +496,8 @@ public sealed partial class MainViewModel : ObservableObject
         _project = p;
         ProjectUpgrade.Normalize(_project);                      // adeguamenti di apertura (per i file: già mostrati e confermati in Open)
         _project.AccumulationTransfer.IsEnabled = true;           // il trasferitore d'accumulo c'è sempre
+        ProjectDescription.Refresh(_project);
+        Raise(nameof(ProjectTitle)); Raise(nameof(ProjectSubtitle));
         RememberStrapperPositions();
         _filePath = path;
         _upgradedFrom = null;
@@ -617,6 +619,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (markModified) _modified = true;
         ProjectNormalizer.AlignEntryPhotocell(_project);
+        ProjectDescription.Refresh(_project);                    // nome e descrizione seguono legatrici e pacchi
+        Raise(nameof(ProjectTitle)); Raise(nameof(ProjectSubtitle));
         GroupInheritance.PropagateAll(_project);                // le famiglie passano le proprietà ai figli non personalizzati
         RollerGroups.Propagate(_project, applyPitch: false);
         ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo sta sempre alla fine dell'ultimo modulo
@@ -702,8 +706,8 @@ public sealed partial class MainViewModel : ObservableObject
         root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm), p.PhotocellDefaults));
         root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
         var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
-        var knof = new TreeNodeViewModel("Famiglia stringifascio KNOF", null, "KnofGroup");
-        knof.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio KNOF", p.BundleClamp), p.BundleClamp, "BundleClamp"));
+        var knof = new TreeNodeViewModel("Famiglia stringifascio", null, "KnofGroup");
+        knof.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio", p.BundleClamp), p.BundleClamp, "BundleClamp"));
         station.Children.Add(knof);
         var compactor = new TreeNodeViewModel("Famiglia compattatori laterali", null, "CompactorGroup");
         compactor.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
@@ -748,7 +752,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         foreach (var n in Tree.SelectMany(t => t.SelfAndDescendants()))
         {
-            if (n.Model is BundleClampConfig k) n.Header = DeviceHeader("Stringifascio KNOF", k);
+            if (n.Model is BundleClampConfig k) n.Header = DeviceHeader("Stringifascio", k);
             else if (n.Model is SideCompactorConfig cm) n.Header = DeviceHeader("Compattatore laterale", cm);
             else if (n.Model is RejectorConfig rj) n.Header = DeviceHeader("Rigettatrice SMA", rj);
             else if (n.Model is ComponentBase c) n.Header = c.ToString();
@@ -907,6 +911,11 @@ public sealed partial class MainViewModel : ObservableObject
         bool groupChanged = false;
         if (SelectedNode?.Model is RollerGroup)
             groupChanged = RollerGroups.Propagate(_project, applyPitch: item.Name == nameof(RollerGroup.RollerPitchMm));
+        if (SelectedNode?.Model is RollerGroup && item.Name == nameof(RollerGroup.RollerDiameterMm))
+        {
+            RollerGroups.SetDiameterForAll(_project);
+            groupChanged = true;
+        }
         if (SelectedNode?.Model is RollerGroup && item.Name == nameof(RollerGroup.RollerTopElevationMm))
             RollerGroups.SyncElevation(_project, fromGroup: true);
         if (SelectedNode?.Model is PhotocellGroup or StrapperGroup or ScaleGroup)
@@ -1565,7 +1574,7 @@ public sealed partial class MainViewModel : ObservableObject
                 _ => "Ferma"
             }, fault));
         }
-        if (_project.BundleClamp.IsEnabled) rows.Add(("Stringifascio KNOF", ClampText(f?.BundleClampState ?? ClampState.Open), f?.BundleClampState == ClampState.Fault));
+        if (_project.BundleClamp.IsEnabled) rows.Add(("Stringifascio", ClampText(f?.BundleClampState ?? ClampState.Open), f?.BundleClampState == ClampState.Fault));
         if (_project.Compactor.IsEnabled) rows.Add(("Compattatore laterale", ClampText(f?.CompactorState ?? ClampState.Open), f?.CompactorState == ClampState.Fault));
         if (_project.Rejector.IsEnabled) rows.Add(("Rigettatrice SMA", (f?.RejectorState ?? RejectorState.Idle) == RejectorState.Idle ? "Ferma" : f!.RejectorState.ToString(), f?.RejectorState == RejectorState.Fault));
         rows.Add(("Stopper", (f?.StopperState ?? StopperState.Free) switch { StopperState.Aligning => "Intestatura", StopperState.Aligned => "Pacco intestato", _ => "Libero" }, false));

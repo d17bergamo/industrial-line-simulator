@@ -102,8 +102,8 @@ public static class SampleProjects
         var p = new LineProject
         {
             Name = name,
-            Description = $"Area di legatura con {strappers} {(strappers == 1 ? "legatrice" : "legatrici")} KNCA a {StrapperSpacingMm:0} mm, " +
-                          $"prima legatrice a 4 m dall'inizio, stringifascio KNOF per ogni legatrice, svincolo da 4 rulli, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
+            Description = $"Area di legatura con {strappers} {(strappers == 1 ? "legatrice" : "legatrici")} a filo a {StrapperSpacingMm:0} mm, " +
+                          $"prima legatrice a 4 m dall'inizio, stringifascio per ogni legatrice, svincolo da 4 rulli, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
         };
 
         p.Sections.Add(Mod("M1", "Modulo 1 - Legatura", 0, strapLen));
@@ -120,7 +120,7 @@ public static class SampleProjects
         // nessuna fotocellula di presenza sul fermo finale: il pacco in battuta lo segnala il fermo e lo vede FC2
 
         for (int i = 0; i < strappers; i++)
-            p.Strappers.Add(Str($"L{i + 1}", $"Legatrice KNCA {i + 1}", first + i * StrapperSpacingMm));
+            p.Strappers.Add(Str($"L{i + 1}", $"Legatrice {i + 1}", first + i * StrapperSpacingMm));
         p.StrappingStation = new StrappingStationConfig
         {
             IsEnabled = true, InverterId = "M1", PositioningSpeed = 0.3, PositioningToleranceMm = 2, Strategy = StrappingStrategyMode.Automatic

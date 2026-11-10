@@ -20,6 +20,8 @@ public enum EditorKind
 public sealed class PropertyItemViewModel : ObservableObject
 {
     private readonly object _target;
+    /// <summary>Oggetto di cui la voce mostra la proprietà.</summary>
+    public object Target => _target;
     private readonly PropertyInfo _prop;
     private readonly Action<PropertyItemViewModel> _changed;
     private string? _error;
@@ -37,7 +39,7 @@ public sealed class PropertyItemViewModel : ObservableObject
         else if (t.IsEnum)
         {
             Kind = EditorKind.Choice;
-            Options = Enum.GetNames(t).ToList();
+            Options = Enum.GetNames(t).Select(n => EnumLabel(t, n)).ToList();   // etichetta leggibile (Description) se c'è
         }
         else if (idOptions != null && t == typeof(string))
         {
@@ -50,7 +52,23 @@ public sealed class PropertyItemViewModel : ObservableObject
 
     public UiPropertyAttribute Meta { get; }
     public string Name => _prop.Name;
-    public string DisplayName => string.IsNullOrEmpty(Meta.Unit) ? Meta.DisplayName : $"{Meta.DisplayName} [{Meta.Unit}]";
+    /// <summary>Etichetta alternativa (es. "Tempo di ricarica filo" quando sulla linea ci sono solo legatrici).</summary>
+    public string? LabelOverride { get; set; }
+    public string DisplayName
+    {
+        get
+        {
+            var n = LabelOverride ?? Meta.DisplayName;
+            return string.IsNullOrEmpty(Meta.Unit) ? n : $"{n} [{Meta.Unit}]";
+        }
+    }
+
+    /// <summary>Etichetta di un valore di enumerazione: la Description, se presente, altrimenti il nome.</summary>
+    public static string EnumLabel(Type t, string name) =>
+        (t.GetField(name)?.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).FirstOrDefault() as System.ComponentModel.DescriptionAttribute)?.Description ?? name;
+
+    private static string EnumName(Type t, string labelOrName) =>
+        Enum.GetNames(t).FirstOrDefault(n => n == labelOrName || EnumLabel(t, n) == labelOrName) ?? labelOrName;
     public string Category => Meta.Category;
     private bool _locked;
     /// <summary>Bloccata da una regola (valore ereditato dal padre, posizione fissa): visibile ma non modificabile.</summary>
@@ -115,12 +133,16 @@ public sealed class PropertyItemViewModel : ObservableObject
 
     public string? ChoiceValue
     {
-        get => _prop.GetValue(_target)?.ToString();
+        get
+        {
+            var v = _prop.GetValue(_target);
+            return v != null && _prop.PropertyType.IsEnum ? EnumLabel(_prop.PropertyType, v.ToString()!) : v?.ToString();
+        }
         set
         {
             if (IsReadOnly || value == null) return;
             var t = _prop.PropertyType;
-            _prop.SetValue(_target, t.IsEnum ? Enum.Parse(t, value) : value);
+            _prop.SetValue(_target, t.IsEnum ? Enum.Parse(t, EnumName(t, value)) : value);
             Raise();
             _changed(this);
         }

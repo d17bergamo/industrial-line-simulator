@@ -37,7 +37,7 @@ public static class LayoutGeometry
             list.Add(Make(st.Id, st.Name, "Reggiatrice", st.PositionMm / 1000.0, Math.Max(300, st.FootprintLengthMm) / 1000.0,
                 (st.Side == LateralSide.Left ? 1 : -1) * (w / 2 + 0.45), 0));
         if (p.BundleClamp.IsEnabled)
-            list.Add(Make(p.BundleClamp.Id, p.BundleClamp.Name, "Stringifascio KNOF", p.BundleClamp.PositionMm / 1000.0, 0.3, 0, 0));
+            list.Add(Make(p.BundleClamp.Id, p.BundleClamp.Name, "Stringifascio", p.BundleClamp.PositionMm / 1000.0, 0.3, 0, 0));
         if (p.Compactor.IsEnabled)
             list.Add(Make(p.Compactor.Id, p.Compactor.Name, "Compattatore laterale", p.Compactor.PositionMm / 1000.0, Math.Max(300, p.Compactor.JawLengthMm) / 1000.0, 0, zTop));
         if (p.Rejector.IsEnabled)
@@ -64,7 +64,7 @@ public static class LayoutGeometry
     /// <summary>Distanza tra due macchine contigue sull'asse linea: dall'uscita della prima all'ingresso della seconda e tra i centri.</summary>
     public sealed record MachineGap(string FromId, string ToId, double ClearM, double CenterM);
 
-    private static readonly HashSet<string> LineMachines = new() { "Reggiatrice", "Stringifascio KNOF", "Compattatore laterale", "Rigettatrice", "Stopper", "Trasferitore" };
+    private static readonly HashSet<string> LineMachines = new() { "Reggiatrice", "Stringifascio", "Compattatore laterale", "Rigettatrice", "Stopper", "Trasferitore" };
 
     /// <summary>Macchine sull'asse linea, ordinate lungo X, e distanze tra macchine adiacenti (reggiatrici su lati opposti comprese).</summary>
     public static IReadOnlyList<MachineGap> Gaps(LineProject p)

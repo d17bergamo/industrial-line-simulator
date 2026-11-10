@@ -8,8 +8,8 @@ public static class EssentialProperties
 {
     private static readonly Dictionary<string, string[]> Map = new()
     {
-        ["RollerSection"] = new[] { "LengthMm", "RollerCount" },
-        ["RollerGroup"] = new[] { "RollerTopElevationMm", "WidthMm", "RollerPitchMm", "MaxSpeed", "HighSpeed", "LowSpeed", "Acceleration" },
+        ["RollerSection"] = new[] { "LengthMm", "RollerCount", "RollerDiameterMm" },
+        ["RollerGroup"] = new[] { "RollerTopElevationMm", "WidthMm", "RollerDiameterMm", "MaxSpeed", "HighSpeed", "LowSpeed", "Acceleration" },
         ["PhotocellConfig"] = new[] { "Name", "PositionMm", "Purpose", "IsEnabled" },
         ["PhotocellGroup"] = new[] { "Type", "ResponseTimeMs" },
         ["EncoderConfig"] = new[] { "IsEnabled", "PositionMm" },
@@ -22,6 +22,7 @@ public static class EssentialProperties
         ["StrapperConfig"] = new[] { "Name", "PositionMm", "Side", "MachineType", "StrappingTimeS", "IsEnabled" },
         ["StrapperGroup"] = new[] { "StrappingTimeS", "ArmingTimeS" },
         ["StopperConfig"] = new[] { "PositionMm" },
+        ["AccumulationTransferConfig"] = new[] { "WidthMm", "StepGapMm", "StepSpeed" },
         ["TransferConfig"] = new[] { "LengthMm", "WidthMm", "LiftTimeS", "TranslationSpeed", "DepositTimeS", "FullCycleTimeS" },
         ["StrappingStationConfig"] = new[] { "IsEnabled", "Strategy" },
         ["InfeedConfig"] = new[] { "PackageCount", "TypeSequence", "NewPackageDelayS" },
@@ -34,7 +35,7 @@ public static class EssentialProperties
     private static readonly HashSet<string> OnlyEssential = new() { "RollerSection" };
 
     /// <summary>Campi mai mostrati: l'azione delle fotocellule la decide il modello, l'impatto sul fermo finale non si imposta.</summary>
-    private static readonly HashSet<(string, string)> Never = new() { ("PhotocellConfig", "Action"), ("StopperConfig", "MaxImpactSpeed") };
+    private static readonly HashSet<(string, string)> Never = new() { ("PhotocellConfig", "Action"), ("StopperConfig", "MaxImpactSpeed"), ("AccumulationTransferConfig", "IsEnabled") };
 
     /// <summary>True se la proprietà non va mostrata affatto.</summary>
     public static bool IsHidden(string typeName, string propertyName) =>
