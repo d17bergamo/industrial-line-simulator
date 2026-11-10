@@ -81,7 +81,10 @@ public static class StepCyclogramPdf
         c.Append("BT /F1 ").Append(F(size)).Append(" Tf ").Append(F(x)).Append(' ').Append(F(y)).Append(" Td (").Append(sb).Append(") Tj ET\n");
     }
 
-    internal static byte[] Assemble(List<string> pages)
+    internal static byte[] Assemble(List<string> pages) => Assemble(pages, PageW, PageH);
+
+    /// <summary>Come <see cref="Assemble(List{string})"/> con un formato di pagina a scelta (punti PDF).</summary>
+    internal static byte[] Assemble(List<string> pages, double pageW, double pageH)
     {
         var objs = new List<string>();
         // 1 catalogo, 2 pagine, 3 font, poi per ogni pagina: oggetto pagina + contenuto
@@ -91,7 +94,7 @@ public static class StepCyclogramPdf
         objs.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
         for (int i = 0; i < pages.Count; i++)
         {
-            objs.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {F(PageW)} {F(PageH)}] /Resources << /Font << /F1 3 0 R >> >> /Contents {5 + i * 2} 0 R >>");
+            objs.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {F(pageW)} {F(pageH)}] /Resources << /Font << /F1 3 0 R >> >> /Contents {5 + i * 2} 0 R >>");
             objs.Add($"<< /Length {Encoding.Latin1.GetByteCount(pages[i])} >>\nstream\n{pages[i]}endstream");
         }
         var ms = new MemoryStream();

@@ -29,6 +29,29 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Scheda grande cliccabile della schermata iniziale -->
+        <Style x:Key="HomeCard" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,16,16"/>
+            <Setter Property="Width" Value="360"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="White" BorderBrush="#E3E6EA" BorderThickness="1.5" CornerRadius="14" Padding="16">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#0B5FC0"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F7FAFE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Passo del percorso Pacchi → Layout → Ciclo → Simula: Tag = True sul passo attivo -->
         <Style x:Key="StepButton" TargetType="Button">
             <Setter Property="Height" Value="36"/>

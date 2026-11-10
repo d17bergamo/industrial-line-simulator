@@ -161,7 +161,56 @@ public sealed partial class MainViewModel
     // ------------------------------------------------------------ Avvio guidato
 
     /// <summary>Esempio proposto all'avvio, con le scelte e le caratteristiche principali.</summary>
-    public sealed record StartOption(string Name, string Summary, IReadOnlyList<string> Features, Func<LineProject> Create);
+    public sealed record StartOption(string Name, string Summary, IReadOnlyList<string> Features, Func<LineProject> Create, IReadOnlyList<PictureShape> Picture);
+
+    /// <summary>Rettangolo del disegno schematico dall'alto di un esempio (coordinate su una tela 320 × 110).</summary>
+    public sealed record PictureShape(double X, double Y, double W, double H, System.Windows.Media.Brush Fill, double Radius = 1);
+
+    private static readonly System.Windows.Media.Brush PicRoller = Frozen(0x9A, 0xA4, 0xAE), PicFrame = Frozen(0x6F, 0x76, 0x7C),
+        PicMachine = Frozen(0x0B, 0x5F, 0xC0), PicTransfer = Frozen(0xB5, 0xBA, 0xBF), PicScale = Frozen(0x34, 0x46, 0x5C), PicPhotocell = Frozen(0x1E, 0x7A, 0x45),
+        PicPackage = Frozen(0xE0, 0x8A, 0x1E);
+
+    private static System.Windows.Media.Brush Frozen(byte r, byte g, byte b)
+    {
+        var br = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        br.Freeze();
+        return br;
+    }
+
+    /// <summary>Disegno schematico dall'alto: vie a rulli, legatrici, fotocellule, trasferitore con catene e bilico.</summary>
+    public static IReadOnlyList<PictureShape> Picture(LineProject p)
+    {
+        var list = new List<PictureShape>();
+        if (p.Sections.Count == 0) return list;
+        double start = p.Sections.Min(s => s.StartMm), end = p.Sections.Max(s => s.EndMm);
+        double k = 300.0 / Math.Max(1, end - start);
+        double X(double mm) => 10 + (mm - start) * k;
+        const double ly = 40, lh = 16;
+        foreach (var s in p.Sections.OrderBy(x => x.StartMm))
+        {
+            list.Add(new PictureShape(X(s.StartMm), ly - 2, Math.Max(1, s.LengthMm * k - 1.5), lh + 4, PicFrame, 2));
+            list.Add(new PictureShape(X(s.StartMm) + 1, ly, Math.Max(1, s.LengthMm * k - 3.5), lh, PicRoller, 1));
+        }
+        // catene del trasferitore e bilico
+        if (p.Transfer.LengthMm > 0)
+        {
+            int n = Math.Max(3, (int)(p.Transfer.LengthMm / 2500) + 1);
+            for (int i = 0; i < n; i++)
+                list.Add(new PictureShape(X(p.Transfer.PositionMm) + 3 + (p.Transfer.LengthMm * k - 8) * i / (n - 1), ly + lh + 2, 2.5, 36, PicTransfer, 1));
+            list.Add(new PictureShape(X(p.Transfer.PositionMm), ly + lh + 38, p.Transfer.LengthMm * k, 10, PicTransfer, 2));
+            foreach (var sc in p.Scales.Where(x => x.IsEnabled))
+                list.Add(new PictureShape(X(sc.StartMm) + 2, ly + lh + 18, Math.Max(4, sc.LengthMm * k - 4), 10, PicScale, 2));
+        }
+        // legatrici sopra la linea
+        foreach (var st in p.Strappers)
+            list.Add(new PictureShape(X(st.PositionMm) - 3.5, ly - 22, 7, 20, st.IsEnabled ? PicMachine : PicTransfer, 2));
+        foreach (var pc in p.Photocells.Where(x => x.IsEnabled))
+            list.Add(new PictureShape(X(pc.PositionMm) - 1, ly - 5, 2, 4, PicPhotocell, 0));
+        // un pacco sulla via di legatura
+        var pk = p.PackageTypes.OrderByDescending(t => t.LengthMm).FirstOrDefault();
+        if (pk != null) list.Add(new PictureShape(X(start + 500), ly + 4, Math.Min(pk.LengthMm, end - start) * k * 0.9, lh - 8, PicPackage, 1));
+        return list;
+    }
 
     private IReadOnlyList<StartOption>? _startOptions;
     public IReadOnlyList<StartOption> StartOptions => _startOptions ??= SampleProjects.All.Select(x =>
@@ -177,8 +226,12 @@ public sealed partial class MainViewModel
             $"Trasferitore a catene {p.Transfer.LengthMm / 1000:0.#} m · {p.Scales.Count} {(p.Scales.Count == 1 ? "bilico" : "bilici")}" + (p.Transfer.ScaleAtMidStroke ? " a metà corsa" : ""),
             p.IntermediateStops.Any(f => f.IsEnabled) ? "Fermo scomparente: double banking e intestatura di coda possibili" : "Senza fermo scomparente: intestatura di testa"
         };
-        return new StartOption(x.Name, $"Modello pronto da simulare: {p.Sections.Count} moduli, lunghezza {sec.Last().EndMm / 1000:0.#} m", feats, x.Factory);
+        return new StartOption(x.Name, $"{p.Sections.Count} moduli · linea di {sec.Last().EndMm / 1000:0.#} m", feats, x.Factory, Picture(p));
     }).ToList();
+
+    private IReadOnlyList<PictureShape>? _emptyPicture;
+    /// <summary>Disegno della linea base del "layout nuovo".</summary>
+    public IReadOnlyList<PictureShape> EmptyPicture => _emptyPicture ??= Picture(SampleProjects.CreateEmpty());
 
     private ICommand? _startFromExampleCommand, _startFromScratchCommand;
     /// <summary>Apre l'esempio scelto e va dritto al layout e simulazione.</summary>
