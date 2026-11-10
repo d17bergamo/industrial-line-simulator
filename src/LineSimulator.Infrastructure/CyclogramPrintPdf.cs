@@ -199,17 +199,20 @@ public static class CyclogramPrintPdf
             if (trfReturn != null) events.Add((trfReturn.StartS, "Pacco depositato: il trasferitore torna, pronto per il successivo."));
         }
         events = events.Where(x => x.T >= t0 && x.T <= t1).OrderBy(x => x.T).ToList();
+        double prevX = double.NegativeInfinity, prevDy = 0;
         for (int i = 0; i < events.Count; i++)
         {
             double xx = X(events[i].T);
+            double dy = xx - prevX < 16 ? prevDy + 15 : 0;                 // eventi quasi contemporanei: cerchi uno sotto l'altro
             c.Append("[4 3] 0 d 0.9 w\n"); Line(c, xx, gy1, xx, chartTop); c.Append("[] 0 d 0.5 w\n");
-            Circle(c, xx, gy1 - 22, 6.5);
-            Text(c, xx - 2.5, gy1 - 25, 8, (i + 1).ToString(ci));
+            Circle(c, xx, gy1 - 22 - dy, 6.5);
+            Text(c, xx - 2.5, gy1 - 25 - dy, 8, (i + 1).ToString(ci));
+            prevX = xx; prevDy = dy;
         }
         // tempo ciclo a regime
         if (r.CycleTimeMeanS is double tc && pk != null)
         {
-            double a = X(pk.EntryTimeS), b = X(Math.Min(t1, pk.EntryTimeS + tc)), yb = gy1 - 40;
+            double a = X(pk.EntryTimeS), b = X(Math.Min(t1, pk.EntryTimeS + tc)), yb = gy1 - 52;
             c.Append("1.2 w\n"); Line(c, a, yb, b, yb); Line(c, a, yb - 4, a, yb + 4); Line(c, b, yb - 4, b, yb + 4); c.Append("0.5 w\n");
             string tt = $"Tempo ciclo a regime Tc = {N(tc, "0.0")} s";
             Gray(c, 1); Rect(c, (a + b) / 2 - tt.Length * 2.3, yb - 6, tt.Length * 4.6, 12, true); Gray(c, 0);
