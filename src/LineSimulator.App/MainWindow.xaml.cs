@@ -50,6 +50,12 @@ public partial class MainWindow : Window
     private LineSimulator.Models.PackageType? _lastPackage3D;
     private int _strapDrag = -1;
 
+    private void StrapDims_Changed(object sender, RoutedEventArgs e)
+    {
+        _packageScene.ShowDimensions = (sender as CheckBox)?.IsChecked == true;
+        if (IsLoaded) RefreshPackage3D();
+    }
+
     private void RefreshPackage3D()
     {
         var sel = _vm.SelectedPackageType;
@@ -289,6 +295,7 @@ public partial class MainWindow : Window
         scene.Dragging = true;
         _lastXm = p.Value.X;
         viewport.CaptureMouse();
+        e.Handled = true;            // si sposta l'oggetto: il tasto sinistro non ruota la vista (sullo sfondo sì)
     }
 
     private void LayoutViewport_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) => BeginMove(LayoutViewport, _vm.LayoutScene, e);

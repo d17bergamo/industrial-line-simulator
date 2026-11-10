@@ -29,7 +29,7 @@ public static class EquipmentLibrary
             "M5,26 L5,8 L25,8 L25,26 M5,15 L25,15", 0.3, 1.9, 2.2),
         new("compactor", CatCompactors, "Compattatore laterale", "Due ganasce con apertura e chiusura regolabili",
             "M3,8 L9,8 L9,22 L3,22 Z M27,8 L21,8 L21,22 L27,22 Z M11,15 L19,15", 1.5, 1.4, 1.0),
-        new("chains", CatOthers, "Trasferitore a catene", "Trasferitore a catene: preleva i pacchi dalla linea e li porta lateralmente",
+        new("chains", CatOthers, "Trasferitore sollevabile a catene", "Trasferitore sollevabile a catene: preleva i pacchi dalla linea e li porta lateralmente",
             "M3,20 L27,20 M3,14 L27,14 M3,14 L3,20 M27,14 L27,20 M9,14 L9,20 M15,14 L15,20 M21,14 L21,20", 12.0, 1.4, 0.3),
         new("scale", CatOthers, "Bilico di pesatura", "Piattaforma di pesatura lungo la linea",
             "M3,20 L27,20 L27,25 L3,25 Z M6,20 L6,14 L24,14 L24,20", 6.5, 1.2, 0.8),

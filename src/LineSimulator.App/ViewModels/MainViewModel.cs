@@ -90,7 +90,12 @@ public sealed partial class MainViewModel : ObservableObject
                 Examples.Add(new ExampleItem("File: " + Path.GetFileName(f), () => _repo.Load(f)));
 
         NewCommand = new RelayCommand(() => { if (ConfirmDiscard()) LoadProject(NewEmptyProject(), null); });
-        OpenCommand = new RelayCommand(Open);
+        OpenCommand = new RelayCommand(() =>
+        {
+            var before = _project;
+            Open();
+            if (!ReferenceEquals(before, _project) && CurrentSection == AppSection.Home) CurrentSection = AppSection.Layout;   // dall'avvio guidato
+        });
         SaveCommand = new RelayCommand(() => Save(false));
         SaveAsCommand = new RelayCommand(() => Save(true));
         DuplicateCommand = new RelayCommand(Duplicate);
@@ -1137,7 +1142,7 @@ public sealed partial class MainViewModel : ObservableObject
                 added = _project.Rejector;
                 break;
             case "chains":
-                _project.Transfer.Kind = TransferKind.Chains;
+                _project.Transfer.Kind = TransferKind.Lifting;       // trasferitore sollevabile a catene (unico tipo)
                 _project.Transfer.PositionMm = Math.Max(0, Snap(x - _project.Transfer.LengthMm / 2));
                 _project.Transfer.DestinationSide = yM >= 0 ? LateralSide.Left : LateralSide.Right;
                 added = _project.Transfer;
@@ -1612,7 +1617,14 @@ public sealed partial class MainViewModel : ObservableObject
                 "Simulazione non avviabile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
-        _engine = new SimulationEngine(ProjectSerializer.Clone(_project));
+        var simProject = ProjectSerializer.Clone(_project);
+        if (simProject.Infeed.Continuous)
+        {
+            // simulazione continua: i pacchi entrano senza fine finché l'utente non la ferma
+            simProject.Infeed.PackageCount = ContinuousPackageCount;
+            simProject.Simulation.MaxSimulationTimeS = 1e9;
+        }
+        _engine = new SimulationEngine(simProject);
         if (_lineSpeedOverride is double ov) _engine.SetLineSpeed(ov);
         _liveMeasuredPph = null; _lastExitedForPph = -1;
         _eventIndex = 0;
@@ -1705,11 +1717,23 @@ public sealed partial class MainViewModel : ObservableObject
         if (_engine.IsFinished) ComputeResults();
     }
 
+    /// <summary>Numero di pacchi della simulazione continua (in pratica senza fine).</summary>
+    private const int ContinuousPackageCount = 1_000_000;
+
     private void RunToEnd()
     {
         if (!EnsureEngine()) return;
         Mouse.OverrideCursor = Cursors.Wait;
-        try { _engine!.RunToCompletion(); }
+        try
+        {
+            if (_project.Infeed.Continuous)
+            {
+                // continua: "fino alla fine" avanza di un'ora di simulazione e si ferma, con i risultati misurati fin lì
+                double until = _engine!.Time + 3600;
+                while (_engine.Time < until && _engine.Step()) { }
+            }
+            else _engine!.RunToCompletion();
+        }
         finally { Mouse.OverrideCursor = null; }
         UpdateAfterAdvance(final: true);
         ComputeResults();
@@ -1743,7 +1767,7 @@ public sealed partial class MainViewModel : ObservableObject
             RaiseProductivity();
         }
         if (IsPlaying || final)
-            Status = $"t = {_engine.Time:0.0} s · pacchi in linea {onLine} · usciti {exited}/{_engine.PackagesToSimulate}"
+            Status = $"t = {_engine.Time:0.0} s · pacchi in linea {onLine} · usciti {exited}" + (_project.Infeed.Continuous ? "" : $"/{_engine.PackagesToSimulate}")
                      + (rejected > 0 ? $" · rigettati {rejected}" : "") + $" · collisioni {_engine.Collisions}"
                      + (_engine.DeviceAlarms > 0 ? $" · allarmi {_engine.DeviceAlarms}" : "")
                      + (_engine.IsFinished ? " · " + _engine.FinishReason : "");

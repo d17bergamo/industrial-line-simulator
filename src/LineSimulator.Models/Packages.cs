@@ -79,6 +79,12 @@ public sealed class InfeedConfig
     public int PackageCount { get; set; } = 10;
 
     /// <summary>
+    /// Simulazione continua (default): nell'app i pacchi entrano senza fine finché l'utente non ferma la simulazione;
+    /// PackageCount vale solo per le misure fatte "fino alla fine" (test, ottimizzazione).
+    /// </summary>
+    public bool Continuous { get; set; } = true;
+
+    /// <summary>
     /// Regola di ingresso. Predefinita: il nuovo pacco si crea quando la coda del precedente libera la fotocellula di ingresso
     /// della via rulli di legatura (+ <see cref="NewPackageDelayS"/>) e avanza solo quando la coda del precedente libera
     /// la fotocellula di uscita della via rulli di legatura.

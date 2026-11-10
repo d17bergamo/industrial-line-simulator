@@ -197,7 +197,7 @@ public enum TransferKind { Lifting, Chains }
 
 public sealed class TransferConfig : ComponentBase
 {
-    [UiProperty("Tipo di trasferitore", "", "Geometria", Order = 0)]
+    /// <summary>Il trasferitore sollevabile è sempre a catene (si disegna così): il tipo non si sceglie più dall'interfaccia.</summary>
     public TransferKind Kind { get; set; } = TransferKind.Lifting;
 
     [UiProperty("Inizio trasferitore (in linea)", "mm", "Geometria", Order = 1)]
@@ -221,8 +221,9 @@ public sealed class TransferConfig : ComponentBase
         if (Sections.Count > 0) LengthMm = Sections.Sum(s => s.LengthMm);
     }
 
-    [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
-    public double WidthMm { get; set; } = 400;
+    /// <summary>Larghezza del trasferitore a catene: lunghezza delle catene trasversali alla linea.</summary>
+    [UiProperty("Larghezza trasferitore", "mm", "Geometria", Order = 3)]
+    public double WidthMm { get; set; } = 3000;
 
     [UiProperty("Corsa di sollevamento", "mm", "Geometria", Order = 4)]
     public double LiftStrokeMm { get; set; } = 150;

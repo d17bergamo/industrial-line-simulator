@@ -56,6 +56,20 @@ public static class SampleProjects
     /// <summary>Modello aperto all'avvio: 2 legatrici, pacchi 6/9/12 m.</summary>
     public static LineProject CreateStandardLine() => CreateTwoStrappers12m();
 
+    /// <summary>
+    /// Layout "da zero" per l'avvio guidato: pacchi 6/9/12 m, via di ingresso, via davanti al trasferitore, trasferitore a catene,
+    /// bilico e fermo finale; nessuna legatrice (si aggiungono dalla libreria). La simulazione funziona già (pacchi non legati).
+    /// </summary>
+    public static LineProject CreateEmpty()
+    {
+        var p = CreateOneStrapper12m();
+        p.Name = "Nuovo layout";
+        p.Strappers.Clear();
+        p.BundleClamp.IsEnabled = false;
+        p.Compactor.IsEnabled = false;
+        return p;
+    }
+
     public static LineProject CreateOneStrapper12m() =>
         Build("1 legatrice - pacchi 6/9/12 m", strappers: 1, maxLengthM: 12, infeedLengthsM: new[] { 6, 9, 12 });
 

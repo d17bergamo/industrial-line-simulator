@@ -333,8 +333,11 @@ public sealed class LineScene
         double x = pc.PositionMm / 1000.0, w = _lineWidth;
         var postColor = Color.FromRgb(0x34, 0x49, 0x5E);
         var f = new MeshFactory();
-        f.AddBox(new Point3D(x, -w / 2 - 0.3, _zTop / 2 + 0.15), 0.06, 0.06, _zTop + 0.3);
-        f.AddBox(new Point3D(x, w / 2 + 0.3, _zTop / 2 + 0.15), 0.06, 0.06, _zTop + 0.3);
+        // davanti al trasferitore (sulla sua via) la fotocellula è a tasteggio: una sola colonna, dal lato opposto al trasferitore
+        bool diffuse = _project != null && LayoutRules.TransferModule(_project) is { } tm && pc.PositionMm >= tm.StartMm - 1e-6 && pc.PositionMm <= tm.EndMm + 1e-6;
+        double away = _project?.Transfer.DestinationSide == LateralSide.Left ? -1 : 1;
+        if (!diffuse || away < 0) f.AddBox(new Point3D(x, -w / 2 - 0.3, _zTop / 2 + 0.15), 0.06, 0.06, _zTop + 0.3);
+        if (!diffuse || away > 0) f.AddBox(new Point3D(x, w / 2 + 0.3, _zTop / 2 + 0.15), 0.06, 0.06, _zTop + 0.3);
         var post = MeshFactory.Model(f.ToMesh(), postColor, out var pb);
         _group.Children.Add(post);
         Register(post, pc, pb, postColor);
@@ -345,6 +348,8 @@ public sealed class LineScene
         GeometryModel3D beam;
         if (pc.Direction == DetectionDirection.Vertical)
             beam = MeshFactory.Box(new Point3D(x, 0, _zTop + 0.35), 0.02, 0.02, 0.7, beamColor, out bb);
+        else if (diffuse)   // a tasteggio: il fascio parte dalla colonna e arriva al pacco (metà linea)
+            beam = MeshFactory.Box(new Point3D(x, away * (w / 2 + 0.3) / 2, beamZ), 0.02, w / 2 + 0.3, 0.02, beamColor, out bb);
         else
             beam = MeshFactory.Box(new Point3D(x, 0, beamZ), 0.02, w + 0.6, 0.02, beamColor, out bb);
         _group.Children.Add(beam);
@@ -472,19 +477,16 @@ public sealed class LineScene
         {
             double sl = Math.Max(0.3, sec.LengthMm / 1000.0), gap = 0.04;
             int n = Math.Max(2, (int)Math.Round(sl / 2.5) + 1);
-            if (t.Kind == TransferKind.Chains)
-            {
-                // catene: quattro filari lungo la linea con i pignoni alle estremità
-                foreach (double yy in new[] { -0.36, -0.12, 0.12, 0.36 })
-                    f.AddBox(new Point3D(sx + (sl - gap) / 2, yy * _lineWidth, _zTop - 0.05), sl - gap, 0.06, 0.05);
-                f.AddCylinderY(sx + 0.08, _zTop - 0.05, -_lineWidth / 2 - 0.05, _lineWidth / 2 + 0.05, 0.07, 12);
-                f.AddCylinderY(sx + sl - gap - 0.08, _zTop - 0.05, -_lineWidth / 2 - 0.05, _lineWidth / 2 + 0.05, 0.07, 12);
-            }
-            else
+            // trasferitore sollevabile a catene (unico tipo): catene trasversali tra i rulli, lunghe quanto la larghezza del trasferitore,
+            // dal lato opposto della linea verso la destinazione, con i pignoni alle estremità
+            double tw = Math.Max(_lineWidth + 0.2, t.WidthMm / 1000.0);
+            double y0 = -sign * (_lineWidth / 2 + 0.1), y1 = y0 + sign * tw, yc = (y0 + y1) / 2;
             for (int i = 0; i < n; i++)
             {
                 double x = sx + 0.1 + (sl - 0.2 - gap) * i / (n - 1);
-                f.AddBox(new Point3D(x, 0, _zTop - 0.06), 0.12, _lineWidth + 0.2, 0.08);
+                f.AddBox(new Point3D(x, yc, _zTop - 0.05), 0.06, tw, 0.05);
+                f.AddBox(new Point3D(x, y0, _zTop - 0.05), 0.14, 0.14, 0.14);
+                f.AddBox(new Point3D(x, y1, _zTop - 0.05), 0.14, 0.14, 0.14);
             }
             f.AddBox(new Point3D(sx + (sl - gap) / 2, 0, _zTop - 0.1), sl - gap, 0.1, 0.04);       // longherone di sezione
             _names.Children.Add(Label(sec.Name, new Point3D(sx + sl / 2, -_lineWidth / 2 - 0.35, _zTop + 0.15)));

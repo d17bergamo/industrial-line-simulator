@@ -281,7 +281,8 @@ public sealed class IntermediateStopConfig : ComponentBase
 /// all'estremità scelta all'inserimento); si sposta a mano solo con la spunta <see cref="ManualPosition"/>.
 /// </summary>
 [UiHiddenProperties(nameof(Model), nameof(StartConsent), nameof(StopCondition), nameof(ConfirmDelayS), nameof(ConfirmTimeoutS),
-    nameof(StartMm), nameof(LengthMm), nameof(PositionToleranceMm), nameof(ResolutionKg), nameof(CapacityKg))]
+    nameof(StartMm), nameof(LengthMm), nameof(PositionToleranceMm), nameof(ResolutionKg), nameof(CapacityKg),
+    nameof(StabilizationTimeS), nameof(ReleaseTimeS))]
 public sealed class WeighingScaleConfig : SequenceDeviceConfig, IGroupChild
 {
     [UiProperty("Posizione sul trasferitore (centro / estremità)", "", "Posizione", Order = 5)]
@@ -327,13 +328,16 @@ public sealed class WeighingScaleConfig : SequenceDeviceConfig, IGroupChild
     public double PositionToleranceMm { get; set; } = 10;
 
     [UiProperty("Tempo di stabilizzazione", "s", "Tempi", Order = 30)]
-    public double StabilizationTimeS { get; set; } = 3.0;
+    public double StabilizationTimeS { get; set; } = 0;
 
-    [UiProperty("Tempo di acquisizione peso", "s", "Tempi", Order = 31)]
-    public double AcquisitionTimeS { get; set; } = 1.0;
+    [UiProperty("Tempo di pesata", "s", "Tempi", Order = 31)]
+    public double AcquisitionTimeS { get; set; } = DefaultWeighingTimeS;
+
+    /// <summary>Tempo di pesata di default (s): l'unico tempo del bilico.</summary>
+    public const double DefaultWeighingTimeS = 10;
 
     [UiProperty("Tempo di scarico dal bilico", "s", "Tempi", Order = 32)]
-    public double ReleaseTimeS { get; set; } = 4.0;
+    public double ReleaseTimeS { get; set; } = 0;
 
     [UiProperty("Risoluzione", "kg", "Pesatura", Order = 40)]
     public double ResolutionKg { get; set; } = 2;
@@ -385,15 +389,7 @@ public sealed class ScaleGroup : ComponentBase
 {
     public ScaleGroup() { Id = "BIL"; Name = "Bilici di pesatura"; }
 
-    [UiProperty("Tolleranza di verifica posizione sul bilico", "mm", "Posizionamento", Order = 25)]
-    public double PositionToleranceMm { get; set; } = 10;
-
-    [UiProperty("Tempo di stabilizzazione", "s", "Tempi", Order = 30)]
-    public double StabilizationTimeS { get; set; } = 3.0;
-
-    [UiProperty("Tempo di acquisizione peso", "s", "Tempi", Order = 31)]
-    public double AcquisitionTimeS { get; set; } = 1.0;
-
-    [UiProperty("Tempo di scarico dal bilico", "s", "Tempi", Order = 32)]
-    public double ReleaseTimeS { get; set; } = 4.0;
+    /// <summary>Unico parametro dei bilici: il tempo di pesata.</summary>
+    [UiProperty("Tempo di pesata", "s", "Tempi", Order = 31)]
+    public double AcquisitionTimeS { get; set; } = WeighingScaleConfig.DefaultWeighingTimeS;
 }
