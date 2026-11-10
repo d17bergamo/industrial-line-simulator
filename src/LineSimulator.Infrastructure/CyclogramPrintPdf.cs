@@ -145,13 +145,13 @@ public static class CyclogramPrintPdf
         double gy1 = chartTop - rows.Count * rowH;
 
         // griglia del tempo
-        for (int t = (int)Math.Ceiling(t0); t <= t1; t++)
+        for (int ts = (int)Math.Ceiling(t0); ts <= t1; ts++)
         {
-            bool major = (t - (int)Math.Ceiling(t0)) % 10 == 0;
+            bool major = (ts - (int)Math.Ceiling(t0)) % 10 == 0;
             Gray(c, major ? 0 : 0.78);
             c.Append(major ? "0.6 w\n" : "0.25 w\n");
-            Line(c, X(t), gy1, X(t), chartTop);
-            if (major) { Gray(c, 0); Text(c, X(t) - 6, chartTop + 4, 7.5, $"{t - t0:0} s"); Text(c, X(t) - 4, gy1 - 10, 7.5, $"{t - t0:0}"); }
+            Line(c, X(ts), gy1, X(ts), chartTop);
+            if (major) { Gray(c, 0); Text(c, X(ts) - 6, chartTop + 4, 7.5, $"{ts - t0:0} s"); Text(c, X(ts) - 4, gy1 - 10, 7.5, $"{ts - t0:0}"); }
         }
         Gray(c, 0); c.Append("0.5 w\n");
         for (int i = 0; i < rows.Count; i++)
@@ -241,10 +241,10 @@ public static class CyclogramPrintPdf
         if (p.BundleClamp.IsEnabled)
             mach.Add(new[] { "Stringifascio", p.BundleClamp.PerMachine ? $"{N(p.BundleClamp.MachineOffsetMm, "0")} mm prima di ogni legatrice" : N(p.BundleClamp.PositionMm, "0") + " mm",
                 $"chiude {N(p.BundleClamp.CloseTimeS)} s · tiene {N(p.BundleClamp.HoldTimeS)} s · apre {N(p.BundleClamp.OpenTimeS)} s", "" });
-        var t = p.Transfer;
-        mach.Add(new[] { "Trasferitore a catene", N(t.PositionMm, "0") + " mm, " + N(t.LengthMm, "0") + " mm",
-            $"solleva {N(t.LiftTimeS)} s · abbassa {N(t.LowerTimeS)} s · deposito {N(t.DepositTimeS)} s",
-            $"corsa {N(t.LiftStrokeMm, "0")} mm · traslazione {N(t.TranslationStrokeMm, "0")} mm a {N(t.TranslationSpeed)} m/s" });
+        var trf = p.Transfer;
+        mach.Add(new[] { "Trasferitore a catene", N(trf.PositionMm, "0") + " mm, " + N(trf.LengthMm, "0") + " mm",
+            $"solleva {N(trf.LiftTimeS)} s · abbassa {N(trf.LowerTimeS)} s · deposito {N(trf.DepositTimeS)} s",
+            $"corsa {N(trf.LiftStrokeMm, "0")} mm · traslazione {N(trf.TranslationStrokeMm, "0")} mm a {N(trf.TranslationSpeed)} m/s" });
         foreach (var sc in p.Scales.Where(x => x.IsEnabled))
             mach.Add(new[] { sc.Name, sc.Mounting == ScaleMounting.InLine ? "integrato nella via" : "bancale", $"pesata {N(sc.AcquisitionTimeS)} s", "" });
         ry = Table(c, rx, ry, colW, new[] { "Macchina", "Posizione", "Tempi", "Velocità / corse" }, mach, new[] { 0.2, 0.2, 0.33, 0.27 });
