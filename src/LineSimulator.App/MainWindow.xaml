@@ -392,7 +392,7 @@
 <TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                         <Grid>
-                            <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ViewCubeHorizontalPosition="0.86" ViewCubeVerticalPosition="-0.62" ViewCubeWidth="90" ViewCubeHeight="90" ZoomExtentsWhenLoaded="True" RotateGesture2="LeftClick"
+                            <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ViewCubeHorizontalPosition="Right" ViewCubeVerticalPosition="Bottom" ViewCubeWidth="90" ViewCubeHeight="90" Margin="0,0,0,46" ZoomExtentsWhenLoaded="True" RotateGesture2="LeftClick"
                                                PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" PreviewMouseMove="MoveViewport_PreviewMouseMove"
                                                PreviewMouseLeftButtonUp="MoveViewport_PreviewMouseLeftButtonUp"
                                                AllowDrop="True" DragEnter="LayoutViewport_DragOver" DragOver="LayoutViewport_DragOver"
@@ -440,7 +440,7 @@
                             </StackPanel>
                         </Border>
                         <!-- Viste in basso a destra (il cubo 3D è subito sopra) -->
-                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,8,8" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3">
+                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,8,6" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3">
                             <WrapPanel>
                                 <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
                                 <Button Style="{StaticResource ToolButton}" Content="Frontale" Click="ViewFront_Click"/>
