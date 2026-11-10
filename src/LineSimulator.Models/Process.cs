@@ -384,7 +384,6 @@ public static class ProcessText
 }
 
 /// <summary>Famiglia dei bilici di pesatura: tempi comuni ereditati dai bilici non personalizzati.</summary>
-[UiHiddenProperties(nameof(PositionToleranceMm))]
 public sealed class ScaleGroup : ComponentBase
 {
     public ScaleGroup() { Id = "BIL"; Name = "Bilici di pesatura"; }
