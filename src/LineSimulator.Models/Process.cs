@@ -15,6 +15,15 @@ public enum PhotocellDetectionMode
 }
 
 /// <summary>Funzione di processo di una fotocellula.</summary>
+/// <summary>Montaggio del bilico di pesatura.</summary>
+public enum ScaleMounting
+{
+    /// <summary>Bancale accanto alla linea: il trasferitore deposita il pacco sul bilico.</summary>
+    Pallet = 0,
+    /// <summary>Integrato nella via a rulli davanti al trasferitore: il pacco si pesa in battuta, poi il trasferitore lo preleva.</summary>
+    InLine = 1
+}
+
 public enum PhotocellPurpose
 {
     /// <summary>Uso generico (accumulo, rallentamento, arresto, segnale) secondo l'azione configurata.</summary>
@@ -285,6 +294,10 @@ public sealed class IntermediateStopConfig : ComponentBase
     nameof(StabilizationTimeS), nameof(ReleaseTimeS))]
 public sealed class WeighingScaleConfig : SequenceDeviceConfig, IGroupChild
 {
+    /// <summary>Bancale (il trasferitore deposita il pacco sul bilico) oppure integrato nella via a rulli (pesata in battuta prima del prelievo).</summary>
+    [UiProperty("Tipo di bilico", "", "Posizione", Order = 4)]
+    public ScaleMounting Mounting { get; set; } = ScaleMounting.Pallet;
+
     [UiProperty("Posizione sul trasferitore (centro / estremità)", "", "Posizione", Order = 5)]
     public DevicePlacement Placement { get; set; } = DevicePlacement.Center;
 
@@ -387,6 +400,9 @@ public static class ProcessText
 public sealed class ScaleGroup : ComponentBase
 {
     public ScaleGroup() { Id = "BIL"; Name = "Bilici di pesatura"; }
+
+    [UiProperty("Tipo di bilico", "", "Posizione", Order = 4)]
+    public ScaleMounting Mounting { get; set; } = ScaleMounting.Pallet;
 
     /// <summary>Unico parametro dei bilici: il tempo di pesata.</summary>
     [UiProperty("Tempo di pesata", "s", "Tempi", Order = 31)]

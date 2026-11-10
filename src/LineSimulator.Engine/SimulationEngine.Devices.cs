@@ -14,6 +14,9 @@ public sealed partial class SimulationEngine
 {
     private readonly List<StopRuntime> _stops = new();
     private readonly List<ScaleRuntime> _scales = new();
+    /// <summary>Bilici integrati nella via a rulli: tempo di pesata in battuta prima del prelievo (0 = nessuno).</summary>
+    private double _inlineWeighS;
+    private readonly Dictionary<PackageRuntime, double> _inlineSince = new();
     private readonly Dictionary<PackageRuntime, List<ScaleRuntime>> _scalePlan = new();
     private readonly Dictionary<SequenceDeviceConfig, (LogicCondition? Consent, LogicCondition? Stop)> _deviceLogic = new();
     private PackageRuntime? _finalAssigned;
@@ -94,7 +97,8 @@ public sealed partial class SimulationEngine
         if (_stops.Count > 0 && Topology.StopperZone != null)
             _zoneById[Topology.StopperZone.Id].MultiStop = true;
         for (int i = 0; i < p.Scales.Count; i++)
-            if (p.Scales[i].IsEnabled) _scales.Add(new ScaleRuntime(p.Scales[i], i));
+            if (p.Scales[i].IsEnabled && p.Scales[i].Mounting == ScaleMounting.Pallet) _scales.Add(new ScaleRuntime(p.Scales[i], i));
+        _inlineWeighS = p.Scales.Where(s => s.IsEnabled && s.Mounting == ScaleMounting.InLine).Select(s => s.AcquisitionTimeS).DefaultIfEmpty(0).Max();
 
         var devices = new List<SequenceDeviceConfig> { p.BundleClamp, p.Compactor, p.Rejector };
         devices.AddRange(p.Scales);

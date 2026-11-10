@@ -240,7 +240,7 @@ public sealed class LineScene
         foreach (var st in p.Strappers) AddStrapper(st);
         AddStopper(p.Stopper);
         AddTransfer(p.Transfer);
-        if (p.Transfer.ScaleAtMidStroke && p.AccumulationTransfer.IsEnabled) AddAccumulation(p.AccumulationTransfer, p.Transfer);
+        if (p.AccumulationTransfer.IsEnabled) AddAccumulation(p.AccumulationTransfer, p.Transfer);
         // Uno stringifascio per ogni legatrice/reggettatrice (se previsto) oppure quello unico; si chiudono insieme
         foreach (var (_, xMm) in LayoutRules.BundleClampPositions(p)) AddBundleClamp(p.BundleClamp, xMm);
         if (p.Compactor.IsEnabled) AddCompactor(p.Compactor);
@@ -489,7 +489,6 @@ public sealed class LineScene
                 f.AddBox(new Point3D(x, y1, _zTop - 0.05), 0.14, 0.14, 0.14);
             }
             f.AddBox(new Point3D(sx + (sl - gap) / 2, 0, _zTop - 0.1), sl - gap, 0.1, 0.04);       // longherone di sezione
-            _names.Children.Add(Label(sec.Name, new Point3D(sx + sl / 2, -_lineWidth / 2 - 0.35, _zTop + 0.15)));
             forks += n;
             sx += sl;
         }
@@ -633,8 +632,19 @@ public sealed class LineScene
         double y = sign * t.TranslationStrokeMm / 1000.0 * (t.ScaleAtMidStroke ? 0.5 : 1.0);
         var color = Color.FromRgb(0x17, 0xA5, 0x89);
         var f = new MeshFactory();
-        f.AddBox(new Point3D(x0 + len / 2, y, _zTop - 0.08), len - 0.05, _lineWidth * 0.9, 0.06);
-        f.AddBox(new Point3D(x0 + len / 2, y, (_zTop - 0.1) / 2), len * 0.8, _lineWidth * 0.5, _zTop - 0.1);
+        if (sc.Mounting == ScaleMounting.InLine)
+        {
+            // integrato nella via a rulli: telaio di pesata sotto i rulli, con le celle di carico agli angoli
+            f.AddBox(new Point3D(x0 + len / 2, 0, _zTop - 0.22), len - 0.05, _lineWidth * 0.95, 0.05);
+            foreach (double cx in new[] { x0 + 0.15, x0 + len - 0.15 })
+                foreach (double cy in new[] { -_lineWidth * 0.4, _lineWidth * 0.4 })
+                    f.AddBox(new Point3D(cx, cy, (_zTop - 0.25) / 2), 0.12, 0.12, _zTop - 0.25);
+        }
+        else
+        {
+            f.AddBox(new Point3D(x0 + len / 2, y, _zTop - 0.08), len - 0.05, _lineWidth * 0.9, 0.06);
+            f.AddBox(new Point3D(x0 + len / 2, y, (_zTop - 0.1) / 2), len * 0.8, _lineWidth * 0.5, _zTop - 0.1);
+        }
         var m = MeshFactory.Model(f.ToMesh(), color, out var b);
         _group.Children.Add(m);
         Register(m, sc, b, color);

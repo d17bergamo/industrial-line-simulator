@@ -343,8 +343,8 @@ public sealed class AccumulationTransferConfig : ComponentBase
 {
     public AccumulationTransferConfig() { Id = "TRA"; Name = "Trasferitore d'accumulo"; }
 
-    [UiProperty("Presente", "", "Funzionamento", Order = 1)]
-    public bool IsEnabled { get; set; }
+    /// <summary>Sempre presente (regola dell'utente 2026-11-10): non si toglie più.</summary>
+    public bool IsEnabled { get; set; } = true;
 
     [UiProperty("Larghezza utile (verso di accumulo)", "mm", "Geometria", Order = 10)]
     public double WidthMm { get; set; } = 5000;
