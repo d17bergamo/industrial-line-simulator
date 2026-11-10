@@ -108,6 +108,24 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>PDF della vista dall'alto: sezioni inverter a colori, motori commutabili, quote tra fotocellule, fermi e legatrici.</summary>
+    private ICommand? _exportPrintCyclogramCommand;
+    /// <summary>Ciclogramma da stampare in bianco e nero (A3 orizzontale) del ciclo a regime.</summary>
+    public ICommand ExportPrintCyclogramCommand => _exportPrintCyclogramCommand ??= new RelayCommand(ExportPrintCyclogram);
+
+    private void ExportPrintCyclogram()
+    {
+        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = SafeName(_project.Name) + "_ciclogramma.pdf" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            Mouse.OverrideCursor = Cursors.Wait;
+            CyclogramPrintPdf.Save(dlg.FileName, _project, _lineSpeedOverride);
+            Status = "Ciclogramma da stampare esportato: " + dlg.FileName;
+        }
+        catch (Exception ex) { MessageBox.Show("Esportazione non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { Mouse.OverrideCursor = null; }
+    }
+
     private void ExportTopViewPdf()
     {
         var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = SafeName(_project.Name) + "_vista_dall_alto.pdf" };

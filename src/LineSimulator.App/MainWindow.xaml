@@ -106,6 +106,7 @@
                 <MenuItem Header="Esporta _logica di controllo (JSON/CSV)..." Command="{Binding ExportControlLogicCommand}"/>
                 <MenuItem Header="Esporta specifica _funzionale (Word)..." Command="{Binding ExportFunctionalSpecCommand}"/>
                 <MenuItem Header="Esporta _vista dall'alto (PDF)..." Command="{Binding ExportTopViewPdfCommand}"/>
+                <MenuItem Header="Esporta _ciclogramma da stampare (PDF, bianco e nero)..." Command="{Binding ExportPrintCyclogramCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Esci" Click="Exit_Click"/>
             </MenuItem>
@@ -138,56 +139,76 @@
             </DockPanel>
         </Border>
         <Grid>
-            <!-- Avvio guidato: da un esempio pronto o da un layout nuovo -->
+            <!-- Avvio guidato: schede con il disegno della linea, un clic per partire -->
             <ScrollViewer Background="{StaticResource PanelBg}" VerticalScrollBarVisibility="Auto" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
-                <StackPanel Margin="32,28" MaxWidth="1200">
-                    <TextBlock Text="Cosa vuoi fare?" FontSize="30" FontWeight="SemiBold" Foreground="#1B2430"/>
-                    <TextBlock Text="Parti da un esempio già pronto e adattalo, oppure costruisci un layout nuovo partendo dai pacchi." Foreground="#5B6673" FontSize="14" Margin="0,4,0,20"/>
+                <StackPanel Margin="40,32" MaxWidth="1180" HorizontalAlignment="Center">
+                    <TextBlock Text="Cosa vuoi fare?" FontSize="32" FontWeight="SemiBold" Foreground="#1B2430"/>
+                    <TextBlock Text="Scegli una linea: un clic e sei pronto per simulare." Foreground="#5B6673" FontSize="15" Margin="0,4,0,24"/>
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="PARTI DA UN ESEMPIO" Style="{StaticResource KpiLabel}" Margin="0,0,0,8"/>
-                            <ItemsControl ItemsSource="{Binding StartOptions}">
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,12,12">
-                                            <DockPanel>
-                                                <Button DockPanel.Dock="Bottom" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Content="Apri questo esempio"
-                                                        Command="{Binding DataContext.StartFromExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Summary}" Foreground="#5B6673" Margin="0,2,0,8" TextWrapping="Wrap"/>
-                                                    <ItemsControl ItemsSource="{Binding Features}">
-                                                        <ItemsControl.ItemTemplate><DataTemplate>
-                                                            <TextBlock TextWrapping="Wrap" Margin="0,2"><Run Text="•  " Foreground="{StaticResource Accent}"/><Run Text="{Binding Mode=OneWay}"/></TextBlock>
-                                                        </DataTemplate></ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </StackPanel>
-                                            </DockPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="PARTI DA ZERO" Style="{StaticResource KpiLabel}" Margin="0,0,0,8"/>
-                            <Border Background="White" BorderBrush="#B9D4F5" BorderThickness="1" CornerRadius="12" Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="Layout nuovo" FontSize="16" FontWeight="Bold"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="#34465C" Margin="0,6,0,0" Text="Ti guido in tre passi:"/>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="1  Pacchi: le tipologie da legare (lunghezza, legature)."/>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,2,0,0" Text="2  Dati area: obiettivo t/h e tempi delle macchine."/>
-                                    <TextBlock TextWrapping="Wrap" Margin="0,2,0,0" Text="3  Layout e simulazione: aggiungi legatrici e macchine dalla libreria e simula."/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="#5B6673" Margin="0,8,0,0" Text="Si parte da una linea base (via rulli, trasferitore a catene, bilico) senza legatrici."/>
-                                    <Button Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Content="Inizia dai pacchi" Command="{Binding StartFromScratchCommand}"/>
-                                </StackPanel>
-                            </Border>
-                            <TextBlock Text="OPPURE" Style="{StaticResource KpiLabel}" Margin="0,20,0,8"/>
-                            <Button Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Content="📂  Apri un progetto salvato" Command="{Binding OpenCommand}"/>
-                            <Button Style="{StaticResource ToolButton}" HorizontalAlignment="Left" Margin="0,8,0,0" Content="Continua con il progetto aperto" Command="{Binding GoStepCommand}" CommandParameter="Layout"/>
-                        </StackPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <!-- Nuovo layout -->
+                        <Button Style="{StaticResource HomeCard}" VerticalAlignment="Top" Command="{Binding StartFromScratchCommand}" ToolTip="Parti dai pacchi, poi dati area e layout: le macchine si aggiungono dalla libreria">
+                            <StackPanel>
+                                <Grid>
+                                    <Border Background="#F4F6F9" CornerRadius="10" Height="124" Margin="0,0,0,12">
+                                    <Viewbox Stretch="Uniform" Margin="8">
+                                        <ItemsControl ItemsSource="{Binding DataContext.EmptyPicture, RelativeSource={RelativeSource AncestorType=Window}}" Width="320" Height="110">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate><Rectangle Width="{Binding W}" Height="{Binding H}" Fill="{Binding Fill}" RadiusX="{Binding Radius}" RadiusY="{Binding Radius}"/></DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Viewbox>
+                                </Border>
+                                    <Border Width="56" Height="56" CornerRadius="28" Background="#0B5FC0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,12">
+                                        <TextBlock Text="+" Foreground="White" FontSize="34" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-4,0,0"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="Nuovo layout" FontSize="18" FontWeight="Bold"/>
+                                <TextBlock Text="Parti da zero: pacchi → dati area → layout" Foreground="#5B6673" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <!-- Esempi pronti -->
+                        <ItemsControl Grid.Column="1" ItemsSource="{Binding StartOptions}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource HomeCard}" Command="{Binding DataContext.StartFromExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <Border Background="#F4F6F9" CornerRadius="10" Height="124" Margin="0,0,0,12">
+                                    <Viewbox Stretch="Uniform" Margin="8">
+                                        <ItemsControl ItemsSource="{Binding Picture}" Width="320" Height="110">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate><Rectangle Width="{Binding W}" Height="{Binding H}" Fill="{Binding Fill}" RadiusX="{Binding Radius}" RadiusY="{Binding Radius}"/></DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Viewbox>
+                                </Border>
+                                            <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Summary}" Foreground="#5B6673" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Style="{StaticResource ToolButton}" Content="📂  Apri un progetto salvato" Command="{Binding OpenCommand}" Margin="0,0,10,0"/>
+                        <Button Style="{StaticResource ToolButton}" Content="↩  Continua con il progetto aperto" Command="{Binding GoStepCommand}" CommandParameter="Layout"/>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
             <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Layout}">
@@ -465,6 +486,7 @@
     <DockPanel>
         <DockPanel DockPanel.Dock="Top" Margin="8,4,4,2">
             <Button DockPanel.Dock="Right" Content="✕" Padding="8,0" ToolTip="Nascondi il ciclogramma" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
+            <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="🖨  Da stampare (PDF)" Command="{Binding ExportPrintCyclogramCommand}" ToolTip="Ciclogramma del ciclo a regime in bianco e nero, A3 orizzontale, con velocità, spazi e tempi" Margin="0,0,6,0"/>
             <TextBlock Text="Ciclogramma" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
             <TextBlock Text="  Clic sul diagramma: porta il 3D a quell'istante" Foreground="#5A6672" VerticalAlignment="Center"/>
         </DockPanel>

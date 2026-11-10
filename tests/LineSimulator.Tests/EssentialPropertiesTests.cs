@@ -105,4 +105,18 @@ public class EssentialPropertiesTests
         Assert.True(e <= c.Count - 1);
         Assert.InRange(c.Skip(s).Take(e - s).Average(), 99, 101);
     }
+
+    [Fact]
+    public void PrintableCyclogram_IsAnA3PdfForEveryExample()
+    {
+        foreach (var (_, create) in SampleProjects.All)
+        {
+            var pdf = LineSimulator.Infrastructure.CyclogramPrintPdf.Build(create());
+            var text = System.Text.Encoding.Latin1.GetString(pdf);
+            Assert.StartsWith("%PDF", text);
+            Assert.Contains("/MediaBox [0 0 1191 842]", text);
+            Assert.Contains("Ciclogramma di un ciclo a regime", text);
+            Assert.Contains("VIE A RULLI", text);
+        }
+    }
 }
