@@ -151,7 +151,7 @@ public static class CyclogramPrintPdf
                 }));
             }
 
-        double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 34;
+        double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 64;
         double rowH = Math.Min(34, (chartTop - chartBottom) / Math.Max(1, rows.Count));
         double gy1 = chartTop - rows.Count * rowH;
 
@@ -185,8 +185,11 @@ public static class CyclogramPrintPdf
             if (strap.Count > 0)
             {
                 events.Add((strap[0].StartS, "Prima legatura: il pacco è fermo in posizione, stringifascio chiuso."));
-                double arrive = stopperSeg?.StartS ?? (pk.ExitTimeS ?? double.MaxValue);
-                double lastEnd = strap.Where(s => s.StartS < arrive && s.StartS < strap[0].StartS + 2.2 * tc0).Select(s => s.EndS).DefaultIfEmpty(strap[0].EndS).Max();
+                // il pacco lascia la via di legatura quando impegna la fotocellula di uscita legatura
+                var exitPc = p.Photocells.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingExit);
+                double leave = (exitPc == null ? null : e.Recorder.Tracks.FirstOrDefault(x => x.Key == "PC:" + exitPc.Id)?.Segments
+                    .FirstOrDefault(sg => sg.State == CycleState.On && sg.StartS > strap[0].StartS)?.StartS) ?? (stopperSeg?.StartS ?? double.MaxValue);
+                double lastEnd = strap.Where(s => s.StartS < leave).Select(s => s.EndS).DefaultIfEmpty(strap[0].EndS).Max();
                 events.Add((lastEnd, "Ultima legatura finita: il pacco lascia la via di legatura."));
             }
             if (stopperSeg != null) events.Add((stopperSeg.StartS, "Il pacco arriva in battuta sul fermo finale."));
