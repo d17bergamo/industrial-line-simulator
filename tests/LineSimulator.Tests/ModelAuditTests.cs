@@ -166,13 +166,13 @@ public class ModelAuditTests
         var slow = p.Photocells.Single(x => x.Action == PhotocellAction.SlowDown);
         slow.PositionMm = p.Stopper.PositionMm - 1200;                       // troppo vicina al fermo finale
         var trf = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
-        trf.PositionMm = p.Transfer.PositionMm - 1500;                       // troppo vicina al trasferitore
+        trf.PositionMm = p.Transfer.PositionMm - 1000;                       // troppo vicina al trasferitore (regola: 1500 mm)
         Assert.Equal(2, PhotocellRules.TooCloseToTarget(p).Count());
         Assert.Contains(ProjectValidator.Validate(p).Warnings, x => x.Code == "PC_TARGET_DIST");
         Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "PC_TARGET_DIST");
         var fixes = PhotocellRules.BeforeSimulation(p);
         Assert.Equal(p.Stopper.PositionMm - 2000, slow.PositionMm, 6);
-        Assert.Equal(p.Transfer.PositionMm - 2000, trf.PositionMm, 6);
+        Assert.Equal(p.Transfer.PositionMm - 1500, trf.PositionMm, 6);      // Vmax²/(2a) + 0,2·Vmax = 1425 → 1500 mm
         Assert.Empty(PhotocellRules.TooCloseToTarget(p));
         Assert.Equal(2, fixes.Count);
     }
@@ -211,7 +211,8 @@ public class ModelAuditTests
         var stop = p.Photocells.Single(x => x.Purpose == PhotocellPurpose.TransferStop);
         // default 1,5 m/s, 1 m/s²: lo spazio di frenata (circa 1,4 m con la sicurezza) è sotto i 2 m → vale il minimo
         Assert.Equal(2000, PhotocellRules.RequiredDistanceMm(p, slow), 6);
-        Assert.Equal(2000, PhotocellRules.RequiredDistanceMm(p, stop), 6);
+        // ingresso al trasferitore (regola dell'utente 2026-11-10): Vmax²/(2a) + 0,2 s·Vmax = 1425 mm → 1500 (per eccesso a 100 mm), senza minimo
+        Assert.Equal(1500, PhotocellRules.RequiredDistanceMm(p, stop), 6);
         // velocità massima 2,5 m/s e decelerazione 0,5 m/s² sulla via del trasferitore: 6,25 m per fermarsi
         var m3 = p.Sections.Single(x => x.Id == "M3");
         m3.OverrideGroup = true; m3.MaxSpeed = 2.5; m3.Deceleration = 0.5;
@@ -222,5 +223,6 @@ public class ModelAuditTests
         PhotocellRules.KeepDistanceFromTarget(p);
         Assert.True(p.Stopper.PositionMm - slow.PositionMm >= needSlow - 1e-6);
         Assert.True(needStop > needSlow);
+        Assert.Equal(Math.Ceiling((2.5 * 2.5 / (2 * 0.5) + 0.2 * 2.5) * 10) * 100, PhotocellRules.RequiredDistanceMm(p, stop), 6);   // 6,75 m → 6800 mm
     }
 }

@@ -95,4 +95,14 @@ public class EssentialPropertiesTests
         ProjectDescription.Refresh(p);
         Assert.Equal("Impianto cliente", p.Name);                 // un nome scelto dall'utente non si tocca
     }
+
+    [Fact]
+    public void SteadyState_IgnoresTheFillingAndEmptyingOfTheLine()
+    {
+        var c = new List<double> { 200, 150, 101, 100, 99, 100, 101, 100, 99, 100, 100, 100, 40 };
+        var (s, e) = LineSimulator.Engine.ResultsCalculator.SteadyWindow(c, 1);
+        Assert.True(s >= 1);
+        Assert.True(e <= c.Count - 1);
+        Assert.InRange(c.Skip(s).Take(e - s).Average(), 99, 101);
+    }
 }
