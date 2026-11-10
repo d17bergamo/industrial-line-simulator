@@ -109,9 +109,12 @@ public class EssentialPropertiesTests
     [Fact]
     public void PrintableCyclogram_IsAnA3PdfForEveryExample()
     {
+        string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
+        int n = 0;
         foreach (var (_, create) in SampleProjects.All)
         {
             var pdf = LineSimulator.Infrastructure.CyclogramPrintPdf.Build(create());
+            if (!string.IsNullOrEmpty(dir)) { Directory.CreateDirectory(dir); File.WriteAllBytes(Path.Combine(dir, $"ciclogramma-stampa-{++n}.pdf"), pdf); }
             var text = System.Text.Encoding.Latin1.GetString(pdf);
             Assert.StartsWith("%PDF", text);
             Assert.Contains("/MediaBox [0 0 1191 842]", text);
