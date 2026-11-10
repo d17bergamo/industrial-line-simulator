@@ -1827,7 +1827,7 @@ public sealed partial class MainViewModel : ObservableObject
         PackageResults.Clear();
         foreach (var x in r.Packages) PackageResults.Add(x);
         Status = $"{r.FinishReason} · {r.PackagesExited} pacchi · " +
-                 (r.PackagesPerHour.HasValue ? $"{r.PackagesPerHour:0.0} pacchi/h · {r.TonnesPerHour:0.0} t/h · " : "") +
+                 (r.PackagesPerHour.HasValue ? $"{r.PackagesPerHour:0.0} pacchi/h · {r.TonnesPerHour:0.0} t/h" + (r.SteadyStateFromS is double sf ? $" a regime (da {sf:0} s)" : "") + " · " : "") +
                  $"collo di bottiglia: {r.BottleneckName}" + (r.HasProblems ? " · ATTENZIONE: anomalie rilevate" : "");
     }
 

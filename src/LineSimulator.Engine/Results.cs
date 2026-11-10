@@ -52,6 +52,14 @@ public sealed class SimulationResults
     public int PackagesExited { get; init; }
 
     public double? CycleTimeMeanS { get; init; }
+
+    /// <summary>Istante dell'uscita da cui il ciclo è a regime (null se non determinato).</summary>
+
+    public double? SteadyStateFromS { get; init; }
+
+    /// <summary>Tempi ciclo usati per la media a regime.</summary>
+
+    public int SteadyStateCycles { get; init; }
     public double? CycleTimeMinS { get; init; }
     public double? CycleTimeMaxS { get; init; }
     /// <summary>Produttività effettiva a regime = 3600 / tempo ciclo medio.</summary>
@@ -97,6 +105,28 @@ public sealed class SimulationResults
 
 public static class ResultsCalculator
 {
+    /// <summary>
+    /// Intervallo dei tempi ciclo "a regime" [inizio, fine): la media mobile su una finestra (almeno 3 cicli o la lunghezza della
+    /// sequenza di tipologie) entro il 3% della media mobile di riferimento (mediana della seconda metà). Con pochi cicli si scarta
+    /// solo il primo (riempimento della linea).
+    /// </summary>
+    public static (int Start, int End) SteadyWindow(IReadOnlyList<double> cycles, int sequenceLength)
+    {
+        int n = cycles.Count;
+        int w = Math.Max(3, sequenceLength);
+        if (n < 3 * w) return n >= 3 ? (1, n) : (0, n);
+        var means = new List<double>();
+        for (int i = 0; i + w <= n; i++) means.Add(cycles.Skip(i).Take(w).Average());
+        var half = means.Skip(means.Count / 2).OrderBy(x => x).ToList();
+        double reference = half[half.Count / 2];
+        bool Ok(double m) => Math.Abs(m - reference) <= 0.03 * reference;
+        int start = 0;
+        while (start < means.Count - 1 && !Ok(means[start])) start++;
+        int last = means.Count - 1;
+        while (last > start && !Ok(means[last])) last--;
+        return (start, Math.Max(start + 1, last + w));
+    }
+
     public static SimulationResults Compute(SimulationEngine e)
     {
         var ci = CultureInfo.InvariantCulture;
@@ -104,8 +134,13 @@ public static class ResultsCalculator
         var cycles = new List<double>();
         for (int i = 1; i < exited.Count; i++) cycles.Add(exited[i].ExitTimeS!.Value - exited[i - 1].ExitTimeS!.Value);
 
-        double? mean = cycles.Count > 0 ? cycles.Average() : null;
-        double meanWeight = exited.Count > 0 ? exited.Average(p => p.WeightKg) : 0;
+        // produttività a regime: si scartano i tempi ciclo dell'avvio (linea che si riempie) e della fine (linea che si svuota)
+        var (rs, re) = SteadyWindow(cycles, Math.Max(1, e.Project.Infeed.TypeSequence.Count));
+        var steady = cycles.Skip(rs).Take(re - rs).ToList();
+        var steadyPkgs = exited.Skip(rs + 1).Take(re - rs).ToList();
+        double? mean = steady.Count > 0 ? steady.Average() : cycles.Count > 0 ? cycles.Average() : null;
+        double meanWeight = steadyPkgs.Count > 0 ? steadyPkgs.Average(p => p.WeightKg) : exited.Count > 0 ? exited.Average(p => p.WeightKg) : 0;
+        double? steadyFrom = steady.Count > 0 && rs + 1 < exited.Count ? exited[rs].ExitTimeS : null;
         double? pph = mean is > 0 ? 3600.0 / mean.Value : null;
         double? tph = pph.HasValue ? pph.Value * meanWeight / 1000.0 : null;
 
@@ -206,6 +241,8 @@ public static class ResultsCalculator
             PackagesEntered = e.Packages.Count,
             PackagesExited = exited.Count,
             CycleTimeMeanS = mean,
+            SteadyStateFromS = steadyFrom,
+            SteadyStateCycles = steady.Count,
             CycleTimeMinS = cycles.Count > 0 ? cycles.Min() : null,
             CycleTimeMaxS = cycles.Count > 0 ? cycles.Max() : null,
             PackagesPerHour = pph,

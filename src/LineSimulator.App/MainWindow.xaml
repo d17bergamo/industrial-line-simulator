@@ -230,7 +230,8 @@
                     <CheckBox Content="Pacchi senza fine (fino a Stop)" IsChecked="{Binding SimContinuous, Mode=TwoWay}" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PRODUTTIVITÀ"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.TonnesPerHour, StringFormat='{}{0:0.0} t/h', FallbackValue='—'}"/>
-                    <TextBlock Foreground="#9A5A0E" Text="{Binding TargetProgress}"/></StackPanel>
+                    <TextBlock Foreground="#9A5A0E" Text="{Binding TargetProgress}"/>
+                    <TextBlock Foreground="#5B6673" Text="{Binding Results.SteadyStateFromS, StringFormat='misurata a regime, da t = {0:0} s', FallbackValue=''}" ToolTip="Si escludono il riempimento e lo svuotamento della linea"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PACCHI ALL'ORA"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="CICLO MEDIO"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.CycleTimeMeanS, StringFormat='{}{0:0.0} s', FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="COLLO DI BOTTIGLIA"/><TextBlock FontSize="16" FontWeight="Bold" Text="{Binding Results.BottleneckName, FallbackValue='—'}"/>
