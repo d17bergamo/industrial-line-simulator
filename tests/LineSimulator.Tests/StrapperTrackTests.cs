@@ -323,7 +323,8 @@ public class StrapperTrackTests
     {
         var p = SampleProjects.CreateThreeStrappers24m();
         double d = TransferEntryRule.RequiredDistanceMm(p);
-        Assert.Equal(1.5 * 1.5 / 2 * 1000 + 0.2 * 1.5 * 1000, d, 0);          // Vmax²/(2a) + 0,2 × Vmax con i default
+        Assert.Equal(1430, TransferEntryRule.FormulaDistanceMm(p));               // Vmax²/(2a) + 0,2 × Vmax con i default (1,425 m)
+        Assert.Equal(2000, d);                                                  // ... ma mai meno dei 2 m delle fotocellule di arresto
         double foot = TransferEntryRule.UpstreamFootprintMm(p);
         Assert.True(foot <= p.Transfer.PositionMm);
         Assert.Equal(Math.Round(foot - d), TransferEntryRule.EntryPhotocellPositionMm(p));

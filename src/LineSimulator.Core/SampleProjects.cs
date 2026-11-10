@@ -193,6 +193,7 @@ public static class SampleProjects
         StrappingAreaRules.PlaceStops(p);
         StrappingAreaRules.DecideReleaseInverters(p);     // svincolo con la via di legatura solo se serve ai pacchi lunghi
         ProjectNormalizer.EnsureProcessSensors(p);
+        TransferEntryRule.EnsureStopPhotocells(p);        // ogni fermo scomparente con la sua fotocellula di comando
         return p;
     }
 

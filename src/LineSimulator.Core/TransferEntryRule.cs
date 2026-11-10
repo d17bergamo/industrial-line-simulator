@@ -23,8 +23,11 @@ public static class TransferEntryRule
         return (v, a > 0 ? a : RollerSection.DefaultAccel);
     }
 
-    /// <summary>Distanza della regola (mm): Vmax² / (2a) + 0,2 s × Vmax.</summary>
-    public static double RequiredDistanceMm(LineProject p)
+    /// <summary>Distanza della regola (mm): Vmax² / (2a) + 0,2 s × Vmax, mai meno dei 2 m minimi delle fotocellule di arresto.</summary>
+    public static double RequiredDistanceMm(LineProject p) => Math.Max(PhotocellRules.MinDistanceToTargetMm, FormulaDistanceMm(p));
+
+    /// <summary>Solo la formula Vmax² / (2a) + 0,2 s × Vmax (mm, arrotondata a 10 mm per eccesso).</summary>
+    public static double FormulaDistanceMm(LineProject p)
     {
         var (v, a) = Drive(p);
         return Math.Ceiling((v * v / (2 * a) + PhotocellDelayS * v) * 1000 / 10) * 10;
