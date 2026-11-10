@@ -62,12 +62,23 @@ public static class CyclogramPrintPdf
         var p = e.Project;
         var c = new StringBuilder();
         var ci = CultureInfo.InvariantCulture;
-        // pacco di riferimento: il primo uscito a regime (altrimenti il secondo uscito)
+        // pacco di riferimento: a metà della finestra a regime (mai il primo, che trova la linea vuota)
         var exited = e.Packages.Where(k => k.ExitTimeS.HasValue).OrderBy(k => k.ExitTimeS).ToList();
-        var pk = (r.SteadyStateFromS is double sf ? exited.FirstOrDefault(k => k.ExitTimeS >= sf - 1e-6) : null)
-                 ?? exited.Skip(1).FirstOrDefault() ?? exited.FirstOrDefault();
+        var cyc = new List<double>();
+        for (int i = 1; i < exited.Count; i++) cyc.Add(exited[i].ExitTimeS!.Value - exited[i - 1].ExitTimeS!.Value);
+        var (ws, we) = ResultsCalculator.SteadyWindow(cyc, Math.Max(1, p.Infeed.TypeSequence.Count));
+        int pi = exited.Count == 0 ? -1 : Math.Clamp(Math.Max(2, (ws + we) / 2), 0, exited.Count - 1);
+        var byEntry = e.Packages.OrderBy(k => k.EntryTimeS).ToList();
+        var pk = pi >= 0 ? exited[pi] : byEntry.Skip(1).FirstOrDefault() ?? byEntry.FirstOrDefault();
+        double tc0 = r.CycleTimeMeanS ?? 60;
+        // fine finestra: il pacco arriva in battuta, il trasferitore lo preleva e torna (o al più due tempi ciclo)
+        var stopperSeg = pk == null ? null : e.Recorder.Tracks.FirstOrDefault(x => x.Group == TrackGroup.Stopper)?.Segments
+            .FirstOrDefault(sg => sg.StartS >= pk.EntryTimeS && StyleOf(TrackGroup.Stopper, sg.State) == Style.Work);
+        var trfReturn = stopperSeg == null ? null : e.Recorder.Tracks.FirstOrDefault(x => x.Group == TrackGroup.Transfer)?.Segments
+            .FirstOrDefault(sg => sg.StartS >= stopperSeg.StartS && sg.State == CycleState.Returning);
         double t0 = pk != null ? Math.Max(0, Math.Floor(pk.EntryTimeS - 2)) : 0;
-        double t1 = pk?.ExitTimeS is double ex ? Math.Ceiling(ex + 15) : Math.Min(e.Time, t0 + 120);
+        double t1 = trfReturn != null ? Math.Ceiling(trfReturn.EndS + 3) : stopperSeg != null ? stopperSeg.StartS + 30 : t0 + 1.3 * tc0;
+        t1 = Math.Min(t1, t0 + Math.Max(2.2 * tc0, 60));
         t1 = Math.Min(Math.Max(t1, t0 + 20), Math.Max(e.Time, t0 + 20));
         double span = t1 - t0;
 
@@ -141,7 +152,7 @@ public static class CyclogramPrintPdf
             }
 
         double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 34;
-        double rowH = Math.Min(28, (chartTop - chartBottom) / Math.Max(1, rows.Count));
+        double rowH = Math.Min(34, (chartTop - chartBottom) / Math.Max(1, rows.Count));
         double gy1 = chartTop - rows.Count * rowH;
 
         // griglia del tempo
@@ -174,16 +185,15 @@ public static class CyclogramPrintPdf
             if (strap.Count > 0)
             {
                 events.Add((strap[0].StartS, "Prima legatura: il pacco è fermo in posizione, stringifascio chiuso."));
-                double lastEnd = strap.Where(s => s.StartS < (pk.ExitTimeS ?? double.MaxValue)).Select(s => s.EndS).DefaultIfEmpty(strap[0].EndS).Max();
+                double arrive = stopperSeg?.StartS ?? (pk.ExitTimeS ?? double.MaxValue);
+                double lastEnd = strap.Where(s => s.StartS < arrive && s.StartS < strap[0].StartS + 2.2 * tc0).Select(s => s.EndS).DefaultIfEmpty(strap[0].EndS).Max();
                 events.Add((lastEnd, "Ultima legatura finita: il pacco lascia la via di legatura."));
             }
-            var stopper = e.Recorder.Tracks.FirstOrDefault(x => x.Group == TrackGroup.Stopper)?.Segments
-                .FirstOrDefault(s => s.StartS >= pk.EntryTimeS && StyleOf(TrackGroup.Stopper, s.State) == Style.Work);
-            if (stopper != null) events.Add((stopper.StartS, "Il pacco arriva in battuta sul fermo finale."));
+            if (stopperSeg != null) events.Add((stopperSeg.StartS, "Il pacco arriva in battuta sul fermo finale."));
             var lift = e.Recorder.Tracks.FirstOrDefault(x => x.Group == TrackGroup.Transfer)?.Segments
                 .FirstOrDefault(s => s.StartS >= pk.EntryTimeS && s.State == CycleState.Lifting);
             if (lift != null) events.Add((lift.StartS, "Il trasferitore solleva e porta via il pacco."));
-            if (pk.ExitTimeS is double xt) events.Add((xt, "Il pacco esce dalla linea (deposito / pesata)."));
+            if (trfReturn != null) events.Add((trfReturn.StartS, "Pacco depositato: il trasferitore torna, pronto per il successivo."));
         }
         events = events.Where(x => x.T >= t0 && x.T <= t1).OrderBy(x => x.T).ToList();
         for (int i = 0; i < events.Count; i++)
