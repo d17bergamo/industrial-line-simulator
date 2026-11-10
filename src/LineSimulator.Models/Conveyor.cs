@@ -31,7 +31,7 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     public double RollerDiameterMm { get; set; } = DefaultDiameterMm;
 
     /// <summary>Passo e diametro rulli di default in tutti i modelli.</summary>
-    public const double DefaultPitchMm = 1250, DefaultDiameterMm = 268;
+    public const double DefaultPitchMm = 1250, DefaultDiameterMm = 315;
 
     /// <summary>Sporgenza della struttura oltre l'asse del primo/ultimo rullo, per lato: sempre metà del passo rulli.</summary>
     [JsonIgnore]
@@ -249,6 +249,9 @@ public enum PhotocellActivation
 
 public sealed class PhotocellConfig : ComponentBase, IGroupChild
 {
+    /// <summary>Fermo scomparente comandato da questa fotocellula (vuoto = nessuno).</summary>
+    public string CommandsStopId { get; set; } = string.Empty;
+
     [UiProperty("Posizione in linea", "mm", "Geometria", Order = 1)]
     public double PositionMm { get; set; }
 

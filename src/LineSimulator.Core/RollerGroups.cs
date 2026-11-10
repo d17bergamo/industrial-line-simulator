@@ -11,7 +11,7 @@ public static class RollerGroups
     /// <summary>Proprietà del modulo che sono governate dal padre (bloccate finché il modulo non è personalizzato).</summary>
     public static readonly IReadOnlySet<string> InheritedProperties = new HashSet<string>
     {
-        nameof(RollerSection.WidthMm), nameof(RollerSection.RollerPitchMm), nameof(RollerSection.RollerDiameterMm),
+        nameof(RollerSection.WidthMm), nameof(RollerSection.RollerPitchMm),
         nameof(RollerSection.LowSpeed), nameof(RollerSection.HighSpeed), nameof(RollerSection.MaxSpeed),
         nameof(RollerSection.Acceleration), nameof(RollerSection.Deceleration), nameof(RollerSection.DefaultSpeed),
         nameof(RollerSection.AutoStopWhenEmpty)
@@ -20,7 +20,7 @@ public static class RollerGroups
     /// <summary>Copia sul modulo i valori del padre (senza il passo, che richiede il ricalcolo dei rulli).</summary>
     public static void CopyDrive(RollerGroup g, RollerSection s)
     {
-        s.WidthMm = g.WidthMm; s.RollerDiameterMm = g.RollerDiameterMm;
+        s.WidthMm = g.WidthMm;           // il diametro dei rulli si imposta per modulo (dal padre vale per tutti, vedi SetDiameterForAll)
         s.LowSpeed = g.LowSpeed; s.HighSpeed = g.HighSpeed; s.MaxSpeed = g.MaxSpeed;
         s.Acceleration = g.Acceleration; s.Deceleration = g.Deceleration;
         s.DefaultSpeed = g.DefaultSpeed; s.AutoStopWhenEmpty = g.AutoStopWhenEmpty;
@@ -50,6 +50,12 @@ public static class RollerGroups
         return changed;
     }
 
+    /// <summary>Diametro dei rulli impostato sul padre: vale per tutti i moduli (poi ogni modulo può cambiarlo).</summary>
+    public static void SetDiameterForAll(LineProject p)
+    {
+        foreach (var s in p.Sections) s.RollerDiameterMm = p.SectionDefaults.RollerDiameterMm;
+    }
+
     /// <summary>Quota piano rulli: il valore del padre è quello del layout (una sola quota per tutta la linea).</summary>
     public static void SyncElevation(LineProject p, bool fromGroup)
     {
@@ -67,7 +73,7 @@ public static class RollerGroups
         bool changed = false;
         foreach (var s in p.Sections.Where(x => !x.OverrideGroup))
         {
-            bool same = Math.Abs(s.WidthMm - g.WidthMm) < 1e-6 && Math.Abs(s.RollerDiameterMm - g.RollerDiameterMm) < 1e-6
+            bool same = Math.Abs(s.WidthMm - g.WidthMm) < 1e-6
                 && Math.Abs(s.LowSpeed - g.LowSpeed) < 1e-6 && Math.Abs(s.HighSpeed - g.HighSpeed) < 1e-6
                 && Math.Abs(s.MaxSpeed - g.MaxSpeed) < 1e-6 && Math.Abs(s.Acceleration - g.Acceleration) < 1e-6
                 && Math.Abs(s.Deceleration - g.Deceleration) < 1e-6 && s.DefaultSpeed == g.DefaultSpeed && s.AutoStopWhenEmpty == g.AutoStopWhenEmpty;

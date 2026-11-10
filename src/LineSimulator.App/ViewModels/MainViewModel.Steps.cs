@@ -60,13 +60,26 @@ public sealed partial class MainViewModel
     private void BuildCyclePage()
     {
         CycleFamilies.Clear();
-        void Fam(string title, object model) { var items = Essentials(model); if (items.Count > 0) CycleFamilies.Add(new CycleFamily(title, items)); }
-        Fam($"Legatrici ({_project.Strappers.Count})", _project.StrapperDefaults);
+        // solo le macchine che ci sono sulla linea; i dati delle legatrici dipendono dal tipo (filo o reggia)
+        CycleFamily? Fam(string title, object model) { var items = Essentials(model); if (items.Count == 0) return null; var f = new CycleFamily(title, items); CycleFamilies.Add(f); return f; }
+        var strappers = _project.Strappers.Where(s => s.IsEnabled).ToList();
+        if (strappers.Count > 0)
+        {
+            bool wire = strappers.Any(s => s.MachineType == StrapperMachineType.KNCA), strap = strappers.Any(s => s.MachineType == StrapperMachineType.SMA);
+            string title = wire && strap ? $"Legatrici e reggettatrici ({strappers.Count})" : strap ? $"Reggettatrici ({strappers.Count})" : $"Legatrici ({strappers.Count})";
+            var f = Fam(title, _project.StrapperDefaults);
+            foreach (var i in f?.Items ?? Array.Empty<PropertyItemViewModel>())
+            {
+                if (i.Name == nameof(StrapperGroup.ArmingTimeS)) i.LabelOverride = wire && strap ? "Ricarica filo / riarmo reggia" : strap ? "Tempo di riarmo reggia" : "Tempo di ricarica filo";
+                if (i.Name == nameof(StrapperGroup.StrappingTimeS)) i.LabelOverride = strap && !wire ? "Ciclo di reggettatura" : "Ciclo di legatura";
+            }
+        }
         Fam($"Vie a rulli ({_project.Sections.Count})", _project.SectionDefaults);
-        if (_project.Scales.Count > 0) Fam($"Bilici ({_project.Scales.Count})", _project.ScaleDefaults);
-        Fam("Trasferitore", _project.Transfer);
-        Fam("Stringifascio KNOF", _project.BundleClamp);
-        Fam("Compattatore laterale", _project.Compactor);
+        if (_project.Scales.Any(s => s.IsEnabled)) Fam($"Bilici ({_project.Scales.Count})", _project.ScaleDefaults);
+        Fam("Trasferitore sollevabile a catene", _project.Transfer);
+        Fam("Trasferitore d'accumulo", _project.AccumulationTransfer);
+        if (_project.BundleClamp.IsEnabled && strappers.Count > 0) Fam("Stringifascio", _project.BundleClamp);
+        if (_project.Compactor.IsEnabled) Fam("Compattatore laterale", _project.Compactor);
 
         DriveRows.Clear();
         var secs = _project.Sections.OrderBy(s => s.StartMm).ToList();
@@ -92,6 +105,7 @@ public sealed partial class MainViewModel
         GroupInheritance.PropagateAll(_project);
         RollerGroups.Propagate(_project, applyPitch: item.Name == nameof(RollerGroup.RollerPitchMm));
         if (item.Name == nameof(RollerGroup.RollerTopElevationMm)) RollerGroups.SyncElevation(_project, fromGroup: true);
+        if (item.Name == nameof(RollerGroup.RollerDiameterMm) && item.Target is RollerGroup) RollerGroups.SetDiameterForAll(_project);
         ProjectChanged(structural: true);
     }
 
@@ -128,6 +142,15 @@ public sealed partial class MainViewModel
     public string TargetProgress => Results?.TonnesPerHour is not double tph || SimTargetTph <= 0 ? "" :
         $"{tph / SimTargetTph * 100:0}% dell'obiettivo ({SimTargetTph:0.#} t/h)";
 
+    private ICommand? _lineSpeedUpCommand, _lineSpeedDownCommand;
+    /// <summary>+ / − della velocità di linea (passi di 0,1 m/s) dal riquadro nella vista 3D.</summary>
+    public ICommand LineSpeedUpCommand => _lineSpeedUpCommand ??= new RelayCommand(() => LineSpeedMps = LineSpeedMps + 0.1);
+    public ICommand LineSpeedDownCommand => _lineSpeedDownCommand ??= new RelayCommand(() => LineSpeedMps = LineSpeedMps - 0.1);
+
+    /// <summary>Nome e descrizione del progetto (si aggiornano con legatrici e pacchi).</summary>
+    public string ProjectTitle => _project.Name;
+    public string ProjectSubtitle => _project.Description;
+
     /// <summary>Simulazione continua (default): i pacchi entrano senza fine finché non si preme Stop.</summary>
     public bool SimContinuous
     {
@@ -148,7 +171,7 @@ public sealed partial class MainViewModel
         var strapSec = sec.FirstOrDefault();
         var feats = new List<string>
         {
-            $"{p.Strappers.Count} {(p.Strappers.Count == 1 ? "legatrice" : "legatrici")} {string.Join(" / ", p.Strappers.Select(s => s.MachineType).Distinct())}, passo {(p.Strappers.Count > 1 ? $"{p.Strappers[1].PositionMm - p.Strappers[0].PositionMm:0} mm" : "—")}",
+            $"{p.Strappers.Count} {(p.Strappers.Count == 1 ? "legatrice" : "legatrici")} {string.Join(" / ", p.Strappers.Select(s => s.MachineType == StrapperMachineType.SMA ? "a reggia" : "a filo").Distinct())}, passo {(p.Strappers.Count > 1 ? $"{p.Strappers[1].PositionMm - p.Strappers[0].PositionMm:0} mm" : "—")}",
             $"Pacchi: {string.Join(", ", p.PackageTypes.Select(t => $"{t.LengthMm / 1000:0} m"))}",
             $"Via di legatura {strapSec?.LengthMm / 1000:0.#} m · svincolo {(sec.Count > 2 ? $"{sec[1].LengthMm / 1000:0.#} m" : "—")} · fronte accumulo {sec.LastOrDefault()?.LengthMm / 1000:0.#} m",
             $"Trasferitore a catene {p.Transfer.LengthMm / 1000:0.#} m · {p.Scales.Count} {(p.Scales.Count == 1 ? "bilico" : "bilici")}" + (p.Transfer.ScaleAtMidStroke ? " a metà corsa" : ""),

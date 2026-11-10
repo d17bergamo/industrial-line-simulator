@@ -87,7 +87,7 @@ public static class FunctionalSpecExporter
         body.Append(MakeTable(new[] { "ID", "Nome", "Lunghezza [mm]", "Peso [kg]", "Tipo di legatura", "Legature dalla testa [mm]" },
             p.PackageTypes.Select(t => new[]
             {
-                t.Id, t.Name, N(t.LengthMm, "0"), N(t.WeightKg, "0"), t.BindingType == BindingType.SteelStrap ? "reggia d'acciaio (SMA)" : "filo (KNCA)",
+                t.Id, t.Name, N(t.LengthMm, "0"), N(t.WeightKg, "0"), t.BindingType == BindingType.SteelStrap ? "reggia d'acciaio (reggettatrice)" : "filo (KNCA)",
                 string.Join(" / ", t.StrapPositionsMm.Select(x => N(x, "0")))
             })));
 
@@ -107,12 +107,12 @@ public static class FunctionalSpecExporter
             body.Append(Para("3.2 Stazione di legatura", "Heading2"));
             var steps = new List<string>
             {
-                "La testa del pacco impegna la fotocellula di riferimento: si azzera l'encoder e le legatrici KNCA iniziano la carica del filo.",
+                "La testa del pacco impegna la fotocellula di riferimento: si azzera l'encoder e le legatrici a filo iniziano la carica del filo.",
                 "Il pacco viene posizionato alla quota encoder della fermata (profilo di posizionamento con frenatura calcolata sulla distanza residua)."
             };
             if (p.Compactor.IsEnabled) steps.Add($"Con la via a rulli ferma il compattatore chiude ({N(p.Compactor.CloseTimeS)} s), conferma e mantiene ({N(p.Compactor.HoldTimeS)} s).");
-            if (p.BundleClamp.IsEnabled) steps.Add($"Lo stringifascio KNOF chiude ({N(p.BundleClamp.CloseTimeS)} s) e conferma la chiusura: solo allora può iniziare il ciclo di legatura.");
-            steps.Add("Le macchine armate della fermata eseguono il ciclo (si abbassano, legano, si rialzano). KNCA: tra le legature dello stesso pattern ricarica il filo in automatico; SMA: riarmo automatico dopo ogni ciclo.");
+            if (p.BundleClamp.IsEnabled) steps.Add($"Lo stringifascio chiude ({N(p.BundleClamp.CloseTimeS)} s) e conferma la chiusura: solo allora può iniziare il ciclo di legatura.");
+            steps.Add("Le macchine armate della fermata eseguono il ciclo (si abbassano, legano, si rialzano). Legatrice a filo: tra le legature dello stesso pattern ricarica il filo in automatico; SMA: riarmo automatico dopo ogni ciclo.");
             if (p.BundleClamp.IsEnabled) steps.Add($"A legatura terminata, dopo il mantenimento ({N(p.BundleClamp.HoldTimeS)} s), lo stringifascio apre ({N(p.BundleClamp.OpenTimeS)} s).");
             if (p.Compactor.IsEnabled) steps.Add($"Il compattatore apre ({N(p.Compactor.OpenTimeS)} s) nella fase prevista; il pacco riparte verso la fermata successiva o viene rilasciato.");
             int i = 1;
@@ -182,8 +182,8 @@ public static class FunctionalSpecExporter
         {
             "L'arresto per interblocco ha priorità su ogni comando di marcia o posizionamento.",
             "Ogni dispositivo ha consenso di avvio, condizione di arresto, ritardo e timeout di conferma; oltre il timeout il dispositivo va in guasto e ripete il comando dopo il tempo di ripristino.",
-            $"KNCA: carica filo {N(StrapperConfig.KncaArmingTimeS)} s, ciclo di legatura {N(StrapperConfig.KncaStrappingTimeS)} s. SMA: ciclo di reggettatura {N(StrapperConfig.SmaStrappingTimeS)} s, riarmo {N(StrapperConfig.SmaArmingTimeS)} s.",
-            $"KNOF: chiusura {N(new BundleClampConfig().CloseTimeS)} s, apertura {N(new BundleClampConfig().OpenTimeS)} s. Compattatore: chiusura {N(new SideCompactorConfig().CloseTimeS)} s, apertura {N(new SideCompactorConfig().OpenTimeS)} s."
+            $"Legatrice a filo: ricarica filo {N(StrapperConfig.KncaArmingTimeS)} s, ciclo di legatura {N(StrapperConfig.KncaStrappingTimeS)} s. Reggettatrice: ciclo di reggettatura {N(StrapperConfig.SmaStrappingTimeS)} s, riarmo {N(StrapperConfig.SmaArmingTimeS)} s.",
+            $"Stringifascio: chiusura {N(new BundleClampConfig().CloseTimeS)} s, apertura {N(new BundleClampConfig().OpenTimeS)} s. Compattatore: chiusura {N(new SideCompactorConfig().CloseTimeS)} s, apertura {N(new SideCompactorConfig().OpenTimeS)} s."
         }) body.Append(Bullet(line));
 
         // 6. Risultati

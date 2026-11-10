@@ -239,6 +239,19 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Doppio clic su una voce della struttura: si apre la scheda Proprietà di quel componente.</summary>
+    private void TreeItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        DependencyObject? d = e.OriginalSource as DependencyObject;
+        while (d != null && d is not TreeViewItem) d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+        if (!ReferenceEquals(d, sender)) return;                       // solo il nodo più interno
+        if (((TreeViewItem)sender).DataContext is not TreeNodeViewModel node || node.Model == null) return;
+        _vm.SelectedNode = node;
+        _vm.ShowInspector = true;
+        _vm.InspectorTab = 0;                                          // scheda Proprietà
+        e.Handled = true;
+    }
+
     private void LineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is TreeNodeViewModel node) _vm.SelectedNode = node;

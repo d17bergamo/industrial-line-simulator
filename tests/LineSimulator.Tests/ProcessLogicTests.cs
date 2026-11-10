@@ -556,7 +556,7 @@ public class ProcessLogicTests
             foreach (var s in x.Strappers) s.MachineType = StrapperMachineType.SMA;
             foreach (var t in x.PackageTypes) t.BindingType = BindingType.SteelStrap;
         });
-        Assert.All(p.Strappers, s => { Assert.Equal(10.0, s.StrappingTimeS); Assert.Equal(5.0, s.ArmingTimeS); Assert.Equal("Sund Birsta SMA", s.Model); });
+        Assert.All(p.Strappers, s => { Assert.Equal(10.0, s.StrappingTimeS); Assert.Equal(5.0, s.ArmingTimeS); Assert.Equal("Reggettatrice", s.Model); });
         var e = RunChecked(p);
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));

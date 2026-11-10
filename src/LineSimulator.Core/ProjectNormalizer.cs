@@ -77,11 +77,9 @@ public static class ProjectNormalizer
     /// </summary>
     public static double TransferStopDistanceMm(LineProject p)
     {
+        // regola dell'utente (2026-11-10): Vmax²/(2a) + 0,2 s × Vmax dall'ingombro più a monte dei pacchi sul trasferitore
         if (p.Sections.Count == 0) return PhotocellRules.MinDistanceToTargetMm;
-        var zone = new LineTopology(p).ZoneAt(Units.MmToM(p.Transfer.PositionMm - 1));
-        var secs = zone?.Sections ?? (IReadOnlyList<RollerSection>)p.Sections;
-        var existing = p.Photocells.FirstOrDefault(x => x.ActsAsTransferStop);
-        return PhotocellRules.RequiredDistanceMm(p, secs, existing?.ResponseTimeMs ?? PhotocellRules.DefaultResponseMs, toLowSpeed: false);
+        return p.Transfer.PositionMm - TransferEntryRule.EntryPhotocellPositionMm(p);
     }
 
     /// <summary>Prima macchina di legatura abilitata (KNCA o SMA) nella stazione, a monte.</summary>
