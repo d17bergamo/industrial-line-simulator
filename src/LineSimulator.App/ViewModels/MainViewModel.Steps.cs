@@ -6,8 +6,8 @@ using LineSimulator.Models;
 
 namespace LineSimulator.App.ViewModels;
 
-/// <summary>Passo di lavoro della schermata Layout e simulazione: ogni passo mostra solo quello che serve.</summary>
-public enum WorkStep { Layout, Cycle, Simulate }
+/// <summary>Passo di lavoro: 1 Pacchi (schermata a parte), 2 Dati area, 3 Layout e simulazione.</summary>
+public enum WorkStep { Area, Layout }
 
 /// <summary>Famiglia di macchine nella pagina Ciclo: titolo e parametri essenziali modificabili.</summary>
 public sealed record CycleFamily(string Title, IReadOnlyList<PropertyItemViewModel> Items);
@@ -19,7 +19,7 @@ public sealed record LegendItem(string Name, System.Windows.Media.Brush Brush);
 public sealed record DriveRow(string Module, string Role, string Drive);
 
 /// <summary>
-/// Percorso in passi (Pacchi → Layout → Ciclo → Simula e risultati) e pagina Ciclo con tutto il ciclo in un posto solo.
+/// Percorso in passi (Pacchi → Dati area → Layout e simulazione), pagina Dati area e avvio guidato.
 /// </summary>
 public sealed partial class MainViewModel
 {
@@ -32,19 +32,17 @@ public sealed partial class MainViewModel
         set
         {
             if (_step == value) return;
-            if (_step == WorkStep.Simulate && IsPlaying) Pause();
+            if (_step == WorkStep.Layout && IsPlaying) Pause();
             _step = value;
-            Raise(nameof(Step)); Raise(nameof(IsStepLayout)); Raise(nameof(IsStepCycle)); Raise(nameof(IsStepSimulate));
-            ShowLibrary = value == WorkStep.Layout;
-            ShowInspector = value == WorkStep.Layout;
-            ShowCyclogram = value == WorkStep.Simulate;
-            if (value == WorkStep.Cycle) BuildCyclePage();
-            if (value == WorkStep.Simulate) Raise(nameof(PackageLegend));
+            Raise(nameof(Step)); Raise(nameof(IsStepLayout)); Raise(nameof(IsStepCycle));
+            if (value == WorkStep.Area) BuildCyclePage();
+            else { ShowLibrary = true; ShowInspector = true; Raise(nameof(PackageLegend)); }
         }
     }
+    /// <summary>Passo 3: layout e simulazione nella stessa schermata.</summary>
     public bool IsStepLayout => _step == WorkStep.Layout;
-    public bool IsStepCycle => _step == WorkStep.Cycle;
-    public bool IsStepSimulate => _step == WorkStep.Simulate;
+    /// <summary>Passo 2: dati dell'area (obiettivo, azionamenti, tempi per famiglia).</summary>
+    public bool IsStepCycle => _step == WorkStep.Area;
 
     /// <summary>Va a un passo: "Packages" apre la schermata Pacchi, gli altri i passi della schermata Layout e simulazione.</summary>
     public ICommand GoStepCommand => _goStepCommand ??= new RelayCommand(p =>
@@ -55,21 +53,16 @@ public sealed partial class MainViewModel
         if (Enum.TryParse<WorkStep>(s, out var st)) Step = st;
     });
 
-    public ObservableCollection<PropertyItemViewModel> CycleInfeed { get; } = new();
     public ObservableCollection<CycleFamily> CycleFamilies { get; } = new();
     public ObservableCollection<DriveRow> DriveRows { get; } = new();
 
     /// <summary>Riempie la pagina Ciclo: ingresso pacchi, tempi per famiglia (solo i campi essenziali) e azionamenti.</summary>
     private void BuildCyclePage()
     {
-        CycleInfeed.Clear();
-        foreach (var i in Essentials(_project.Infeed)) CycleInfeed.Add(i);
-
         CycleFamilies.Clear();
         void Fam(string title, object model) { var items = Essentials(model); if (items.Count > 0) CycleFamilies.Add(new CycleFamily(title, items)); }
         Fam($"Legatrici ({_project.Strappers.Count})", _project.StrapperDefaults);
         Fam($"Vie a rulli ({_project.Sections.Count})", _project.SectionDefaults);
-        Fam($"Fotocellule ({_project.Photocells.Count})", _project.PhotocellDefaults);
         if (_project.Scales.Count > 0) Fam($"Bilici ({_project.Scales.Count})", _project.ScaleDefaults);
         Fam("Trasferitore", _project.Transfer);
         Fam("Stringifascio KNOF", _project.BundleClamp);
@@ -134,4 +127,53 @@ public sealed partial class MainViewModel
     /// <summary>Riga dei risultati del passo Simula.</summary>
     public string TargetProgress => Results?.TonnesPerHour is not double tph || SimTargetTph <= 0 ? "" :
         $"{tph / SimTargetTph * 100:0}% dell'obiettivo ({SimTargetTph:0.#} t/h)";
+
+    /// <summary>Simulazione continua (default): i pacchi entrano senza fine finché non si preme Stop.</summary>
+    public bool SimContinuous
+    {
+        get => _project.Infeed.Continuous;
+        set { if (_project.Infeed.Continuous == value) return; _project.Infeed.Continuous = value; Raise(nameof(SimContinuous)); ProjectChanged(structural: false); }
+    }
+
+    // ------------------------------------------------------------ Avvio guidato
+
+    /// <summary>Esempio proposto all'avvio, con le scelte e le caratteristiche principali.</summary>
+    public sealed record StartOption(string Name, string Summary, IReadOnlyList<string> Features, Func<LineProject> Create);
+
+    private IReadOnlyList<StartOption>? _startOptions;
+    public IReadOnlyList<StartOption> StartOptions => _startOptions ??= SampleProjects.All.Select(x =>
+    {
+        var p = x.Factory();
+        var sec = p.Sections.OrderBy(s => s.StartMm).ToList();
+        var strapSec = sec.FirstOrDefault();
+        var feats = new List<string>
+        {
+            $"{p.Strappers.Count} {(p.Strappers.Count == 1 ? "legatrice" : "legatrici")} {string.Join(" / ", p.Strappers.Select(s => s.MachineType).Distinct())}, passo {(p.Strappers.Count > 1 ? $"{p.Strappers[1].PositionMm - p.Strappers[0].PositionMm:0} mm" : "—")}",
+            $"Pacchi: {string.Join(", ", p.PackageTypes.Select(t => $"{t.LengthMm / 1000:0} m"))}",
+            $"Via di legatura {strapSec?.LengthMm / 1000:0.#} m · svincolo {(sec.Count > 2 ? $"{sec[1].LengthMm / 1000:0.#} m" : "—")} · fronte accumulo {sec.LastOrDefault()?.LengthMm / 1000:0.#} m",
+            $"Trasferitore a catene {p.Transfer.LengthMm / 1000:0.#} m · {p.Scales.Count} {(p.Scales.Count == 1 ? "bilico" : "bilici")}" + (p.Transfer.ScaleAtMidStroke ? " a metà corsa" : ""),
+            p.IntermediateStops.Any(f => f.IsEnabled) ? "Fermo scomparente: double banking e intestatura di coda possibili" : "Senza fermo scomparente: intestatura di testa"
+        };
+        return new StartOption(x.Name, $"Modello pronto da simulare: {p.Sections.Count} moduli, lunghezza {sec.Last().EndMm / 1000:0.#} m", feats, x.Factory);
+    }).ToList();
+
+    private ICommand? _startFromExampleCommand, _startFromScratchCommand;
+    /// <summary>Apre l'esempio scelto e va dritto al layout e simulazione.</summary>
+    public ICommand StartFromExampleCommand => _startFromExampleCommand ??= new RelayCommand(o =>
+    {
+        if (o is not StartOption opt || !CanClose()) return;
+        LoadProject(opt.Create(), null);
+        _step = WorkStep.Area; Step = WorkStep.Layout;
+        CurrentSection = AppSection.Layout;
+        Status = $"Aperto l'esempio \"{opt.Name}\".";
+    });
+    /// <summary>Layout da zero: si parte dai pacchi (passo 1), poi i dati dell'area e il layout.</summary>
+    public ICommand StartFromScratchCommand => _startFromScratchCommand ??= new RelayCommand(() =>
+    {
+        if (!CanClose()) return;
+        LoadProject(SampleProjects.CreateEmpty(), null);
+        _step = WorkStep.Area; Step = WorkStep.Layout;
+        CurrentSection = AppSection.Packages;
+        Status = "Nuovo layout: definisci i pacchi, poi i dati dell'area e la linea (trascina i componenti dalla libreria).";
+    });
 }

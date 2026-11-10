@@ -184,13 +184,13 @@ public class StrapperTrackTests
     {
         var p = SampleProjects.CreateThreeStrappers24m();
         p.PhotocellDefaults.ResponseTimeMs = 40;
-        p.ScaleDefaults.StabilizationTimeS = 5;
+        p.ScaleDefaults.AcquisitionTimeS = 12;
         p.StrapperDefaults.StrappingTimeS = 9;
         p.Photocells[1].OverrideGroup = true;
         Assert.True(GroupInheritance.PropagateAll(p));
         Assert.Equal(40, p.Photocells[0].ResponseTimeMs);
         Assert.Equal(20, p.Photocells[1].ResponseTimeMs);
-        Assert.All(p.Scales, x => Assert.Equal(5, x.StabilizationTimeS));
+        Assert.All(p.Scales, x => Assert.Equal(12, x.AcquisitionTimeS));
         Assert.All(p.Strappers, x => Assert.Equal(9, x.StrappingTimeS));
         Assert.Contains("ResponseTimeMs", GroupInheritance.InheritedNames(p.PhotocellDefaults));
         // progetti vecchi: valori diversi dal padre restano, marcati come personalizzati

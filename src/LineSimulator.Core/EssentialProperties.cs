@@ -9,7 +9,7 @@ public static class EssentialProperties
     private static readonly Dictionary<string, string[]> Map = new()
     {
         ["RollerSection"] = new[] { "Name", "StartMm", "LengthMm", "RollerCount", "IsEnabled" },
-        ["RollerGroup"] = new[] { "RollerTopElevationMm", "WidthMm", "RollerPitchMm", "HighSpeed", "Acceleration" },
+        ["RollerGroup"] = new[] { "RollerTopElevationMm", "WidthMm", "RollerPitchMm", "MaxSpeed", "HighSpeed", "LowSpeed", "Acceleration" },
         ["PhotocellConfig"] = new[] { "Name", "PositionMm", "Purpose", "Action", "IsEnabled" },
         ["PhotocellGroup"] = new[] { "Type", "ResponseTimeMs" },
         ["EncoderConfig"] = new[] { "IsEnabled", "PositionMm" },
@@ -17,12 +17,12 @@ public static class EssentialProperties
         ["SideCompactorConfig"] = new[] { "IsEnabled", "CloseTimeS", "OpenTimeS" },
         ["RejectorConfig"] = new[] { "IsEnabled", "PositionMm", "Side", "EjectTimeS" },
         ["IntermediateStopConfig"] = new[] { "Name", "Placement", "IsEnabled" },
-        ["WeighingScaleConfig"] = new[] { "Name", "Placement", "StabilizationTimeS", "AcquisitionTimeS" },
-        ["ScaleGroup"] = new[] { "StabilizationTimeS", "AcquisitionTimeS", "ReleaseTimeS" },
+        ["WeighingScaleConfig"] = new[] { "Name", "Placement", "AcquisitionTimeS" },
+        ["ScaleGroup"] = new[] { "AcquisitionTimeS" },
         ["StrapperConfig"] = new[] { "Name", "PositionMm", "Side", "MachineType", "StrappingTimeS", "IsEnabled" },
         ["StrapperGroup"] = new[] { "StrappingTimeS", "ArmingTimeS" },
         ["StopperConfig"] = new[] { "PositionMm", "MaxImpactSpeed" },
-        ["TransferConfig"] = new[] { "Kind", "LengthMm", "LiftTimeS", "TranslationSpeed", "DepositTimeS", "FullCycleTimeS" },
+        ["TransferConfig"] = new[] { "LengthMm", "WidthMm", "LiftTimeS", "TranslationSpeed", "DepositTimeS", "FullCycleTimeS" },
         ["StrappingStationConfig"] = new[] { "IsEnabled", "Strategy" },
         ["InfeedConfig"] = new[] { "PackageCount", "TypeSequence", "NewPackageDelayS" },
     };

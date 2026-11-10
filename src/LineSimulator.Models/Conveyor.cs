@@ -18,7 +18,7 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     [UiProperty("Lunghezza fisica struttura (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 2)]
     public double LengthMm { get; set; } = 7500;
 
-    [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
+    [UiProperty("Tavola rullo", "mm", "Geometria", Order = 3)]
     public double WidthMm { get; set; } = 700;
 
     [UiProperty("Numero rulli", "", "Geometria", Order = 4)]
@@ -134,10 +134,10 @@ public sealed class RollerGroup : ComponentBase
 {
     public RollerGroup() { Id = "RLG"; Name = "Moduli via a rulli"; }
 
-    [UiProperty("Larghezza grafica", "mm", "Geometria", Order = 3)]
+    [UiProperty("Tavola rullo", "mm", "Geometria", Order = 3)]
     public double WidthMm { get; set; } = 700;
 
-    [UiProperty("Quota piano rulli", "mm", "Geometria", Order = 1)]
+    [UiProperty("Altezza via a rulli", "mm", "Geometria", Order = 1)]
     public double RollerTopElevationMm { get; set; } = 800;
 
     [UiProperty("Passo rulli (multipli di 50 mm)", "mm", "Geometria", Order = 5)]

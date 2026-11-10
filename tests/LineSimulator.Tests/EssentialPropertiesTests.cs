@@ -28,4 +28,18 @@ public class EssentialPropertiesTests
         Assert.False(EssentialProperties.IsAdvanced("PhotocellConfig", "OverrideGroup"));
         Assert.False(EssentialProperties.IsAdvanced("UnknownType", "Anything"));
     }
+
+    [Fact]
+    public void EmptyLayout_HasNoStrappers_AndSimulates()
+    {
+        var p = SampleProjects.CreateEmpty();
+        Assert.Empty(p.Strappers);
+        Assert.NotEmpty(p.PackageTypes);
+        p.Infeed.PackageCount = 3;
+        var e = new LineSimulator.Engine.SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally);
+        Assert.True(p.Infeed.Continuous);                                        // in app la simulazione è continua di default
+        Assert.Equal(10, new WeighingScaleConfig().AcquisitionTimeS);           // bilico: solo il tempo di pesata, 10 s
+    }
 }
