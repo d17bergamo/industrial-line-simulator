@@ -1203,6 +1203,15 @@ public sealed partial class SimulationEngine : ILogicContext
         {
             tr.LiftM = 0; tr.LateralM = 0;
             var batch = ReadyBatch(t);
+            if (batch != null && _inlineWeighS > 0)
+            {
+                // bilico integrato nella via a rulli: il pacco si pesa fermo in battuta, poi il trasferitore lo preleva
+                foreach (var pk in batch)
+                    if (_inlineSince.TryAdd(pk, t))
+                        Emit(SimEventType.WeighingPhase, EventSeverity.Info, $"{pk.Id} in pesatura sul bilico integrato nella via a rulli ({_inlineWeighS:0.#} s)", Project.Transfer.Id, pk.Id);
+                if (batch.Any(pk => t - _inlineSince[pk] < _inlineWeighS - 1e-9)) return;
+                foreach (var pk in batch) _inlineSince.Remove(pk);
+            }
             if (batch != null)
             {
                 tr.Packages.Clear();

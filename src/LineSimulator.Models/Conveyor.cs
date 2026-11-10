@@ -12,10 +12,10 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     public double StartMm { get; set; }
 
     /// <summary>
-    /// Lunghezza fisica complessiva della struttura (interassiale + sporgenze terminali + carpenteria).
-    /// Non si modifica a mano: dipende da passo, numero rulli e sporgenza (vedi <see cref="RecalculateLength"/>).
+    /// Lunghezza del modulo (multipla di 50 mm): con il numero di rulli è l'unico dato che si imposta; il passo è lunghezza / rulli
+    /// (sporgenza terminale = metà passo, vedi <see cref="RecalculateLength"/>).
     /// </summary>
-    [UiProperty("Lunghezza fisica struttura (calcolata)", "mm", "Geometria", ReadOnly = true, Order = 2)]
+    [UiProperty("Lunghezza (multipli di 50 mm)", "mm", "Geometria", Order = 2)]
     public double LengthMm { get; set; } = 7500;
 
     [UiProperty("Tavola rullo", "mm", "Geometria", Order = 3)]

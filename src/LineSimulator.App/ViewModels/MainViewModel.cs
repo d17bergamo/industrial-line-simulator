@@ -495,6 +495,7 @@ public sealed partial class MainViewModel : ObservableObject
         Pause();
         _project = p;
         ProjectUpgrade.Normalize(_project);                      // adeguamenti di apertura (per i file: già mostrati e confermati in Open)
+        _project.AccumulationTransfer.IsEnabled = true;           // il trasferitore d'accumulo c'è sempre
         RememberStrapperPositions();
         _filePath = path;
         _upgradedFrom = null;
@@ -820,6 +821,7 @@ public sealed partial class MainViewModel : ObservableObject
         string typeName = model.GetType().Name;
         foreach (var item in PropertyItemViewModel.For(model, OnPropertyEdited, IdOptions))
         {
+            if (EssentialProperties.IsHidden(typeName, item.Name)) continue;
             item.IsAdvanced = EssentialProperties.IsAdvanced(typeName, item.Name);
             Properties.Add(item);
         }
@@ -840,6 +842,7 @@ public sealed partial class MainViewModel : ObservableObject
                 RollerSection s => (!s.OverrideGroup && RollerGroups.InheritedProperties.Contains(item.Name))
                                    || (IsLocked(s) && item.Name == nameof(RollerSection.StartMm)),
                 PhotocellConfig pc => (pc.IsEntryPhotocell && item.Name == nameof(PhotocellConfig.PositionMm))
+                                      || item.Name == nameof(PhotocellConfig.Purpose)            // l'utilità la decide il modello
                                       || (!pc.OverrideGroup && GroupInheritance.InheritedNames(_project.PhotocellDefaults).Contains(item.Name)),
                 StrapperConfig st => !st.OverrideGroup && GroupInheritance.InheritedNames(_project.StrapperDefaults).Contains(item.Name),
                 WeighingScaleConfig sc => !sc.OverrideGroup && GroupInheritance.InheritedNames(_project.ScaleDefaults).Contains(item.Name),
@@ -864,11 +867,28 @@ public sealed partial class MainViewModel : ObservableObject
             var pi = primary.GetType().GetProperty(item.Name);
             if (others.Count > 0 && pi != null) MultiEdit.Apply(others, pi, pi.GetValue(primary));
         }
-        foreach (var rs in SelectedModels().OfType<RollerSection>().Where(_ => item.Name is "RollerCount" or "RollerPitchMm"))
+        // vie a rulli: si impostano solo lunghezza (multipla di 50 mm) e numero rulli; il passo ne segue. Le vie restano sempre unite.
+        foreach (var rs in SelectedModels().OfType<RollerSection>().Where(_ => item.Name is "RollerCount" or "RollerPitchMm" or "LengthMm"))
         {
-            double oldEnd = rs.EndMm;
+            // fine precedente: inizio della via a valle (le vie sono unite) o, per l'ultima, il fermo finale (= fine dell'ultimo modulo)
+            var nextSec = _project.Sections.Where(x => !ReferenceEquals(x, rs) && x.StartMm >= rs.StartMm + 1).OrderBy(x => x.StartMm).FirstOrDefault();
+            double oldEnd = nextSec?.StartMm ?? _project.Stopper.PositionMm;
+            rs.RollerCount = Math.Max(2, rs.RollerCount);
+            if (item.Name == "LengthMm")
+            {
+                rs.LengthMm = Math.Max(2 * LineReflow.PitchStepMm, Math.Round(rs.LengthMm / LineReflow.PitchStepMm) * LineReflow.PitchStepMm);
+                rs.RollerPitchMm = rs.LengthMm / rs.RollerCount;
+            }
+            else if (item.Name == "RollerCount") rs.RollerPitchMm = rs.LengthMm / rs.RollerCount;
             rs.RecalculateLength();
-            LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle restano unite
+            LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle si spostano: restano unite e non si sovrappongono
+            if (nextSec == null && item.Name == "LengthMm" && Math.Abs(_project.Transfer.LengthMm - rs.LengthMm) >= 1)
+            {
+                // ultimo modulo = via davanti al trasferitore: il trasferitore ne segue la lunghezza
+                _project.Transfer.Sections.Clear();
+                _project.Transfer.LengthMm = rs.LengthMm;
+                _project.Transfer.PositionMm = rs.StartMm;
+            }
         }
         // arrotondamenti: passo rulli a 50 mm, lunghezza delle macchine a 100 mm
         if (item.Name == nameof(RollerSection.RollerPitchMm))
@@ -901,7 +921,7 @@ public sealed partial class MainViewModel : ObservableObject
             groupChanged = RollerGroups.Propagate(_project, applyPitch: true);   // togliendo la spunta il modulo torna al padre
             ApplyPropertyLocks();
         }
-        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm";
+        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm" or "LengthMm";
         ProjectChanged(structural || groupChanged);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
@@ -977,6 +997,7 @@ public sealed partial class MainViewModel : ObservableObject
         double mid = (topo.LineStartM + topo.LineEndM) / 2 * 1000;
         var pc = new PhotocellConfig { Id = NextId("FC", AllComponents()), Name = "Nuova fotocellula", PositionMm = Math.Round(mid) };
         _project.Photocells.Add(pc);
+        Status = PhotocellRoles.Decide(_project, pc);
         AfterAdd(pc);
     }
 
@@ -1173,6 +1194,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 var pc = new PhotocellConfig { Id = NextId("FC", AllComponents()), Name = "Nuova fotocellula", PositionMm = x };
                 _project.Photocells.Add(pc);
+                PhotocellRoles.Decide(_project, pc);              // utilità decisa dal modello: rallentamento o presenza
                 added = pc;
                 break;
             }
