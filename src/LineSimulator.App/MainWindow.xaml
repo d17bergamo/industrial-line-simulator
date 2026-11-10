@@ -392,7 +392,7 @@
 <TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
                         <Grid>
-                            <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ZoomExtentsWhenLoaded="True" RotateGesture2="LeftClick"
+                            <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ViewCubeHorizontalPosition="0.86" ViewCubeVerticalPosition="-0.62" ViewCubeWidth="90" ViewCubeHeight="90" ZoomExtentsWhenLoaded="True" RotateGesture2="LeftClick"
                                                PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" PreviewMouseMove="MoveViewport_PreviewMouseMove"
                                                PreviewMouseLeftButtonUp="MoveViewport_PreviewMouseLeftButtonUp"
                                                AllowDrop="True" DragEnter="LayoutViewport_DragOver" DragOver="LayoutViewport_DragOver"
@@ -407,7 +407,7 @@
                                 <Button Style="{StaticResource IconButton}" Content="🗑" FontSize="15" Foreground="#B42318" Command="{Binding DeleteCommand}" ToolTip="Elimina i componenti selezionati"/>
                             </StackPanel>
                         </Border>
-                        <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,34,0,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="3">
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,8,0,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3" MaxWidth="720">
 <WrapPanel>
                 <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
                 <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
@@ -424,11 +424,23 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Style="{StaticResource ToolButton}" Content="Velocità linea…" Click="OpenSpeed_Click" ToolTip="Velocità di trasporto 0,5-1,5 m/s e produttività oraria"/>
                 
 </WrapPanel>
                         </Border>
-                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,70,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="3">
+                        <!-- Velocità della linea: riquadro grande in alto a destra con + e − -->
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,8,0" Width="132" Background="#F2FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="10,8">
+                            <StackPanel>
+                                <TextBlock Text="VELOCITÀ LINEA" Style="{StaticResource KpiLabel}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding LineSpeedMps, StringFormat='{}{0:0.00}'}" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#1B2430"/>
+                                <TextBlock Text="m/s" Foreground="#5B6673" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
+                                <UniformGrid Columns="2">
+                                    <Button Style="{StaticResource ToolButton}" Content="−" FontSize="20" FontWeight="Bold" Command="{Binding LineSpeedDownCommand}" ToolTip="Riduci la velocità di linea (0,1 m/s)" Margin="0,0,3,0" HorizontalContentAlignment="Center"/>
+                                    <Button Style="{StaticResource ToolButton}" Content="+" FontSize="20" FontWeight="Bold" Command="{Binding LineSpeedUpCommand}" ToolTip="Aumenta la velocità di linea (0,1 m/s)" Margin="3,0,0,0" HorizontalContentAlignment="Center"/>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+                        <!-- Viste in basso a destra (il cubo 3D è subito sopra) -->
+                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,8,8" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3">
                             <WrapPanel>
                                 <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
                                 <Button Style="{StaticResource ToolButton}" Content="Frontale" Click="ViewFront_Click"/>
@@ -465,21 +477,6 @@
        ToolTip="Trascina per alzare o abbassare il ciclogramma"/>
 </Grid>
 </Grid></TabItem>
-                    <TabItem Header="Ciclogramma a gradini">
-                        <DockPanel Background="White">
-                            <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
-                                <WrapPanel>
-                                    <Button Style="{StaticResource ToolButton}" Content="Aggiorna" Command="{Binding RefreshStepCommand}"/>
-                                    <Button Style="{StaticResource ToolButton}" Content="Esporta PDF…" Command="{Binding ExportStepPdfCommand}"/>
-                                    <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#5A6672"
-                                               Text="Tempi arrotondati a 0,5 s per eccesso solo in questo ciclogramma. Livelli: fermo / lento o transizione / attivo."/>
-                                </WrapPanel>
-                            </Border>
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                                <ctl:StepCyclogramControl Rows="{Binding StepRows}" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                            </ScrollViewer>
-                        </DockPanel>
-                    </TabItem>
                     <TabItem Header="Ciclogramma e risultati">
         <Grid>
             <Grid.RowDefinitions>
@@ -796,6 +793,7 @@
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                 <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="TreeItem_PreviewMouseLeftButtonDown"/>
+                                <EventSetter Event="MouseDoubleClick" Handler="TreeItem_MouseDoubleClick"/>
                             </Style>
                         </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate>

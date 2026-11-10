@@ -1074,6 +1074,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void AfterAdd(object model)
     {
+        SimulationPreparation.RenumberIds(_project);            // nomi progressivi lungo la linea a ogni aggiunta
         ProjectChanged(structural: true);
         SelectModel(model);
     }
@@ -1108,6 +1109,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         }
         _selectedNode = null;
+        SimulationPreparation.RenumberIds(_project);            // ... e a ogni eliminazione
         ProjectChanged(structural: true);
         SelectedNode = Tree.FirstOrDefault();
     }

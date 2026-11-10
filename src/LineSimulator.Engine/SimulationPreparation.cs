@@ -51,6 +51,17 @@ public static class SimulationPreparation
         return r;
     }
 
+    /// <summary>
+    /// Solo la rinumerazione progressiva (M, L, FC, FM, B lungo la linea) con l'aggiornamento dei riferimenti: l'app la usa ogni
+    /// volta che si aggiunge, crea o toglie un componente (sessione A, 2026-11-10). Restituisce le modifiche.
+    /// </summary>
+    public static List<string> RenumberIds(LineProject p)
+    {
+        var r = new PreparationReport();
+        FixIds(p, r);
+        return r.Changes;
+    }
+
     // ================================================================== 1. Nomi progressivi
 
     private sealed record Category(string Prefix, string Label, IList<ComponentBase> Items, Func<ComponentBase, double> Key, bool Reorder);
@@ -124,7 +135,7 @@ public static class SimulationPreparation
         if (map.Count > 0) RemapReferences(p, map);
     }
 
-    private static readonly Regex GenericName = new(@"^(|Legatrice( KNCA| SMA)?( \S+)?|Reggettatrice( SMA)?( \S+)?|Modulo( \S+)?|Nuova fotocellula|Fermo scomparente( \S+)?|Bilico( \S+)?)( \(copia\))*$", RegexOptions.CultureInvariant);
+    private static readonly Regex GenericName = new(@"^(|Legatrice( KNCA| SMA)?( \S+)?|Reggettatrice( SMA)?( \S+)?|Modulo( \S+)?|Nuova fotocellula|Fotocellula( \S+)?|Presenza( \S+)?|Rallentamento( \S+)?|Fermo scomparente( \S+)?|Bilico( \S+)?)( \(copia\))*$", RegexOptions.CultureInvariant);
 
     private static void RenameName(ComponentBase c, string oldId, string newId)
     {
@@ -132,8 +143,10 @@ public static class SimulationPreparation
         string num = Regex.Match(newId, @"\d+$").Value;
         c.Name = c switch
         {
-            StrapperConfig s => (s.MachineType == StrapperMachineType.SMA ? "Reggettatrice SMA " : "Legatrice KNCA ") + num,
+            StrapperConfig s => (s.MachineType == StrapperMachineType.SMA ? "Reggettatrice " : "Legatrice ") + num,
             RollerSection => "Modulo " + num,
+            PhotocellConfig pc when (pc.Name ?? "").StartsWith("Presenza", StringComparison.Ordinal) => "Presenza " + newId,
+            PhotocellConfig pc when (pc.Name ?? "").StartsWith("Rallentamento", StringComparison.Ordinal) => "Rallentamento " + newId,
             PhotocellConfig => "Fotocellula " + newId,
             IntermediateStopConfig => "Fermo scomparente " + num,
             WeighingScaleConfig => "Bilico " + num,

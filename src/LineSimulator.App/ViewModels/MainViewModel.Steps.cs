@@ -142,6 +142,11 @@ public sealed partial class MainViewModel
     public string TargetProgress => Results?.TonnesPerHour is not double tph || SimTargetTph <= 0 ? "" :
         $"{tph / SimTargetTph * 100:0}% dell'obiettivo ({SimTargetTph:0.#} t/h)";
 
+    private ICommand? _lineSpeedUpCommand, _lineSpeedDownCommand;
+    /// <summary>+ / − della velocità di linea (passi di 0,1 m/s) dal riquadro nella vista 3D.</summary>
+    public ICommand LineSpeedUpCommand => _lineSpeedUpCommand ??= new RelayCommand(() => LineSpeedMps = LineSpeedMps + 0.1);
+    public ICommand LineSpeedDownCommand => _lineSpeedDownCommand ??= new RelayCommand(() => LineSpeedMps = LineSpeedMps - 0.1);
+
     /// <summary>Nome e descrizione del progetto (si aggiornano con legatrici e pacchi).</summary>
     public string ProjectTitle => _project.Name;
     public string ProjectSubtitle => _project.Description;

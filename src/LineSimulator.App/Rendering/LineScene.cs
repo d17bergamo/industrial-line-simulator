@@ -209,6 +209,7 @@ public sealed class LineScene
         _knofBrush = _knofBrushR = _compactorBrush = _smaBrush = null;
         _knofArmBrushes.Clear();
         _knofs.Clear();
+        _knofEnabled.Clear();
         _highlighted = null;
         _names.Children.Clear();
 
@@ -222,16 +223,13 @@ public sealed class LineScene
         tg.Children.Add(new TranslateTransform3D(p.Layout.OriginXMm / 1000.0, p.Layout.OriginYMm / 1000.0, 0));
         _group.Transform = tg;
 
-        // Pavimento
         double x0 = topo.LineStartM - 2, x1 = topo.LineEndM + 2;
-        var floor = MeshFactory.Box(new Point3D((x0 + x1) / 2, -1.5, -0.01), x1 - x0, 9, 0.02, Color.FromRgb(0xE8, 0xEB, 0xEE), out _);
-        _group.Children.Add(floor);
 
         // Un colore per modulo di via a rulli (ogni modulo ha il proprio inverter)
         var ordered = p.Sections.OrderBy(x => x.StartMm).ToList();
         for (int i = 0; i < ordered.Count; i++)
         {
-            var c = Palette[i % Palette.Length];
+            var c = ordered[i].IsEnabled ? GreyBody : GreyOff;        // tutte le vie a rulli dello stesso grigio (disabilitate: grigio chiaro)
             _zoneBrushes[ordered[i].Id] = (new SolidColorBrush(c), c);
         }
 
@@ -242,19 +240,59 @@ public sealed class LineScene
         AddTransfer(p.Transfer);
         if (p.AccumulationTransfer.IsEnabled) AddAccumulation(p.AccumulationTransfer, p.Transfer);
         // Uno stringifascio per ogni legatrice/reggettatrice (se previsto) oppure quello unico; si chiudono insieme
-        foreach (var (_, xMm) in LayoutRules.BundleClampPositions(p)) AddBundleClamp(p.BundleClamp, xMm);
-        if (p.Compactor.IsEnabled) AddCompactor(p.Compactor);
+        // anche le macchine disabilitate restano disegnate, in grigio chiaro (colore delle macchine non in lavoro)
+        var kPos = LayoutRules.BundleClampPositions(p).Select(k => k.PositionMm).ToList();
+        if (p.BundleClamp.PositionMm > 0 || p.BundleClamp.PerMachine)
+        {
+            var all = !p.BundleClamp.PerMachine ? new List<(double X, bool On)> { (p.BundleClamp.PositionMm, p.BundleClamp.IsEnabled) }
+                : p.Strappers.OrderBy(s => s.PositionMm).Select(s => (s.PositionMm - p.BundleClamp.MachineOffsetMm, p.BundleClamp.IsEnabled && s.IsEnabled)).ToList();
+            foreach (var (xMm, on) in all)
+            {
+                AddBundleClamp(p.BundleClamp, xMm);
+                _knofEnabled.Add(on);
+                if (!on) foreach (var b in _knofs[^1].Brushes) b.Color = GreyOff;
+            }
+        }
+        if (p.Compactor.IsEnabled || p.Compactor.PositionMm > 0) AddCompactor(p.Compactor);
         if (p.Rejector.IsEnabled) AddRejector(p.Rejector, p.Transfer);
-        foreach (var fs in p.IntermediateStops.Where(x => x.IsEnabled)) AddIntermediateStop(fs);
-        foreach (var sc in p.Scales.Where(x => x.IsEnabled)) AddScale(sc, p.Transfer);
+        foreach (var fs in p.IntermediateStops)
+        {
+            AddIntermediateStop(fs);
+            if (!fs.IsEnabled) { _stopVisuals.RemoveAt(_stopVisuals.Count - 1); Dim(fs); }
+        }
+        foreach (var sc in p.Scales)
+        {
+            AddScale(sc, p.Transfer);
+            if (!sc.IsEnabled) { _scaleVisuals.RemoveAt(_scaleVisuals.Count - 1); Dim(sc); }
+        }
+        if (!p.Compactor.IsEnabled) Dim(p.Compactor);
+        if (!p.BundleClamp.IsEnabled) Dim(p.BundleClamp);
+
+        // Pavimento: largo quanto tutte le macchine coinvolte, più un margine
+        var mb = Rect3D.Empty;
+        foreach (var ch in _group.Children) mb.Union(ch.Bounds);
+        if (mb.IsEmpty) mb = new Rect3D(x0, -3, 0, x1 - x0, 6, 1);
+        double fx0 = Math.Min(x0, mb.X - 2), fx1 = Math.Max(x1, mb.X + mb.SizeX + 2), fy0 = mb.Y - 2, fy1 = mb.Y + mb.SizeY + 2;
+        var floor = MeshFactory.Box(new Point3D((fx0 + fx1) / 2, (fy0 + fy1) / 2, -0.01), fx1 - fx0, fy1 - fy0, 0.02, Color.FromRgb(0xE8, 0xEB, 0xEE), out _);
+        _group.Children.Insert(0, floor);
+        x0 = fx0; x1 = fx1;
 
         _packagesGroup = new Model3DGroup();
         _group.Children.Add(_packagesGroup);
 
-        Bounds = new Rect3D(x0, -5, 0, x1 - x0, 8, 3);
+        Bounds = new Rect3D(x0, fy0, 0, x1 - x0, fy1 - fy0, 3);
         _overlay.Transform = tg;
         RebuildDimensions();
     }
+
+    /// <summary>Componente disabilitato: tutte le sue parti in grigio chiaro (anche dopo la selezione).</summary>
+    private void Dim(object owner)
+    {
+        if (!_brushesByObject.TryGetValue(owner, out var list)) return;
+        for (int i = 0; i < list.Count; i++) { list[i].Brush.Color = GreyOff; list[i] = (list[i].Brush, GreyOff); }
+    }
+
+    private readonly List<bool> _knofEnabled = new();
 
     private void Register(Model3D m, object owner, SolidColorBrush brush, Color normal)
     {
@@ -297,7 +335,7 @@ public sealed class LineScene
         double first = start + Math.Max(0, (len - used) / 2);
         for (int i = 0; i < n; i++)
             rollers.AddCylinderY(first + i * s.RollerPitchMm / 1000.0, _zTop - r, -w / 2, w / 2, r, 10);
-        var rollColor = s.IsEnabled ? Color.FromRgb(0x9A, 0xA4, 0xAE) : Color.FromRgb(0x6B, 0x4B, 0x4B);
+        var rollColor = s.IsEnabled ? Color.FromRgb(0x9A, 0xA4, 0xAE) : GreyOff;
         var rm = MeshFactory.Model(rollers.ToMesh(), rollColor, out var rb);
         _group.Children.Add(rm);
         Register(rm, s, rb, rollColor);
@@ -456,7 +494,7 @@ public sealed class LineScene
     private void AddStopper(StopperConfig s)
     {
         double x = s.PositionMm / 1000.0, h = Math.Max(0.05, s.GraphicHeightMm / 1000.0);
-        var color = Color.FromRgb(0xC0, 0x39, 0x2B);
+        var color = GreyBody;
         var m = MeshFactory.Box(new Point3D(x + 0.06, 0, _zTop - 0.1 + h / 2 + 0.05), 0.12, _lineWidth * 0.9, h + 0.1, color, out var b);
         _group.Children.Add(m);
         Register(m, s, b, color);
@@ -467,7 +505,7 @@ public sealed class LineScene
     {
         double x0 = t.PositionMm / 1000.0, len = t.LengthMm / 1000.0, stroke = t.TranslationStrokeMm / 1000.0;
         double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
-        var color = Color.FromRgb(0xF1, 0xC4, 0x0F);
+        var color = GreyBody;
         var f = new MeshFactory();
         // una struttura per ogni sezione, separate da un piccolo vuoto; il nome compare sopra la sezione
         int forks = 0;
@@ -630,7 +668,7 @@ public sealed class LineScene
         double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
         // con il trasferitore a due prese il bilico sta a metà corsa
         double y = sign * t.TranslationStrokeMm / 1000.0 * (t.ScaleAtMidStroke ? 0.5 : 1.0);
-        var color = Color.FromRgb(0x17, 0xA5, 0x89);
+        var color = GreyBody;
         var f = new MeshFactory();
         if (sc.Mounting == ScaleMounting.InLine)
         {
@@ -660,7 +698,7 @@ public sealed class LineScene
         double x0 = t.PositionMm / 1000.0, len = Math.Max(0.5, t.LengthMm / 1000.0);
         double sign = t.DestinationSide == LateralSide.Left ? 1 : -1;
         double y0 = t.TranslationStrokeMm / 1000.0 - _lineWidth / 2, w = Math.Max(0.5, a.WidthMm / 1000.0);
-        var color = Color.FromRgb(0x5D, 0x6D, 0x7E);
+        var color = GreyBody;
         var f = new MeshFactory();
         int n = Math.Max(2, (int)Math.Round(len / 2.0) + 1);
         for (int i = 0; i < n; i++)
@@ -798,9 +836,9 @@ public sealed class LineScene
         }
         else { _transferT.OffsetY = 0; _transferT.OffsetZ = 0; }
         if (_stopperBrush != null && !IsHighlighted(p.Stopper))
-            _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? MachWorking : Color.FromRgb(0xC0, 0x39, 0x2B);
+            _stopperBrush.Color = f != null && f.StopperState != StopperState.Free ? MachWorking : GreyBody;
         if (_transferBrush != null && !IsHighlighted(p.Transfer))
-            _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? MachWorking : Color.FromRgb(0xF1, 0xC4, 0x0F);
+            _transferBrush.Color = f != null && f.TransferState != TransferState.Home ? MachWorking : GreyBody;
 
         // Legatrici in attesa del consenso (stringifascio): giallo ambra
         for (int i = 0; i < p.Strappers.Count; i++)
@@ -820,9 +858,12 @@ public sealed class LineScene
         // si chiude solo lo stringifascio con il pacco sotto (BundleClampActive); senza informazione si muovono tutti
         var active = f?.BundleClampActive ?? Array.Empty<bool>();
         var kc = (f?.BundleClampState ?? ClampState.Open) switch { ClampState.Fault => FaultRed, ClampState.Closed or ClampState.Closing or ClampState.Opening => MachWorking, _ => MachYellow };
-        for (int i = 0; i < _knofs.Count; i++)
+        for (int i = 0, ai = 0; i < _knofs.Count; i++)
         {
-            bool on = active.Length != _knofs.Count || active[i];
+            if (i < _knofEnabled.Count && !_knofEnabled[i]) continue;     // stringifascio disabilitato: fermo, grigio chiaro
+            int enabledCount = _knofEnabled.Count(x => x);
+            bool on = active.Length != enabledCount || active[ai];
+            ai++;
             double arm = on ? (f?.BundleClampClosed ?? 0) * 0.3 : 0;
             _knofs[i].L.OffsetY = -arm;
             _knofs[i].R.OffsetY = arm;
@@ -834,7 +875,7 @@ public sealed class LineScene
         double jaw = (f?.CompactorClosed ?? 0) * 0.12;
         _jawLeftT.OffsetY = -jaw;
         _jawRightT.OffsetY = jaw;
-        if (_compactorBrush != null && !IsHighlighted(p.Compactor))
+        if (_compactorBrush != null && !IsHighlighted(p.Compactor) && p.Compactor.IsEnabled)
         {
             var cc = ClampColor(f?.CompactorState ?? ClampState.Open, Color.FromRgb(0x8C, 0x92, 0x98));
             _compactorBrush.Color = cc;
@@ -877,7 +918,7 @@ public sealed class LineScene
             var state = f != null && i < f.ScaleStates.Length ? f.ScaleStates[i] : ScaleState.Idle;
             brush.Color = state switch
             {
-                ScaleState.Idle => Color.FromRgb(0x17, 0xA5, 0x89),
+                ScaleState.Idle => GreyBody,
                 ScaleState.Stabilizing or ScaleState.Acquiring => Color.FromRgb(0xF4, 0xD0, 0x3F),
                 ScaleState.Completed or ScaleState.Releasing => Color.FromRgb(0x28, 0xB4, 0x63),
                 ScaleState.Fault => Color.FromRgb(0xC0, 0x39, 0x2B),

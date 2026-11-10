@@ -38,7 +38,7 @@ public sealed class PackageScene
         if (p == null) { Bounds = Rect3D.Empty; return; }
         double L = Math.Max(0.1, p.LengthMm / 1000.0), W = Math.Max(0.05, p.GraphicWidthMm / 1000.0), H = Math.Max(0.05, p.GraphicHeightMm / 1000.0);
         g.Children.Add(MeshFactory.Box(new Point3D(0, 0, H / 2), L, W, H, Wood, out _));
-        var floor = MeshFactory.Box(new Point3D(0, 0, -0.01), L + 1.0, W + 1.0, 0.02, Color.FromRgb(0xE8, 0xEB, 0xEE), out _);
+        var floor = MeshFactory.Box(new Point3D(0, 0, -0.01), L + 1.0, W + 1.0, 0.02, Color.FromArgb(70, 0xC8, 0xCE, 0xD6), out _);   // pavimento trasparente
         g.Children.Add(floor);
 
         double minEnd = p.MinStrapDistanceFromEndsMm / 1000.0, minGap = p.MinDistanceBetweenStrapsMm / 1000.0;
@@ -65,7 +65,7 @@ public sealed class PackageScene
     /// <summary>Catena di quote lungo il fianco del pacco: testa → prima legatura → … → ultima → coda, in mm.</summary>
     private void AddDimensions(Model3DGroup g, List<double> pos, double L, double W, double H)
     {
-        double y = -W / 2 - 0.28, z = H + 0.05;
+        double y = -W / 2 - 0.65, z = H + 0.12;                                      // quote ben staccate dal pacco
         var marks = new List<double> { 0 };
         marks.AddRange(pos);
         marks.Add(L);
@@ -75,7 +75,7 @@ public sealed class PackageScene
         {
             double x = L / 2 - m;
             f.AddBox(new Point3D(x, y, z), 0.012, 0.012, 0.16);                            // segno
-            f.AddBox(new Point3D(x, (y - W / 2) / 2 + 0.07, H + 0.005), 0.008, Math.Abs(y + W / 2) - 0.02, 0.006);   // richiamo verso il pacco
+            f.AddBox(new Point3D(x, (y - W / 2) / 2, z - 0.06), 0.008, Math.Abs(y + W / 2) - 0.04, 0.006);   // richiamo verso il pacco
         }
         g.Children.Add(MeshFactory.Model(f.ToMesh(), DimColor, out _));
         for (int i = 1; i < marks.Count; i++)
@@ -85,7 +85,7 @@ public sealed class PackageScene
             Visual.Children.Add(new BillboardTextVisual3D
             {
                 Text = $"{(b - a) * 1000:0}",
-                Position = new Point3D(L / 2 - (a + b) / 2, y, z + 0.14),
+                Position = new Point3D(L / 2 - (a + b) / 2, y - 0.12, z + 0.22),
                 FontSize = 12,
                 Foreground = new SolidColorBrush(DimColor),
                 Background = new SolidColorBrush(Color.FromArgb(225, 255, 255, 255)),
