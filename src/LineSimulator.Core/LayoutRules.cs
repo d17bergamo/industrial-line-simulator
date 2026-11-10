@@ -104,6 +104,7 @@ public static class LayoutRules
         if (AlignTransferModule(p))
             done.Add($"Via a rulli davanti al trasferitore portata alla lunghezza del trasferitore ({p.Transfer.LengthMm:0} mm)");
         done.AddRange(ClampStrappers(p));
+        done.AddRange(TransferEntryRule.EnsureStopPhotocells(p));     // ogni fermo scomparente ha la sua fotocellula di comando
         if (StrapperTrack.ClampStrappersToTrackStart(p))
             done.Add("Legatrice riportata ad almeno 1 m dall'inizio della via rulli");
         done.AddRange(StrappingAreaRules.Enforce(p));     // macchine sullo stesso lato a 2 m, bilici e fermi sul trasferitore

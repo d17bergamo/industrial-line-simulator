@@ -24,6 +24,7 @@ public static class PhotocellRules
         topo ??= new LineTopology(p);
         var zone = topo.Zone(pc.ControlledInverterId) ?? topo.ZoneAt(Units.MmToM(pc.PositionMm));
         var secs = zone?.Sections ?? (IReadOnlyList<RollerSection>)p.Sections;
+        if (pc.ActsAsTransferStop) return TransferEntryRule.RequiredDistanceMm(p);   // regola dell'ingresso al trasferitore
         bool toLow = pc.Action == PhotocellAction.SlowDown && !pc.ActsAsTransferStop;
         return RequiredDistanceMm(p, secs, pc.ResponseTimeMs, toLow);
     }
@@ -54,7 +55,7 @@ public static class PhotocellRules
     public static double? TargetMm(LineProject p, PhotocellConfig pc, LineTopology? topo = null)
     {
         if (!pc.IsEnabled || pc.IsEntryPhotocell) return null;
-        if (pc.ActsAsTransferStop) return p.Transfer.LengthMm > 0 ? p.Transfer.PositionMm : null;
+        if (pc.ActsAsTransferStop) return p.Transfer.LengthMm > 0 ? TransferEntryRule.UpstreamFootprintMm(p) : null;   // ingombro più a monte
         if (pc.Action is not (PhotocellAction.SlowDown or PhotocellAction.Stop or PhotocellAction.Accumulation)) return null;
         topo ??= new LineTopology(p);
         var zone = topo.Zone(pc.ControlledInverterId) ?? topo.ZoneAt(Units.MmToM(pc.PositionMm));
