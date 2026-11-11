@@ -485,14 +485,15 @@ public static class ProjectValidator
         if (acc.IsEnabled && acc.StepSpeed <= 0) r.Error("ACC_SPEED", "Velocità di avanzamento del trasferitore d'accumulo non valida.", acc.Id);
         if (tr.MaxOverhangMm > TransferConfig.OverhangLimitMm + 1e-6)
             r.Warn("TRF_OVERHANG_MAX", $"Sbalzo ammesso oltre il trasferitore {F(tr.MaxOverhangMm)} mm: non si va oltre {F(TransferConfig.OverhangLimitMm)} mm (la simulazione usa {F(TransferConfig.OverhangLimitMm)} mm).", tr.Id);
-        if (stops.Count == 0 && p.Simulation.Heading == StopReference.Tail)
-            r.Warn("HEADING_TAIL", "Intestatura di coda scelta ma nessun fermo scomparente abilitato: si simula con intestatura di testa.", tr.Id);
+        var sim = BankingOptions.ForSimulation(p);
+        if (stops.Count == 0 && sim.Heading == StopReference.Tail && sim.Banking == AccumulationMode.DoubleBanking)
+            r.Warn("HEADING_TAIL", "Intestatura di coda scelta in double banking ma nessun fermo scomparente abilitato: il secondo pacco si ferma a distanza dal primo (di testa).", tr.Id);
         if (tr.BatchWaitTimeoutS < 0) r.Error("TRF_BATCH", "Attesa gruppo negativa.", tr.Id);
-        if (stops.Count > 0 && p.PackageTypes.Count > 0 && p.Simulation.Banking == AccumulationMode.DoubleBanking)
+        if (stops.Count > 0 && p.PackageTypes.Count > 0 && BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking)
         {
             double minLen = p.PackageTypes.Min(t => t.LengthMm);
             var first = stops.OrderByDescending(s => s.PositionMm).First();
-            double head = p.Simulation.Heading == StopReference.Head ? first.PositionMm : first.PositionMm + minLen + first.TailOvershootMm;
+            double head = BankingOptions.ForSimulation(p).Heading == StopReference.Head ? first.PositionMm : first.PositionMm + minLen + first.TailOvershootMm;
             if (head > p.Stopper.PositionMm - minLen - p.Simulation.MinSafetyDistanceMm + 1e-6)
                 r.Warn("STOP_OVERLAP", $"Con il pacco più corto ({F(minLen)} mm) il fermo {first.Id} si sovrappone al pacco allo stopper: verrà usato solo se c'è spazio.", first.Id);
         }

@@ -13,8 +13,8 @@ public enum AccumulationMode
 }
 
 /// <summary>
-/// Tipologia di pacco: descrizione fisica (lunghezza, larghezza, altezza, peso) e posizione delle legature,
-/// impostata a mano. Come il pacco viene lavorato (banking, intestatura) si sceglie nelle simulazioni.
+/// Tipologia di pacco: descrizione fisica (lunghezza, larghezza, altezza, peso), posizione delle legature e
+/// come il pacco si lavora sul trasferitore (banking e intestatura, nella tabella della schermata Pacchi).
 /// </summary>
 public sealed class PackageType : ComponentBase
 {
@@ -43,6 +43,18 @@ public sealed class PackageType : ComponentBase
 
     [UiProperty("Distanza minima tra legature", "mm", "Legatura", Order = 22)]
     public double MinDistanceBetweenStrapsMm { get; set; } = 500;
+
+    /// <summary>
+    /// Single o double banking per questo pacco (tabella della schermata Pacchi). Null = come le impostazioni della
+    /// simulazione (progetti salvati prima della tabella). Le scelte possibili: <c>BankingOptions</c> nel Core.
+    /// </summary>
+    public AccumulationMode? Banking { get; set; }
+
+    /// <summary>
+    /// Intestatura di testa o di coda per questo pacco. Null = predefinita (di coda con il fermo scomparente all'estremità,
+    /// altrimenti di testa). Senza fermo scomparente "di coda" vuol dire fermato per posizionamento con la coda a inizio trasferitore.
+    /// </summary>
+    public StopReference? Heading { get; set; }
 
     [JsonIgnore]
     [UiProperty("Numero di legature", "", "Legatura", ReadOnly = true, Order = 20)]

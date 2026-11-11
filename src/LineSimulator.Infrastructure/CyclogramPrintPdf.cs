@@ -85,8 +85,8 @@ public static class CyclogramPrintPdf
         // ---------------------------------------------------- intestazione
         string title = string.IsNullOrWhiteSpace(p.Name) ? "Linea di legatura" : p.Name;
         Text(c, M, H - M - 8, 16, "Ciclogramma di un ciclo a regime");
-        string banking = p.Simulation.Banking == AccumulationMode.DoubleBanking ? "double banking" : "single banking";
-        string heading = p.Simulation.Heading == StopReference.Tail ? "intestatura di coda" : "intestatura di testa";
+        string banking = BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking ? "double banking" : "single banking";
+        string heading = BankingOptions.ForSimulation(p).Heading == StopReference.Tail ? "intestatura di coda" : "intestatura di testa";
         Text(c, M, H - M - 24, 9.5, $"{title} · pacco {pk?.Type.Id ?? "-"} · {banking}, {heading} · velocità linea {N(e.LineSpeedMps ?? e.Zones.Min(z => z.Config.HighSpeed))} m/s");
         string prod = r.PackagesPerHour is double pph ? $"Produttività a regime: {N(pph, "0.0")} pacchi/h · {N(r.TonnesPerHour ?? 0, "0.0")} t/h" : "Produttività: non misurata";
         Text(c, W - M - 330, H - M - 8, 10, prod);

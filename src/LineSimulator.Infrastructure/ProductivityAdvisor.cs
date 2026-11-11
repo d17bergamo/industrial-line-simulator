@@ -148,11 +148,11 @@ public static class ProductivityAdvisor
             yield return new Candidate("SWITCHABLE_" + m.Id, $"Motori commutabili sullo svincolo {m.Id}",
                 $"Lo svincolo {m.Id} ha il suo inverter; i motori vengono commutati sull'inverter di legatura solo mentre il pacco in legatura lo impegna per le legature di coda. Negli altri momenti porta via il pacco già legato.",
                 q => { var s = q.Sections.First(x => x.Id == m.Id); s.FollowsStrapping = true; return true; });
-        if (p.Simulation.Banking == AccumulationMode.SingleBanking)
+        if (BankingOptions.ForSimulation(p).Banking == AccumulationMode.SingleBanking)
             yield return new Candidate("DOUBLE_BANKING", "Double banking",
                 "Il trasferitore preleva due pacchi per ciclo (il secondo sul fermo scomparente o fermato per posizionamento).",
-                q => { q.Simulation.Banking = AccumulationMode.DoubleBanking; return true; });
-        if (p.Simulation.Banking == AccumulationMode.SingleBanking && !p.IntermediateStops.Any(s => s.IsEnabled))
+                q => { BankingOptions.SetBankingAll(q, AccumulationMode.DoubleBanking); return true; });
+        if (BankingOptions.ForSimulation(p).Banking == AccumulationMode.SingleBanking && !p.IntermediateStops.Any(s => s.IsEnabled))
             yield return new Candidate("STOP_DOUBLE", "Fermo scomparente al centro + double banking",
                 "Un fermo scomparente al centro del trasferitore e due pacchi per ciclo.",
                 q =>
@@ -162,7 +162,7 @@ public static class ProductivityAdvisor
                         Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
                         PositionMm = StrappingAreaRules.StopPositionMm(q, DevicePlacement.Center), AlignmentTimeS = 2.0
                     });
-                    q.Simulation.Banking = AccumulationMode.DoubleBanking;
+                    BankingOptions.SetBankingAll(q, AccumulationMode.DoubleBanking);
                     return true;
                 });
         if (p.StrappingStation.Strategy != StrappingStrategyMode.Automatic)

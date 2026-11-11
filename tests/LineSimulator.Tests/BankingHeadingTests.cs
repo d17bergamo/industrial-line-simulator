@@ -47,7 +47,63 @@ public class BankingHeadingTests
         Assert.False(Ui(typeof(SimulationSettings), nameof(SimulationSettings.Heading)));
         Assert.False(Ui(typeof(IntermediateStopConfig), nameof(IntermediateStopConfig.Reference)));
         Assert.False(Ui(typeof(TransferConfig), nameof(TransferConfig.BatchSize)));
-        Assert.DoesNotContain(typeof(PackageType).GetProperties(), x => x.PropertyType == typeof(AccumulationMode) || x.PropertyType == typeof(StopReference));
+        // Per pacco si scelgono nella tabella della schermata Pacchi (non nelle caratteristiche)
+        Assert.False(Ui(typeof(PackageType), nameof(PackageType.Banking)));
+        Assert.False(Ui(typeof(PackageType), nameof(PackageType.Heading)));
+    }
+
+    [Fact]
+    public void PackageTable_Options_FollowTheLine()
+    {
+        // Linea senza fermo scomparente (trasferitore 43-55 m): di testa predefinita, di coda per posizionamento solo in single
+        var p = StandardWith6m(AccumulationMode.SingleBanking, 2);
+        var p6 = p.PackageTypes.First(t => t.Id == "P6");
+        var p12 = p.PackageTypes.First(t => t.Id != "P6");
+        Assert.Equal(StopReference.Head, BankingOptions.DefaultHeading(p));
+        Assert.True(BankingOptions.HeadingAvailable(p, p6, AccumulationMode.SingleBanking, StopReference.Tail));
+        Assert.False(BankingOptions.HeadingAvailable(p, p6, AccumulationMode.DoubleBanking, StopReference.Tail));
+        Assert.True(BankingOptions.DoubleBankingAvailable(p, p6));          // 2 × 6 m + 500 mm con 500 mm di sbalzo
+        Assert.False(BankingOptions.DoubleBankingAvailable(p, p12));        // due pacchi da 12 m non ci stanno
+        p12.Banking = AccumulationMode.DoubleBanking;
+        Assert.Equal(AccumulationMode.SingleBanking, BankingOptions.Banking(p, p12));
+        Assert.True(BankingOptions.Normalize(p));
+        Assert.Equal(AccumulationMode.SingleBanking, p12.Banking);
+
+        // Fermo scomparente al centro: di testa; all'estremità: di coda
+        var f = LegacySamples.CreateFullProcessLine();
+        var stop = f.IntermediateStops.First(s => s.IsEnabled);
+        stop.Placement = DevicePlacement.Center;
+        Assert.Equal(StopReference.Head, BankingOptions.DefaultHeading(f));
+        stop.Placement = DevicePlacement.End;
+        Assert.Equal(StopReference.Tail, BankingOptions.DefaultHeading(f));
+        Assert.Equal(StopReference.Tail, BankingOptions.ChosenHeading(f, f.PackageTypes[0]));
+        f.PackageTypes[0].Heading = StopReference.Head;                     // scelta del pacco
+        Assert.Equal(StopReference.Head, BankingOptions.ChosenHeading(f, f.PackageTypes[0]));
+    }
+
+    [Fact]
+    public void PackageChoice_OverridesSimulationSetting()
+    {
+        var p = StandardWith6m(AccumulationMode.SingleBanking, 4);
+        p.PackageTypes.First(t => t.Id == "P6").Banking = AccumulationMode.DoubleBanking;
+        var (e, lifts) = Run(p);
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(AccumulationMode.DoubleBanking, e.EffectiveBanking);
+        Assert.Equal(2, e.Transfer.Cycles);
+    }
+
+    [Fact]
+    public void TailHeading_WithoutStop_StopsByPositioningWithTailAtTransferStart()
+    {
+        var p = StandardWith6m(AccumulationMode.SingleBanking, 2);
+        p.PackageTypes.First(t => t.Id == "P6").Heading = StopReference.Tail;
+        var (e, lifts) = Run(p);
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(StopReference.Tail, e.EffectiveHeading);
+        Assert.Equal(2, lifts.Count);
+        double start = p.Transfer.PositionMm / 1000.0;
+        Assert.All(lifts, l => Assert.InRange(Assert.Single(l).Tail, start - 0.004, start + 0.004));
+        Assert.Contains(e.Events, x => x.Message.Contains("intestatura di coda senza fermo", StringComparison.Ordinal));
     }
 
     [Fact]
