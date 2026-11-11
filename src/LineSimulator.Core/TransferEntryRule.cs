@@ -53,7 +53,7 @@ public static class TransferEntryRule
             tails.Add(s.PositionMm - lmax);                                    // testa sul fermo scomparente
             tails.Add(s.PositionMm);                                           // coda sul fermo scomparente
         }
-        if (p.Simulation.Banking == AccumulationMode.DoubleBanking)
+        if (BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking)
             tails.Add(Math.Max(limit, p.Stopper.PositionMm - lmin - p.Transfer.DoubleBankingGapMm - lmax));   // secondo pacco in double banking
         return Math.Min(trfStart, Math.Max(limit, tails.Min()));
     }

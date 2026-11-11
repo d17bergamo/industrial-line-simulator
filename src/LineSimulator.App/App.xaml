@@ -199,5 +199,11 @@
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Foreground" Value="#5A6672"/>
         </Style>
+        <!-- Voce di una tendina con scelte non possibili: in grigio, non selezionabile, con il motivo nel suggerimento -->
+        <Style x:Key="ChoiceItem" TargetType="ComboBoxItem">
+            <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
+            <Setter Property="ToolTip" Value="{Binding Hint}"/>
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        </Style>
     </Application.Resources>
 </Application>

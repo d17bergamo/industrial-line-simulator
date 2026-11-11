@@ -212,6 +212,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (_syncingSimType || value == null || !Set(ref _simPackageType, value)) return;
             _project.Infeed.TypeSequence = new List<string> { value.Id };
             ProjectChanged(structural: false);
+            Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
             Status = $"Tipologia simulata: {value.Id} - {value.Name} ({value.LengthMm:0} mm, {value.WeightKg:0} kg)";
         }
     }
@@ -222,18 +223,18 @@ public sealed partial class MainViewModel : ObservableObject
         : new[] { StopReference.Head };
     public bool TailHeadingAvailable => BankingOptions.TailHeadingAvailable(_project);
 
-    /// <summary>Banking (single/double) scelto per la simulazione, non per il pacco.</summary>
+    /// <summary>Banking (single/double) del pacco simulato: lo stesso della tabella della schermata Pacchi.</summary>
     public AccumulationMode SimBanking
     {
-        get => _project.Simulation.Banking;
-        set { if (_project.Simulation.Banking == value) return; _project.Simulation.Banking = value; Raise(nameof(SimBanking)); ProjectChanged(structural: false); Status = $"Banking: {value}"; }
+        get => SimRow?.Banking ?? _project.Simulation.Banking;
+        set { var r = SimRow; if (r == null || r.Banking == value) return; r.Banking = value; }
     }
 
-    /// <summary>Intestatura di testa o di coda scelta per la simulazione.</summary>
+    /// <summary>Intestatura di testa o di coda del pacco simulato (tabella della schermata Pacchi).</summary>
     public StopReference SimHeading
     {
-        get => _project.Simulation.Heading;
-        set { if (_project.Simulation.Heading == value) return; _project.Simulation.Heading = value; Raise(nameof(SimHeading)); ProjectChanged(structural: false); Status = $"Intestatura: {value}"; }
+        get => SimRow?.Heading ?? _project.Simulation.Heading;
+        set { var r = SimRow; if (r == null || r.Heading == value) return; r.Heading = value; }
     }
     public ObservableCollection<EquipmentStatusRow> EquipmentStatus { get; } = new();
 
@@ -631,7 +632,9 @@ public sealed partial class MainViewModel : ObservableObject
         if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
         // Intestatura di coda solo con un fermo scomparente (sessione B)
         if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo scomparente: impostata di testa";
+        RefreshPackageRows();
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading)); Raise(nameof(SimTargetTph));
+        Raise(nameof(SimBanking)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
         RefreshCheck();
         var selected = SelectedNode?.Model;
         LayoutScene.Build(_project);
@@ -1410,6 +1413,7 @@ public sealed partial class MainViewModel : ObservableObject
         var keep = _selectedPackageType != null && _project.PackageTypes.Contains(_selectedPackageType) ? _selectedPackageType : _project.PackageTypes.FirstOrDefault();
         PackageTypes.Clear();
         foreach (var t in _project.PackageTypes) PackageTypes.Add(t);
+        RebuildPackageRows();
         _selectedPackageType = null;
         SelectedPackageType = keep;
         NormalizeSimulatedType();
@@ -1426,6 +1430,7 @@ public sealed partial class MainViewModel : ObservableObject
         _simPackageType = first;
         _syncingSimType = false;
         Raise(nameof(SimPackageType));
+        Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
     }
 
     private int _packagePreviewVersion;
@@ -1539,7 +1544,7 @@ public sealed partial class MainViewModel : ObservableObject
             Name = src.Name, BindingType = src.BindingType, LengthMm = src.LengthMm, WeightKg = src.WeightKg,
             GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
             StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
-            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm
+            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm, Banking = src.Banking, Heading = src.Heading
         };
         t.Id = PackageNaming.UniqueId(_project, t);
         t.Name = t.Id;

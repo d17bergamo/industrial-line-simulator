@@ -285,6 +285,8 @@ public sealed class StopRuntime
     /// si ferma per posizionamento (encoder) dietro al primo. La posizione si calcola all'assegnazione.
     /// </summary>
     public bool IsVirtual { get; }
+    /// <summary>Posizione virtuale per l'intestatura di coda senza fermo: la coda del pacco a inizio trasferitore.</summary>
+    public bool TailPositioning { get; init; }
     public double PositionM { get; internal set; }
     public double ToleranceM { get; }
     /// <summary>Intestatura applicata (dalle impostazioni della simulazione).</summary>

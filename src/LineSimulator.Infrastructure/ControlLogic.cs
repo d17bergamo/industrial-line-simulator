@@ -84,7 +84,7 @@ public static class ControlLogicGenerator
                 : $"RUN({z.Id}) | SIG({empty})";
             if (z.Kind == ZoneKind.Stopper && p.Transfer.BlockInfeedUntilHome) consentCond = $"({consentCond}) & TRANSFER_HOME";
             if (z.Kind == ZoneKind.Stopper && p.IntermediateStops.Any(s => s.IsEnabled)
-                && (p.Simulation.Banking == AccumulationMode.DoubleBanking || p.Simulation.Heading == StopReference.Tail))
+                && (BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking || BankingOptions.ForSimulation(p).Heading == StopReference.Tail))
                 consentCond = $"(RUN({z.Id}) | SIG({empty})) & SIG({z.Id}_FERMO_LIBERO)" + (p.Transfer.BlockInfeedUntilHome ? " & TRANSFER_HOME" : "");
             rules.Add(new ControlRule($"{z.Id}.CONSENSO", group, consentCond, $"IMPOSTA SEGNALE {consent}", z.Id,
                 single ? "La zona a pacco singolo accetta un nuovo pacco solo se libera." : "Consenso all'ingresso dalla zona a monte."));
@@ -222,8 +222,8 @@ public static class ControlLogicGenerator
         const string gt = "Accumulo e trasferitore";
         rules.Add(new ControlRule($"{p.Stopper.Id}.ALLINEAMENTO", gt, $"DEV({p.Stopper.Id},Aligning)", $"MARCIA di allineamento a {F(p.Stopper.AlignmentRollerSpeed)} m/s per {F(p.Stopper.AlignmentTimeS + p.Stopper.HeadingTimeS)} s", topo.StopperZone?.Id ?? "",
             "Intestatura di testa contro il fermo finale."));
-        bool tail = p.Simulation.Heading == StopReference.Tail;
-        bool dbl = p.Simulation.Banking == AccumulationMode.DoubleBanking;
+        bool tail = BankingOptions.ForSimulation(p).Heading == StopReference.Tail;
+        bool dbl = BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking;
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         if (stops.Count == 0) tail = false;
         if (!dbl && !tail) stops.Clear();   // single banking di testa: fermi scomparenti sempre abbassati

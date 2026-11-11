@@ -69,22 +69,25 @@ public sealed partial class SimulationEngine
             try { numbers = p.Rejector.ParseRejectNumbers(); } catch (FormatException) { numbers = Array.Empty<int>(); }
             if (rz != null) Rejector = new RejectorRuntime(p.Rejector, _zoneById[rz.Id], numbers.ToList());
         }
-        // Banking e intestatura: scelti nella sezione Simulazioni (non nel pacco né nel fermo)
+        // Banking e intestatura: quelli della tipologia simulata (tabella della schermata Pacchi; prima: sezione Simulazioni)
         var stopCfg = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
-        EffectiveBanking = p.Simulation.Banking;
-        EffectiveHeading = p.Simulation.Heading;
-        bool virtualSecond = false;
+        (EffectiveBanking, EffectiveHeading) = BankingOptions.ForSimulation(p);
+        bool virtualSecond = false, virtualTail = false;
         if (stopCfg.Count == 0)
         {
-            if (EffectiveHeading == StopReference.Tail)
-                _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile: serve un fermo scomparente. Si simula con intestatura di testa sullo fermo finale."));
-            EffectiveHeading = StopReference.Head;
+            if (EffectiveHeading == StopReference.Tail && DoubleBanking)
+            {
+                _bankingNotes.Add((EventSeverity.Warning, "Intestatura di coda non possibile in double banking senza fermo scomparente: il secondo pacco si ferma a distanza dal primo, intestatura di testa."));
+                EffectiveHeading = StopReference.Head;
+            }
             // Double banking senza fermo: il secondo pacco si ferma per posizionamento (encoder) dietro al primo
-            virtualSecond = EffectiveBanking == AccumulationMode.DoubleBanking;
+            virtualSecond = DoubleBanking;
+            // Single banking di coda senza fermo: il pacco si ferma per posizionamento con la coda a inizio trasferitore
+            virtualTail = !DoubleBanking && EffectiveHeading == StopReference.Tail;
         }
         _bankingNotes.Insert(0, (EventSeverity.Info,
             $"Accumulo sul trasferitore: {(!DoubleBanking ? "single banking (1 pacco per ciclo)" : virtualSecond ? $"double banking (2 pacchi: il primo di testa sullo fermo finale, il secondo fermato per posizionamento a {p.Transfer.DoubleBankingGapMm:0} mm dal primo, senza fermo scomparente)" : "double banking (2 pacchi: il primo di testa sullo fermo finale, il secondo sul fermo scomparente)")}, " +
-            $"intestatura di {(EffectiveHeading == StopReference.Head ? "testa" : "coda (oltre il fermo, il fermo si solleva e il pacco torna indietro)")}"));
+            $"intestatura di {(EffectiveHeading == StopReference.Head ? "testa" : virtualTail ? "coda (fermato per posizionamento con la coda a inizio trasferitore)" : "coda (oltre il fermo, il fermo si solleva e il pacco torna indietro)")}"));
         // Single banking di testa: i fermi scomparenti restano abbassati e il pacco va fino allo fermo finale
         if (virtualSecond)
             _stops.Add(new StopRuntime(new IntermediateStopConfig
@@ -92,6 +95,12 @@ public sealed partial class SimulationEngine
                 Id = "POS2", Name = "Posizionamento secondo pacco (encoder)", AlignmentTimeS = 0,
                 PositionToleranceMm = 3, PositionMm = p.Stopper.PositionMm
             }, StopReference.Head, isVirtual: true));
+        else if (virtualTail)
+            _stops.Add(new StopRuntime(new IntermediateStopConfig
+            {
+                Id = "POSC", Name = "Posizionamento di coda (encoder)", AlignmentTimeS = 0,
+                PositionToleranceMm = 3, PositionMm = p.Transfer.PositionMm
+            }, StopReference.Head, isVirtual: true) { TailPositioning = true });
         else if (DoubleBanking || EffectiveHeading == StopReference.Tail)
             foreach (var s in stopCfg) _stops.Add(new StopRuntime(s, EffectiveHeading));
         if (_stops.Count > 0 && Topology.StopperZone != null)
@@ -765,6 +774,8 @@ public sealed partial class SimulationEngine
 
     private double StopTargetHead(StopRuntime s, PackageRuntime p)
     {
+        if (s.IsVirtual && s.TailPositioning)
+            return Transfer.StartM + p.LengthM;     // coda a inizio trasferitore
         if (s.IsVirtual)
         {
             // Nessun fermo: la testa si ferma alla distanza impostata dalla coda del primo pacco
@@ -785,6 +796,8 @@ public sealed partial class SimulationEngine
         double head = StopTargetHead(s, p);
         double tail = head - p.LengthM;
         double reach = head + s.OvershootM;   // con intestatura di coda il pacco supera il fermo prima di tornare indietro
+        if (s.IsVirtual && s.TailPositioning)
+            return head <= Stopper.PositionM + 1e-6;
         if (s.IsVirtual)
         {
             // Senza fermo: serve il primo pacco già destinato allo stopper; il secondo può sbalzare un poco oltre il trasferitore
@@ -830,6 +843,13 @@ public sealed partial class SimulationEngine
         s.State = StopState.Assigned;
         s.TargetHeadM = StopTargetHead(s, p);
         s.Packages++;
+        if (s.IsVirtual && s.TailPositioning)
+        {
+            s.PositionM = s.TargetHeadM;
+            Emit(SimEventType.StopPhase, EventSeverity.Info,
+                $"{p.Id} intestatura di coda senza fermo: fermato per posizionamento (encoder) con la coda a {(s.TargetHeadM - p.LengthM) * 1000:0} mm (inizio trasferitore)", null, p.Id);
+            return;
+        }
         if (s.IsVirtual)
         {
             s.PositionM = s.TargetHeadM;

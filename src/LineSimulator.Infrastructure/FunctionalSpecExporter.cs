@@ -127,8 +127,8 @@ public static class FunctionalSpecExporter
         body.Append(Para("3.3 Accumulo sul trasferitore: single e double banking", "Heading2"));
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
         double safety = p.Simulation.MinSafetyDistanceMm;
-        bool tailMode = p.Simulation.Heading == StopReference.Tail && stops.Count > 0;
-        bool dblMode = p.Simulation.Banking == AccumulationMode.DoubleBanking;
+        bool tailMode = BankingOptions.ForSimulation(p).Heading == StopReference.Tail && stops.Count > 0;
+        bool dblMode = BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking;
         bool virtualSecond = dblMode && stops.Count == 0;
         body.Append(Para($"Impostazione della simulazione: {(dblMode ? "double banking" : "single banking")}, intestatura di {(tailMode ? "coda" : "testa")}." +
             (tailMode ? " Intestatura di coda: il pacco supera il fermo scomparente abbassato di un'extra corsa, il fermo si solleva dietro la coda e il pacco torna indietro fino alla battuta." : "")));

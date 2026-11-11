@@ -245,8 +245,10 @@
                 <StackPanel Margin="0,0,12,0"><TextBlock Style="{StaticResource KpiLabel}" Text="COSA SIMULO"/>
                     <ComboBox ItemsSource="{Binding PackageTypes}" DisplayMemberPath="Id" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" ToolTip="Tipologia di pacco da vedere nella simulazione (nome della schermata Pacchi)" Margin="0,2"/>
                     <DockPanel Margin="0,2">
-                        <ComboBox DockPanel.Dock="Right" Width="80" ItemsSource="{Binding HeadingModes}" SelectedItem="{Binding SimHeading, Mode=TwoWay}" ToolTip="Battuta: di testa o di coda (di coda solo con fermo scomparente)" Margin="4,0,0,0"/>
-                        <ComboBox ItemsSource="{Binding BankingModes}" SelectedItem="{Binding SimBanking, Mode=TwoWay}" ToolTip="Come si carica il trasferitore: un pacco (single) o due (double)"/>
+                        <ComboBox DockPanel.Dock="Right" Width="90" ItemsSource="{Binding SimHeadingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding SimHeading, Mode=TwoWay}" ItemContainerStyle="{StaticResource ChoiceItem}" ToolTip="Intestatura del pacco simulato (come nella tabella della schermata Pacchi)" Margin="4,0,0,0"/>
+                        <ComboBox ItemsSource="{Binding SimBankingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding SimBanking, Mode=TwoWay}" ItemContainerStyle="{StaticResource ChoiceItem}" ToolTip="Banking del pacco simulato: un pacco (single) o due (double) per ciclo del trasferitore"/>
                     </DockPanel>
                     <CheckBox Content="Pacchi senza fine (fino a Stop)" IsChecked="{Binding SimContinuous, Mode=TwoWay}" Margin="0,2,0,0"/>
                 </StackPanel>
@@ -1018,7 +1020,8 @@
                     <!-- Resto dello schermo: 3D del pacco sopra, righello 2D sotto -->
                     <Grid Grid.Column="2" Margin="16">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*" MinHeight="160"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
@@ -1055,6 +1058,42 @@
                                 <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 100 mm)"
                                         MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
                             </StackPanel>
+                        </Border>
+                        <!-- Tabella delle configurazioni: una riga per pacco -->
+                        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12" Margin="0,14,0,0">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="CONFIGURAZIONI DEI PACCHI" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
+                                <TextBlock DockPanel.Dock="Top" Margin="0,2,0,8" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
+                                           Text="Come si lavora ogni pacco sul trasferitore. Le scelte in grigio non sono possibili con questa linea (passa sopra per sapere perché)."/>
+                                <DataGrid ItemsSource="{Binding PackageRows}" AutoGenerateColumns="False" HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                                          CanUserReorderColumns="False" SelectionMode="Single" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
+                                          BorderThickness="0" Background="White" RowBackground="White" MaxHeight="230" RowHeight="30" VerticalContentAlignment="Center">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Pacco" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="1.6*" FontWeight="SemiBold"/>
+                                        <DataGridTextColumn Header="Peso (kg)" Binding="{Binding WeightKg, StringFormat={}{0:0}}" Width="*"/>
+                                        <DataGridTextColumn Header="Lunghezza (m)" Binding="{Binding LengthM, StringFormat={}{0:0.00}}" Width="*"/>
+                                        <DataGridTextColumn Header="N. legature" Binding="{Binding StrapCount}" Width="*"/>
+                                        <DataGridTextColumn Header="Base (mm)" Binding="{Binding WidthMm, StringFormat={}{0:0}}" Width="*"/>
+                                        <DataGridTextColumn Header="Altezza (mm)" Binding="{Binding HeightMm, StringFormat={}{0:0}}" Width="*"/>
+                                        <DataGridTemplateColumn Header="Banking" Width="1.4*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ComboBox ItemsSource="{Binding BankingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" Margin="2"
+                                                              SelectedValue="{Binding Banking, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource ChoiceItem}"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Intestatura" Width="1.2*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ComboBox ItemsSource="{Binding HeadingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" Margin="2"
+                                                              SelectedValue="{Binding Heading, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource ChoiceItem}"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
                         </Border>
                     </Grid>
                 </Grid>
