@@ -350,6 +350,33 @@ public sealed partial class SimulationEngine : ILogicContext
         }
     }
 
+    /// <summary>Testa più avanzata (m) di un pacco durante la legatura: prima legatrice + legatura più lontana dalla testa.</summary>
+    private double StrappingHeadReachM
+    {
+        get
+        {
+            double mm = StrappingAreaRules.RequiredStrappingHeadMaxMm(Project);
+            return double.IsNegativeInfinity(mm) ? double.NegativeInfinity : mm / 1000.0;
+        }
+    }
+
+    /// <summary>
+    /// Punto che la coda del pacco legato deve superare perché entri il successivo: la fotocellula di uscita legatura;
+    /// con lo svincolo sotto lo stesso inverter e i pacchi lunghi (la testa del successivo, legandosi, arriva oltre la
+    /// fotocellula: <see cref="StrappingHeadReachM"/>) la fine della zona, altrimenti la legatura del successivo spingerebbe
+    /// il pacco legato nell'area del trasferitore.
+    /// </summary>
+    private double StrappingClearM
+    {
+        get
+        {
+            double exit = StrappingExitM;
+            var zi = Station?.Zone.Info;
+            if (zi == null || exit >= zi.EndM - 1e-6) return exit;
+            return StrappingHeadReachM + Project.Simulation.MinSafetyDistanceMm / 1000.0 > exit + 1e-9 ? zi.EndM : exit;
+        }
+    }
+
     /// <summary>Posizione (m) della fotocellula di uscita della via rulli di legatura (fine della zona se manca).</summary>
     private double StrappingExitM
     {
@@ -419,13 +446,13 @@ public sealed partial class SimulationEngine : ILogicContext
         if (waiting != null)
         {
             var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
-            bool clear = prev == null || !prev.OnRollers || prev.TailM > StrappingExitM + 1e-9;
+            bool clear = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
             if (!clear) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
             _lastProgressTime = t;
             Emit(SimEventType.InfeedWaiting, EventSeverity.Info,
                 prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
-                             : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato la fotocellula di uscita legatura ({StrappingExitM * 1000:0} mm)", null, waiting.Id);
+                             : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
             return;
         }
         if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;
@@ -582,6 +609,8 @@ public sealed partial class SimulationEngine : ILogicContext
         if (Station == null || z != Station.Zone || Station.Package != res || Station.State != StationState.Releasing) return false;
         double exit = StrappingExitM;
         if (exit >= z.Info.EndM - 1e-6 || res.TailM <= exit + 1e-9) return false;
+        // svincolo lungo sotto lo stesso inverter: il pacco legato si libera solo uscendo dalla zona (vedi StrappingClearM)
+        if (StrappingClearM >= z.Info.EndM - 1e-6) return false;
         _releasedFromStation.Add(res);
         return true;
     }

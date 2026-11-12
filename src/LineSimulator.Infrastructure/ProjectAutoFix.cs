@@ -39,6 +39,10 @@ public static class ProjectAutoFix
         }
         Add(SourceLayout, LayoutRules.Enforce(p));
         Add(SourceCheck, EquipmentCheck.Run(p, fix: true).Where(i => i.Fixed).Select(i => i.Message));
+        var outside = p.Sections.Count == 0 ? new List<string>()
+            : p.Photocells.Where(x => x.PositionMm < p.Sections.Min(s => s.StartMm) - 1e-6 || x.PositionMm > p.Sections.Max(s => s.EndMm) + 1e-6).Select(x => x.Id).ToList();
+        if (ProjectNormalizer.ClampPhotocellsToRollers(p))
+            Add(SourcePhotocells, new[] { $"Fotocellule riportate dentro le vie a rulli: {string.Join(", ", outside)}" });
         Add(SourcePhotocells, PhotocellRules.BeforeSimulation(p));
         var prep = SimulationPreparation.Prepare(p);
         Add(SourcePreparation, prep.Changes);

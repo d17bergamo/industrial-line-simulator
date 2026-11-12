@@ -57,7 +57,7 @@ public class ModelAuditTests
         Assert.All(LayoutRules.BundleClampPositions(p), k => Assert.InRange(k.PositionMm, m1.StartMm, m1.EndMm));
 
         // Svincolo 4 rulli; trasferitore = ultimo modulo; bilici affiancati sul trasferitore; fermo scomparente al centro
-        Assert.Equal(4, s[1].RollerCount);
+        Assert.True(s[1].RollerCount >= 4);   // svincolo: almeno 4 rulli, più lungo per i pacchi lunghi
         Assert.Equal(m3.StartMm, p.Transfer.PositionMm, 6);
         Assert.Equal(m3.LengthMm, p.Transfer.LengthMm, 6);
         Assert.Equal(p.Transfer.LengthMm, p.Scales.Sum(b => b.LengthMm), 6);

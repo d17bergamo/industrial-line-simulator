@@ -50,6 +50,7 @@ public static class LayoutRules
     {
         var m = TransferModule(p);
         if (m == null || p.Transfer.LengthMm <= 0 || TransferModuleMatches(p)) return false;
+        var stopperPc = ProjectNormalizer.StopperPhotocell(p);   // l'ultima fotocellula prima del fermo segue il fermo
         if (Math.Abs(m.LengthMm - p.Transfer.LengthMm) >= 1)
             LineReflow.Fit(m, m.StartMm, m.StartMm + p.Transfer.LengthMm);
         double dx = m.StartMm - p.Transfer.PositionMm;
@@ -59,7 +60,7 @@ public static class LayoutRules
             foreach (var sc in p.Scales) sc.StartMm += dx;
             foreach (var fs in p.IntermediateStops) fs.PositionMm += dx;
         }
-        ProjectNormalizer.AlignStopperToLastRoller(p);
+        ProjectNormalizer.AlignStopperToLastRoller(p, stopperPc);
         return true;
     }
 

@@ -107,7 +107,7 @@ public class LineModelsTests
         }
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.Equal(4, created.Count);
-        Assert.Contains(e.Events, x => x.Message.Contains("ha liberato la fotocellula di uscita legatura", StringComparison.Ordinal));
+        Assert.Contains(e.Events, x => x.Message.Contains(" avanza: la coda di ", StringComparison.Ordinal) && x.Message.Contains("ha liberato", StringComparison.Ordinal));
     }
 
     [Fact]

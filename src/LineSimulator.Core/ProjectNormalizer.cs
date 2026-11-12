@@ -43,14 +43,54 @@ public static class ProjectNormalizer
     /// Il fermo finale sta sempre dopo l'ultimo rullo dell'ultima via a rulli: la posizione della battuta si calcola
     /// dalla sola distanza rullo-fermo. Restituisce true se la posizione è cambiata.
     /// </summary>
-    public static bool AlignStopperToLastRoller(LineProject p)
+    public static bool AlignStopperToLastRoller(LineProject p) => AlignStopperToLastRoller(p, null);
+
+    /// <summary>
+    /// Come sopra; <paramref name="stopperPhotocell"/> (l'ultima fotocellula prima del fermo, da <see cref="StopperPhotocell"/>
+    /// letta prima dello spostamento) si sposta con il fermo e ne mantiene la distanza.
+    /// </summary>
+    public static bool AlignStopperToLastRoller(LineProject p, PhotocellConfig? stopperPhotocell)
     {
         if (p.Sections.Count == 0) return false;
         var lastSec = p.Sections.OrderBy(s => s.EndMm).Last();
         double pos = lastSec.EndMm;                       // il fermo sta alla fine dell'ultimo modulo (= fine del trasferitore)
         bool changed = Math.Abs(pos - p.Stopper.PositionMm) >= 1e-9 || Math.Abs(p.Stopper.DistanceFromLastRollerMm - lastSec.EndOverhangMm) >= 1e-9;
+        double delta = pos - p.Stopper.PositionMm;
         p.Stopper.DistanceFromLastRollerMm = lastSec.EndOverhangMm;
         p.Stopper.PositionMm = pos;
+        if (stopperPhotocell != null && Math.Abs(delta) > 1e-9) stopperPhotocell.PositionMm += delta;
+        return changed;
+    }
+
+    /// <summary>
+    /// Ultima fotocellula in fondo prima del fermo finale (nell'ultima via a rulli, esclusa l'ingresso): segue il fermo
+    /// quando si sposta o si allunga l'area del trasferitore. Null se non c'è.
+    /// </summary>
+    public static PhotocellConfig? StopperPhotocell(LineProject p)
+    {
+        if (p.Sections.Count == 0) return null;
+        var lastSec = p.Sections.OrderBy(s => s.EndMm).Last();
+        return p.Photocells
+            .Where(x => !x.IsEntryPhotocell && x.PositionMm >= lastSec.StartMm - 1e-6 && x.PositionMm <= p.Stopper.PositionMm + 1e-6)
+            .OrderByDescending(x => x.PositionMm).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Le fotocellule non escono mai dalle vie a rulli: riporta dentro (tra inizio della prima via e fine dell'ultima)
+    /// quelle fuori. Restituisce true se ne ha spostata qualcuna.
+    /// </summary>
+    public static bool ClampPhotocellsToRollers(LineProject p)
+    {
+        if (p.Sections.Count == 0) return false;
+        double min = p.Sections.Min(s => s.StartMm), max = p.Sections.Max(s => s.EndMm);
+        bool changed = false;
+        foreach (var x in p.Photocells)
+        {
+            double c = Math.Clamp(x.PositionMm, min, max);
+            if (Math.Abs(c - x.PositionMm) < 1e-9) continue;
+            x.PositionMm = c;
+            changed = true;
+        }
         return changed;
     }
 

@@ -91,7 +91,7 @@ public class ProductivityAdvisorTests
         var p = SampleProjects.CreateTwoStrappers12m();
         p.Strappers[1].PositionMm = p.Strappers[0].PositionMm + 3000;      // passo attuale 3000 mm
         var before = p.Strappers.Select(s => (s.Id, s.PositionMm, s.Side)).ToList();
-        var r = ProductivityAdvisor.Analyze(p, targetTph: 1000, maxSteps: 1);
+        var r = ProductivityAdvisor.Analyze(p, targetTph: 1000, maxSteps: 3);   // con la via di legatura a regola il primo passo può essere un altro (motori commutabili)
         Assert.DoesNotContain(r.Options, o => o.Id is "SPACING_2M" or "ALTERNATE_SIDES");
         Assert.Contains(r.Options, o => o.Id == "ADD_STRAPPER");
         Assert.Contains(r.Path, o => o.Id == "ADD_STRAPPER");

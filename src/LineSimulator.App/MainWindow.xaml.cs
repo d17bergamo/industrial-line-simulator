@@ -73,15 +73,6 @@ public partial class MainWindow : Window
         }), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
-    private void PackageSearch_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        var q = PackageSearch.Text.Trim();
-        PackageSearchHint.Visibility = q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_vm.PackageTypes);
-        view.Filter = q.Length == 0 ? null : o => o is LineSimulator.Models.PackageType t
-            && ((t.Name ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || (t.Id ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
-    }
-
     private void StrapRuler_SizeChanged(object sender, SizeChangedEventArgs e) => DrawStrapRuler();
 
     private void UpdatePackageDecor()
@@ -270,9 +261,6 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------ Selezione e spostamento col mouse (layout e simulazione)
-
-    private void PackageListThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
-        => PackageListColumn.Width = new GridLength(Math.Clamp(PackageListColumn.ActualWidth + e.HorizontalChange, 200, 700));
 
     private void PackagePropsThumb_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
         => _vm.PackagePropsWidth = Math.Clamp(_vm.PackagePropsWidth + e.HorizontalChange, 240, 800);

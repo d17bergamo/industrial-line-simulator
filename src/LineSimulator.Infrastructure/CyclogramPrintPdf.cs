@@ -17,14 +17,20 @@ public static class CyclogramPrintPdf
 {
     private const double W = 1191, H = 842, M = 30, LabelW = 175;
 
-    public static void Save(string path, LineProject project, double? lineSpeedMps = null) => File.WriteAllBytes(path, Build(project, lineSpeedMps));
+    public static void Save(string path, LineProject project, double? lineSpeedMps = null, string? typeId = null) => File.WriteAllBytes(path, Build(project, lineSpeedMps, typeId));
 
-    public static byte[] Build(LineProject source, double? lineSpeedMps = null)
+    /// <summary>Ciclogramma del progetto; con <paramref name="typeId"/> solo di quella tipologia di pacco.</summary>
+    public static byte[] Build(LineProject source, double? lineSpeedMps = null, string? typeId = null)
     {
-        var p = ProjectSerializer.Clone(source);
-        try { ProjectAutoFix.Run(p); } catch { /* progetto incompleto: si simula com'è */ }
-        p.Infeed.Continuous = false;
-        p.Infeed.PackageCount = Math.Max(8, Math.Min(p.Infeed.PackageCount, 12));
+        LineProject p;
+        if (typeId != null) p = PackageProductivity.PrepareFor(source, typeId);
+        else
+        {
+            p = ProjectSerializer.Clone(source);
+            try { ProjectAutoFix.Run(p); } catch { /* progetto incompleto: si simula com'è */ }
+            p.Infeed.Continuous = false;
+            p.Infeed.PackageCount = Math.Max(8, Math.Min(p.Infeed.PackageCount, 12));
+        }
         var e = new SimulationEngine(p);
         if (lineSpeedMps is double v) e.SetLineSpeed(v);
         e.RunToCompletion();
