@@ -1,7 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
 using LineSimulator.App.Mvvm;
 using LineSimulator.Core;
+using LineSimulator.Infrastructure;
 using LineSimulator.Models;
+using Microsoft.Win32;
 
 namespace LineSimulator.App.ViewModels;
 
@@ -125,6 +130,22 @@ public sealed class PackageRowViewModel : ObservableObject
         }
     }
 
+    // Colonne compilate dal simulatore (simulazione di quel pacco da solo sulla linea)
+    private PackageProductivityResult? _result;
+    private bool _computing = true;
+    public void SetResult(PackageProductivityResult? r, bool computing)
+    {
+        _result = r;
+        _computing = computing;
+        Raise(nameof(CycleTimeText)); Raise(nameof(ProductivityText)); Raise(nameof(ResultHint));
+    }
+    public string CycleTimeText => _computing && _result == null ? "…" : _result?.CycleTimeS is double c ? c.ToString("0.0") : "-";
+    public string ProductivityText => _computing && _result == null ? "…" : _result?.TonnesPerHour is double t ? t.ToString("0.0") : "-";
+    public string ResultHint => _result == null
+        ? "Il simulatore sta calcolando questo pacco da solo sulla linea"
+        : _result.Problem != null ? "Simulazione con problemi: " + _result.Problem
+        : $"Simulati 12 pacchi {Type.Id} da soli sulla linea: tempo ciclo medio a regime {_result.CycleTimeS:0.0} s, {_result.PackagesPerHour:0.0} pacchi/h, {_result.TonnesPerHour:0.0} t/h";
+
     /// <summary>Aggiorna tutte le colonne (modifiche dalle caratteristiche o dal layout).</summary>
     public void RefreshAll() => Raise(string.Empty);
 }
@@ -138,6 +159,8 @@ public partial class MainViewModel
     {
         PackageRows.Clear();
         foreach (var t in _project.PackageTypes) PackageRows.Add(new PackageRowViewModel(t, () => _project, OnPackageRowEdited));
+        Raise(nameof(SelectedPackageRow));
+        ScheduleProductivity();
     }
 
     private void RefreshPackageRows()
@@ -148,7 +171,69 @@ public partial class MainViewModel
             return;
         }
         foreach (var r in PackageRows) r.RefreshAll();
+        ScheduleProductivity();
     }
+
+    /// <summary>Riga selezionata nella tabella = pacco mostrato nel 3D e nelle caratteristiche.</summary>
+    public PackageRowViewModel? SelectedPackageRow
+    {
+        get => PackageRows.FirstOrDefault(r => r.Type == _selectedPackageType);
+        set { if (value != null && value.Type != _selectedPackageType) SelectedPackageType = value.Type; }
+    }
+
+    // ---- Tempo medio e produttività per pacco: simulazioni in background, rifatte a ogni modifica (dopo 1 s di calma)
+    private DispatcherTimer? _productivityTimer;
+    private CancellationTokenSource? _productivityCts;
+
+    private void ScheduleProductivity()
+    {
+        _productivityCts?.Cancel();
+        foreach (var r in PackageRows) r.SetResult(null, computing: true);
+        if (_productivityTimer == null)
+        {
+            _productivityTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _productivityTimer.Tick += (_, _) => { _productivityTimer!.Stop(); StartProductivity(); };
+        }
+        _productivityTimer.Stop();
+        _productivityTimer.Start();
+    }
+
+    private async void StartProductivity()
+    {
+        _productivityCts?.Cancel();
+        var cts = _productivityCts = new CancellationTokenSource();
+        LineProject snapshot;
+        try { snapshot = ProjectSerializer.Clone(_project); } catch { return; }
+        var speed = _lineSpeedOverride;
+        var rows = PackageRows.ToList();
+        foreach (var row in rows)
+        {
+            if (cts.IsCancellationRequested) return;
+            string id = row.Type.Id;
+            PackageProductivityResult? res;
+            try { res = await Task.Run(() => PackageProductivity.Evaluate(snapshot, id, speed, cts.Token), cts.Token); }
+            catch (OperationCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            row.SetResult(res, computing: false);
+        }
+    }
+
+    private RelayCommand? _exportRowCyclogramCommand;
+    /// <summary>Esporta il ciclogramma da stampare (PDF) di un solo pacco (icona nella riga della tabella).</summary>
+    public ICommand ExportRowCyclogramCommand => _exportRowCyclogramCommand ??= new RelayCommand(o =>
+    {
+        if (o is not PackageRowViewModel row) return;
+        var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = SafeName(_project.Name + "_" + row.Type.Id) + "_ciclogramma.pdf" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            Mouse.OverrideCursor = Cursors.Wait;
+            CyclogramPrintPdf.Save(dlg.FileName, _project, _lineSpeedOverride, row.Type.Id);
+            Status = $"Ciclogramma del pacco {row.Type.Id} esportato: {dlg.FileName}";
+        }
+        catch (Exception ex) { MessageBox.Show("Esportazione non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { Mouse.OverrideCursor = null; }
+    });
 
     private void OnPackageRowEdited(PackageRowViewModel row, string what)
     {
@@ -186,8 +271,14 @@ public partial class MainViewModel
         }
         if (t == _selectedPackageType) BuildPackageProperties();
         RefreshPackageRows();
-        Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
+        RaiseSimBanking();
         Status = $"{t.Id}: {DescribeRow(t)}";
+    }
+
+    private void RaiseSimBanking()
+    {
+        Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
+        Raise(nameof(SimBankingText)); Raise(nameof(SimHeadingText));
     }
 
     private string DescribeRow(PackageType t) =>
@@ -195,8 +286,10 @@ public partial class MainViewModel
         $"{(BankingOptions.Banking(_project, t) == AccumulationMode.DoubleBanking ? "double" : "single")} banking, intestatura di " +
         $"{(BankingOptions.Heading(_project, t) == StopReference.Tail ? "coda" : "testa")}";
 
-    // Barra "Cosa simulo": banking e intestatura del pacco simulato (le stesse scelte della tabella)
+    // Barra "Cosa simulo": banking e intestatura del pacco simulato, in sola lettura (si scelgono nella tabella dei pacchi)
     private PackageRowViewModel? SimRow => _simPackageType == null ? null : PackageRows.FirstOrDefault(r => r.Type == _simPackageType);
     public IReadOnlyList<ChoiceOption> SimBankingChoices => SimRow?.BankingChoices ?? Array.Empty<ChoiceOption>();
     public IReadOnlyList<ChoiceOption> SimHeadingChoices => SimRow?.HeadingChoices ?? Array.Empty<ChoiceOption>();
+    public string SimBankingText => SimBanking == AccumulationMode.DoubleBanking ? "Double banking" : "Single banking";
+    public string SimHeadingText => SimHeading == StopReference.Tail ? "Intestatura di coda" : "Intestatura di testa";
 }

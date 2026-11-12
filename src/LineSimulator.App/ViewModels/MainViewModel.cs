@@ -193,7 +193,7 @@ public sealed partial class MainViewModel : ObservableObject
     public PackageType? SelectedPackageType
     {
         get => _selectedPackageType;
-        set { if (Set(ref _selectedPackageType, value)) BuildPackageProperties(); }
+        set { if (Set(ref _selectedPackageType, value)) { BuildPackageProperties(); Raise(nameof(SelectedPackageRow)); } }
     }
     public ICommand NewPackageCommand { get; private set; } = null!;
     public ICommand DuplicatePackageCommand { get; private set; } = null!;
@@ -212,7 +212,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (_syncingSimType || value == null || !Set(ref _simPackageType, value)) return;
             _project.Infeed.TypeSequence = new List<string> { value.Id };
             ProjectChanged(structural: false);
-            Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
+            RaiseSimBanking();
             Status = $"Tipologia simulata: {value.Id} - {value.Name} ({value.LengthMm:0} mm, {value.WeightKg:0} kg)";
         }
     }
@@ -620,6 +620,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (markModified) _modified = true;
         ProjectNormalizer.AlignEntryPhotocell(_project);
+        ProjectNormalizer.ClampPhotocellsToRollers(_project);       // le fotocellule non escono mai dalle vie a rulli
         ProjectDescription.Refresh(_project);                    // nome e descrizione seguono legatrici e pacchi
         Raise(nameof(ProjectTitle)); Raise(nameof(ProjectSubtitle));
         GroupInheritance.PropagateAll(_project);                // le famiglie passano le proprietà ai figli non personalizzati
@@ -634,7 +635,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo scomparente: impostata di testa";
         RefreshPackageRows();
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading)); Raise(nameof(SimTargetTph));
-        Raise(nameof(SimBanking)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
+        RaiseSimBanking();
         RefreshCheck();
         var selected = SelectedNode?.Model;
         LayoutScene.Build(_project);
@@ -1260,6 +1261,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
         StrapperTrack.KeepEncoderBehindFirstStrapper(_project);    // encoder e fotocellula di legatura seguono la prima legatrice (≥ 1 m)
         ProjectNormalizer.AlignStopperToLastRoller(_project);
+        ProjectNormalizer.ClampPhotocellsToRollers(_project);       // le fotocellule non escono mai dalle vie a rulli
         LayoutScene.Build(_project);
         LayoutScene.Highlight(m);
         foreach (var item in Properties) item.Refresh();
@@ -1430,7 +1432,7 @@ public sealed partial class MainViewModel : ObservableObject
         _simPackageType = first;
         _syncingSimType = false;
         Raise(nameof(SimPackageType));
-        Raise(nameof(SimBanking)); Raise(nameof(SimHeading)); Raise(nameof(SimBankingChoices)); Raise(nameof(SimHeadingChoices));
+        RaiseSimBanking();
     }
 
     private int _packagePreviewVersion;

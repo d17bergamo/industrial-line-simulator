@@ -31,20 +31,17 @@ public static class SampleProjects
     public static double FirstStrapperPositionMm(int strappers, int maxLengthM) => ProjectNormalizer.DefaultEntryOffsetMm + FirstStrapperFromEntryMm;
 
     /// <summary>
-    /// Lunghezza della via rulli di legatura: almeno due rulli dopo l'ultima legatrice; per i pacchi lunghi quanto basta
-    /// perché, con lo svincolo sotto lo stesso inverter, la legatura di coda si possa fare sotto la prima legatrice
-    /// (testa fino a prima legatrice + distanza della legatura di coda dalla testa).
+    /// Lunghezza della via rulli di legatura in tutti gli esempi: la regola rispetto all'ultima legatrice o reggettatrice,
+    /// cioè fine via = ultima macchina + due rulli (<see cref="StrapperTrack.MinRollersAfterLastStrapper"/>), arrotondata
+    /// al passo dei rulli. Per i pacchi lunghi lo svincolo va sotto lo stesso inverter (StrappingAreaRules).
     /// </summary>
     public static double StrappingModuleLengthMm(int strappers, int maxLengthM)
     {
         double pitch = RollerSection.DefaultPitchMm;
         double first = FirstStrapperPositionMm(strappers, maxLengthM);
-        double last = first + (strappers - 1) * StrapperSpacingMm;
+        double last = first + (Math.Max(1, strappers) - 1) * StrapperSpacingMm;
         double byRule = last + StrapperTrack.MinRollersAfterLastStrapper * pitch;
-        double rearStrap = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm;
-        double release = StrappingAreaRules.ReleaseModuleRollers * pitch;
-        double forLongest = first + rearStrap + 250 - release;
-        return Math.Ceiling(Math.Max(byRule, forLongest) / pitch) * pitch;
+        return Math.Ceiling(byRule / pitch - 1e-9) * pitch;
     }
 
     /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>

@@ -138,9 +138,11 @@ public static class LineReflow
         if (prev != null) dx = Math.Max(dx, prev.StartMm + MinLengthMm(prev) - s.StartMm);
         if (next != null) dx = Math.Min(dx, next.EndMm - MinLengthMm(next) - s.EndMm);
         if (Math.Abs(dx) < 1e-9) return 0;
-        // ciò che sta dentro la via (fotocellule, macchine, fermi) si sposta con lei
+        // ciò che sta dentro la via (fotocellule, macchine, fermi) si sposta con lei; l'ultima fotocellula prima del fermo
+        // finale segue il fermo (spostata da AlignStopperToLastRoller)
+        var stopperPc = ProjectNormalizer.StopperPhotocell(p);
         bool InS(double v) => v >= s.StartMm - 1e-6 && v < s.EndMm - 1e-6;
-        foreach (var x in p.Photocells.Where(x => !x.IsEntryPhotocell && InS(x.PositionMm))) x.PositionMm += dx;
+        foreach (var x in p.Photocells.Where(x => !x.IsEntryPhotocell && x != stopperPc && InS(x.PositionMm))) x.PositionMm += dx;
         foreach (var x in p.Strappers.Where(x => InS(x.PositionMm))) x.PositionMm += dx;
         if (next != null)
         {
@@ -163,7 +165,7 @@ public static class LineReflow
             foreach (var sc in p.Scales) sc.StartMm += dx;
             foreach (var fs in p.IntermediateStops) fs.PositionMm += dx;
         }
-        ProjectNormalizer.AlignStopperToLastRoller(p);
+        ProjectNormalizer.AlignStopperToLastRoller(p, stopperPc);
         return dx;
     }
 
@@ -173,12 +175,13 @@ public static class LineReflow
         double delta = s.EndMm - oldEndMm;
         if (Math.Abs(delta) < 1e-9) return;
         double Map(double v) => v >= oldEndMm - 1e-6 ? v + delta : v;
+        var stopperPc = ProjectNormalizer.StopperPhotocell(p);     // segue il fermo finale (spostata da AlignStopperToLastRoller)
         foreach (var o in p.Sections.Where(x => !ReferenceEquals(x, s))) o.StartMm = Map(o.StartMm);
-        foreach (var x in p.Photocells) x.PositionMm = Map(x.PositionMm);
+        foreach (var x in p.Photocells.Where(x => x != stopperPc)) x.PositionMm = Map(x.PositionMm);
         foreach (var x in p.Strappers) x.PositionMm = Map(x.PositionMm);
         foreach (var x in p.IntermediateStops) x.PositionMm = Map(x.PositionMm);
         foreach (var x in p.Scales) x.StartMm = Map(x.StartMm);
         p.Transfer.PositionMm = Map(p.Transfer.PositionMm);
-        ProjectNormalizer.AlignStopperToLastRoller(p);
+        ProjectNormalizer.AlignStopperToLastRoller(p, stopperPc);
     }
 }

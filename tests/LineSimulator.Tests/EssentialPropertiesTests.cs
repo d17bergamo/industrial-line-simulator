@@ -1,5 +1,6 @@
 using System.Reflection;
 using LineSimulator.Core;
+using LineSimulator.Infrastructure;
 using LineSimulator.Models;
 using Xunit;
 
@@ -121,5 +122,63 @@ public class EssentialPropertiesTests
             Assert.Contains("Ciclogramma di un ciclo a regime", text);
             Assert.Contains("VIE A RULLI", text);
         }
+    }
+}
+
+/// <summary>Pagina Pacchi (tempo e produttività per pacco), esempi con la regola della via di legatura, fotocellule.</summary>
+public class PackagePageAndPhotocellTests
+{
+    [Fact]
+    public void Examples_StrappingTrack_EndsTwoRollersAfterLastStrapper()
+    {
+        foreach (var p in new[] { SampleProjects.CreateOneStrapper12m(), SampleProjects.CreateTwoStrappers12m(), SampleProjects.CreateTwoStrappers18m(), SampleProjects.CreateThreeStrappers24m() })
+        {
+            var last = StrapperTrack.LastStrapper(p)!;
+            var sec = StrapperTrack.SectionAt(p, last.PositionMm)!;
+            double after = sec.EndMm - last.PositionMm;
+            Assert.InRange(after, StrapperTrack.MinRollersAfterLastStrapper * sec.RollerPitchMm - 1, StrapperTrack.MinRollersAfterLastStrapper * sec.RollerPitchMm + sec.RollerPitchMm);
+        }
+    }
+
+    [Fact]
+    public void StopperPhotocell_FollowsTheTransferArea()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var pc = ProjectNormalizer.StopperPhotocell(p)!;
+        double d = p.Stopper.PositionMm - pc.PositionMm;
+        var trfMod = LayoutRules.TransferModule(p)!;
+        LineReflow.MoveSection(p, trfMod, 1250);
+        Assert.Equal(d, p.Stopper.PositionMm - pc.PositionMm, 3);
+        // trasferitore più lungo: il fermo va avanti e la fotocellula con lui
+        p.Transfer.LengthMm += 2500;
+        LayoutRules.AlignTransferModule(p);
+        Assert.Equal(d, p.Stopper.PositionMm - pc.PositionMm, 3);
+    }
+
+    [Fact]
+    public void Photocells_NeverOutsideRollers()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var pc = p.Photocells.First(x => !x.IsEntryPhotocell);
+        pc.PositionMm = p.Sections.Max(s => s.EndMm) + 3000;
+        Assert.True(ProjectNormalizer.ClampPhotocellsToRollers(p));
+        Assert.Equal(p.Sections.Max(s => s.EndMm), pc.PositionMm, 3);
+        pc.PositionMm = -500;
+        ProjectAutoFix.Run(p);
+        Assert.True(pc.PositionMm >= p.Sections.Min(s => s.StartMm) - 1e-6);
+    }
+
+    [Fact]
+    public void PackageProductivity_PerType_AndPerTypeCyclogram()
+    {
+        var p = SampleProjects.CreateTwoStrappers12m();
+        foreach (var t in p.PackageTypes)
+        {
+            var r = PackageProductivity.Evaluate(p, t.Id);
+            Assert.Null(r.Problem);
+            Assert.True(r.CycleTimeS > 0 && r.TonnesPerHour > 0, $"{t.Id}: {r.CycleTimeS} s {r.TonnesPerHour} t/h");
+        }
+        var pdf = CyclogramPrintPdf.Build(p, null, p.PackageTypes[^1].Id);
+        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(pdf, 0, 4));
     }
 }

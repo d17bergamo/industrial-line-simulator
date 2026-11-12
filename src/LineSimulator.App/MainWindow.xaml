@@ -245,10 +245,14 @@
                 <StackPanel Margin="0,0,12,0"><TextBlock Style="{StaticResource KpiLabel}" Text="COSA SIMULO"/>
                     <ComboBox ItemsSource="{Binding PackageTypes}" DisplayMemberPath="Id" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" ToolTip="Tipologia di pacco da vedere nella simulazione (nome della schermata Pacchi)" Margin="0,2"/>
                     <DockPanel Margin="0,2">
-                        <ComboBox DockPanel.Dock="Right" Width="90" ItemsSource="{Binding SimHeadingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                  SelectedValue="{Binding SimHeading, Mode=TwoWay}" ItemContainerStyle="{StaticResource ChoiceItem}" ToolTip="Intestatura del pacco simulato (come nella tabella della schermata Pacchi)" Margin="4,0,0,0"/>
-                        <ComboBox ItemsSource="{Binding SimBankingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                  SelectedValue="{Binding SimBanking, Mode=TwoWay}" ItemContainerStyle="{StaticResource ChoiceItem}" ToolTip="Banking del pacco simulato: un pacco (single) o due (double) per ciclo del trasferitore"/>
+                        <Border DockPanel.Dock="Right" Background="#EEF1F4" CornerRadius="6" Padding="8,3" Margin="4,0,0,0" VerticalAlignment="Center"
+                                ToolTip="Intestatura del pacco simulato: si sceglie nella tabella della schermata Pacchi">
+                            <TextBlock Text="{Binding SimHeadingText}" Foreground="#3D4650" FontSize="12"/>
+                        </Border>
+                        <Border Background="#EEF1F4" CornerRadius="6" Padding="8,3" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                ToolTip="Banking del pacco simulato: si sceglie nella tabella della schermata Pacchi">
+                            <TextBlock Text="{Binding SimBankingText}" Foreground="#3D4650" FontSize="12"/>
+                        </Border>
                     </DockPanel>
                     <CheckBox Content="Pacchi senza fine (fino a Stop)" IsChecked="{Binding SimContinuous, Mode=TwoWay}" Margin="0,2,0,0"/>
                 </StackPanel>
@@ -907,58 +911,10 @@
                 </Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition x:Name="PackageListColumn" Width="270" MinWidth="200"/>
+                        <ColumnDefinition Width="0"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <!-- Sinistra: elenco dei pacchi come schede -->
-                    <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="Elenco pacchi" FontSize="16" FontWeight="Bold" Margin="14,14,14,10"/>
-                            <Border DockPanel.Dock="Top" Margin="14,0,14,10" Height="34" BorderBrush="#D5DAE0" BorderThickness="1" CornerRadius="8" Background="White">
-                                <Grid>
-                                    <TextBlock x:Name="PackageSearchHint" Text="🔍  Cerca tipologia" Foreground="#7B8794" VerticalAlignment="Center" Margin="10,0" IsHitTestVisible="False"/>
-                                    <TextBox x:Name="PackageSearch" BorderThickness="0" Background="Transparent" VerticalContentAlignment="Center" Margin="6,0" TextChanged="PackageSearch_TextChanged" ToolTip="Cerca tipologia"/>
-                                </Grid>
-                            </Border>
-                            <ListBox ItemsSource="{Binding PackageTypes}" SelectedItem="{Binding SelectedPackageType, Mode=TwoWay}" BorderThickness="0" Background="Transparent"
-                                     HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="10,0,10,10">
-                                <ListBox.ItemContainerStyle>
-                                    <Style TargetType="ListBoxItem">
-                                        <Setter Property="Margin" Value="0,0,0,8"/>
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="ListBoxItem">
-                                                    <Border x:Name="Bd" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="12,9">
-                                                        <ContentPresenter/>
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#F7F9FB"/></Trigger>
-                                                        <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Bd" Property="Background" Value="#F1F7FE"/>
-                                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </ListBox.ItemContainerStyle>
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Id}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Foreground="#5B6673" FontSize="12" TextTrimming="CharacterEllipsis">
-                                                <Run Text="{Binding LengthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicWidthMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" × "/><Run Text="{Binding GraphicHeightMm, Mode=OneWay, StringFormat={}{0:0}}"/><Run Text=" · "/><Run Text="{Binding StrapPositionsMm.Count, Mode=OneWay}"/><Run Text=" legature"/>
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </DockPanel>
-                    </Border>
-                    <Thumb Grid.Column="0" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20"
-                           DragDelta="PackageListThumb_DragDelta" ToolTip="Trascina per allargare o stringere l'elenco pacchi"/>
                     <Thumb Grid.Column="1" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20"
                            DragDelta="PackagePropsThumb_DragDelta" ToolTip="Trascina per allargare o stringere le caratteristiche"
                            Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}"/>
@@ -1022,7 +978,8 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" MinHeight="160"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="280" MinHeight="120"/>
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
                             <DockPanel>
@@ -1059,15 +1016,30 @@
                                         MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
                             </StackPanel>
                         </Border>
+                        <!-- Separatore trascinabile: la tabella si allarga verso l'alto o verso il basso, il 3D si riadatta -->
+                        <GridSplitter Grid.Row="2" Height="12" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                                      Background="Transparent" Cursor="SizeNS" ShowsPreview="False" ToolTip="Trascina per ingrandire o ridurre la tabella dei pacchi"/>
+                        <Border Grid.Row="2" Width="44" Height="4" CornerRadius="2" Background="#C9D0D8" IsHitTestVisible="False" VerticalAlignment="Center"/>
                         <!-- Tabella delle configurazioni: una riga per pacco -->
-                        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12" Margin="0,14,0,0">
+                        <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12">
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Top" Text="CONFIGURAZIONI DEI PACCHI" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
                                 <TextBlock DockPanel.Dock="Top" Margin="0,2,0,8" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
-                                           Text="Come si lavora ogni pacco sul trasferitore. Le scelte in grigio non sono possibili con questa linea (passa sopra per sapere perché)."/>
-                                <DataGrid ItemsSource="{Binding PackageRows}" AutoGenerateColumns="False" HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
-                                          CanUserReorderColumns="False" SelectionMode="Single" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
-                                          BorderThickness="0" Background="White" RowBackground="White" MaxHeight="230" RowHeight="30" VerticalContentAlignment="Center">
+                                           Text="Seleziona una riga per vederla nel 3D. Le scelte in grigio non sono possibili con questa linea (passa sopra per sapere perché). Tempo medio e produttività li calcola il simulatore, simulando ogni pacco da solo sulla linea."/>
+                                <DataGrid ItemsSource="{Binding PackageRows}" SelectedItem="{Binding SelectedPackageRow, Mode=TwoWay}" AutoGenerateColumns="False" HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                                          CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
+                                          BorderThickness="0" Background="White" RowBackground="White" RowHeight="30" VerticalContentAlignment="Center">
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="DataGridCell">
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#E6F0FC"/>
+                                                    <Setter Property="Foreground" Value="#1B2430"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Pacco" Binding="{Binding Id, Mode=OneWay}" IsReadOnly="True" Width="1.6*" FontWeight="SemiBold"/>
                                         <DataGridTextColumn Header="Peso (kg)" Binding="{Binding WeightKg, StringFormat={}{0:0}}" Width="*"/>
@@ -1088,6 +1060,29 @@
                                                 <DataTemplate>
                                                     <ComboBox ItemsSource="{Binding HeadingChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" Margin="2"
                                                               SelectedValue="{Binding Heading, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemContainerStyle="{StaticResource ChoiceItem}"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Tempo medio (s)" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding CycleTimeText}" ToolTip="{Binding ResultHint}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" Foreground="#1E5FA8" FontWeight="SemiBold"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Produttività (t/h)" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding ProductivityText}" ToolTip="{Binding ResultHint}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" Foreground="#1E5FA8" FontWeight="SemiBold"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Ciclogramma" Width="Auto">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Button Style="{StaticResource IconButton}" Content="🖨" FontSize="14" HorizontalAlignment="Center"
+                                                            Command="{Binding DataContext.ExportRowCyclogramCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"
+                                                            ToolTip="Esporta il ciclogramma da stampare (PDF) di questo pacco"/>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
