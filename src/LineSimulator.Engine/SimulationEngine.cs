@@ -350,6 +350,16 @@ public sealed partial class SimulationEngine : ILogicContext
         }
     }
 
+    /// <summary>Testa più avanzata (m) di un pacco durante la legatura: prima legatrice + legatura più lontana dalla testa.</summary>
+    private double StrappingHeadReachM
+    {
+        get
+        {
+            double mm = StrappingAreaRules.RequiredStrappingHeadMaxMm(Project);
+            return double.IsNegativeInfinity(mm) ? double.NegativeInfinity : mm / 1000.0;
+        }
+    }
+
     /// <summary>Posizione (m) della fotocellula di uscita della via rulli di legatura (fine della zona se manca).</summary>
     private double StrappingExitM
     {
@@ -582,6 +592,11 @@ public sealed partial class SimulationEngine : ILogicContext
         if (Station == null || z != Station.Zone || Station.Package != res || Station.State != StationState.Releasing) return false;
         double exit = StrappingExitM;
         if (exit >= z.Info.EndM - 1e-6 || res.TailM <= exit + 1e-9) return false;
+        // con lo svincolo lungo sotto lo stesso inverter il pacco legato si ferma con lui: il successivo, legandosi, arriva
+        // con la testa fino a prima legatrice + legatura più lontana; il pacco legato si libera solo quando la sua coda è oltre
+        // (più la distanza di sicurezza), altrimenti esce normalmente dalla zona
+        double clear = StrappingHeadReachM + Project.Simulation.MinSafetyDistanceMm / 1000.0;
+        if (res.TailM <= clear + 1e-9) return false;
         _releasedFromStation.Add(res);
         return true;
     }
