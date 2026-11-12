@@ -44,6 +44,21 @@ public static class SampleProjects
         return Math.Ceiling(byRule / pitch - 1e-9) * pitch;
     }
 
+    /// <summary>
+    /// Svincolo degli esempi: almeno 4 rulli; per i pacchi lunghi quanto basta perché, con lo svincolo sotto lo stesso
+    /// inverter della legatura, la legatura di coda si possa fare sotto la prima legatrice (la via di legatura resta
+    /// quella della regola: ultima legatrice + due rulli).
+    /// </summary>
+    public static double ReleaseModuleLengthMm(int strappers, int maxLengthM)
+    {
+        double pitch = RollerSection.DefaultPitchMm;
+        double first = FirstStrapperPositionMm(strappers, maxLengthM);
+        double rearStrap = maxLengthM * 1000.0 - PackageNaming.DefaultEndDistanceMm;
+        double need = first + rearStrap + 250 - StrappingModuleLengthMm(strappers, maxLengthM);
+        int rollers = Math.Max(StrappingAreaRules.ReleaseModuleRollers, (int)Math.Ceiling(need / pitch - 1e-9));
+        return rollers * pitch;
+    }
+
     /// <summary>Distanza tra le legatrici in tutti i modelli.</summary>
     public const double StrapperSpacingMm = 2500;
 
@@ -82,7 +97,7 @@ public static class SampleProjects
     /// <summary>
     /// M1 via rulli di legatura (primo modulo) con la prima legatrice a 4 m dall'inizio, le altre a 2500 mm, un KNOF davanti a
     /// ciascuna e almeno due rulli dopo l'ultima; fotocellula di uscita legatura a fine modulo
-    /// → M2 via rulli di svincolo da 4 rulli (il software decide se va sotto l'inverter della legatura)
+    /// → M2 via rulli di svincolo da almeno 4 rulli (più lungo per i pacchi lunghi) (il software decide se va sotto l'inverter della legatura)
     /// → M3 via rulli davanti al trasferitore, lunga come il trasferitore (pacco massimo + 0,5 m) con fermo finale
     /// → trasferitore sollevabile → bilici di pesatura (lunghezza automatica).
     /// </summary>
@@ -91,7 +106,7 @@ public static class SampleProjects
         double lmax = maxLengthM * 1000.0;
         // lunghezze multiple di 2500 mm: con passo 1250 mm i rulli sono interi e il passo resta multiplo di 50 mm
         double strapLen = StrappingModuleLengthMm(strappers, maxLengthM);                         // via rulli di legatura
-        double relLen = StrappingAreaRules.ReleaseModuleRollers * RollerSection.DefaultPitchMm;    // svincolo: 4 rulli
+        double relLen = ReleaseModuleLengthMm(strappers, maxLengthM);                               // svincolo: almeno 4 rulli
         double trfStart = strapLen + relLen;
         double trfLen = Math.Ceiling((lmax + 500) / 2500) * 2500;            // trasferitore = via rulli davanti al trasferitore
         double first = FirstStrapperPositionMm(strappers, maxLengthM);
@@ -100,7 +115,7 @@ public static class SampleProjects
         {
             Name = name,
             Description = $"Area di legatura con {strappers} {(strappers == 1 ? "legatrice" : "legatrici")} a filo a {StrapperSpacingMm:0} mm, " +
-                          $"prima legatrice a 4 m dall'inizio, stringifascio per ogni legatrice, svincolo da 4 rulli, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
+                          $"prima legatrice a 4 m dall'inizio, stringifascio per ogni legatrice, svincolo da {relLen / RollerSection.DefaultPitchMm:0} rulli, trasferitore sollevabile da {trfLen / 1000:0.#} m e bilici. Pacchi fino a {maxLengthM} m."
         };
 
         p.Sections.Add(Mod("M1", "Modulo 1 - Legatura", 0, strapLen));

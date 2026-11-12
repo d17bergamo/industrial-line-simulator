@@ -20,12 +20,12 @@ public class StrappingAreaTests
 
     [Theory]
     [MemberData(nameof(Models))]
-    public void Models_HaveStrapping_Release4Rollers_TransferModules(string name)
+    public void Models_HaveStrapping_ReleaseAtLeast4Rollers_TransferModules(string name)
     {
         var p = Model(name);
         var s = p.Sections.OrderBy(x => x.StartMm).ToList();
         Assert.Equal(3, s.Count);
-        Assert.Equal(4, s[1].RollerCount);                                 // svincolo da 4 rulli
+        Assert.True(s[1].RollerCount >= 4);                                // svincolo da almeno 4 rulli (più lungo per i pacchi lunghi)
         Assert.Equal(s[0].EndMm, s[1].StartMm, 6);
         Assert.Equal(s[1].EndMm, s[2].StartMm, 6);
         Assert.Equal(p.Transfer.PositionMm, s[2].StartMm, 6);
