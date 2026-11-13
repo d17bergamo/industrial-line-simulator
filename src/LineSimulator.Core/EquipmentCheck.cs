@@ -11,7 +11,7 @@ public sealed record EquipmentCheckItem(string Code, string Message, bool Fixed,
 /// </summary>
 public static class EquipmentCheck
 {
-    public const string EntryName = "FC0 ingresso (identificazione)";
+    public const string EntryName = "FC1 (ingresso identificazione)";
 
     public static List<EquipmentCheckItem> Run(LineProject p, bool fix = true)
     {
@@ -53,7 +53,7 @@ public static class EquipmentCheck
                     + $": {(fix ? "portata" : "da portare")} a {target:0} mm.", fix, true));
             }
             // 4. Nome corretto
-            if (entry.Name != EntryName)
+            if (!(entry.Name.StartsWith("FC") && entry.Name.Contains("ingresso")))
             {
                 if (fix) entry.Name = EntryName;
                 r.Add(new("ENTRY_NAME", $"Prima fotocellula {(fix ? "rinominata" : "da rinominare")} in \"{EntryName}\".", fix, true));

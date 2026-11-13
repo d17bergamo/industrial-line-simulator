@@ -144,7 +144,7 @@ public class ValidatorTests
     public void StrapOutsidePackage_IsError()
     {
         var p = LegacySamples.CreateStandardLine();
-        p.PackageTypes[0].StrapPositionsMm.Add(11900);
+        p.PackageTypes[0].StrapPositionsMm.Add(p.PackageTypes[0].LengthMm + 100);
         Assert.Contains(ProjectValidator.Validate(p).Errors, i => i.Code == "STRAP_POS");
     }
 }

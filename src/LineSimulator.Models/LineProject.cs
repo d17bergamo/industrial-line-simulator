@@ -60,7 +60,7 @@ public sealed class LayoutSettings
     public double RotationDeg { get; set; }
 
     /// <summary>Quota del piano rulli: si modifica dalle proprietà generali delle vie rulli (padre).</summary>
-    public double RollerTopElevationMm { get; set; } = 800;
+    public double RollerTopElevationMm { get; set; } = 1294;
 }
 
 /// <summary>

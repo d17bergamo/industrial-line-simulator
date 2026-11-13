@@ -38,12 +38,6 @@ public sealed class PackageType : ComponentBase
     [UiProperty("Tipo di legatura (filo / reggetta)", "", "Legatura", Order = 19)]
     public BindingType BindingType { get; set; } = BindingType.Wire;
 
-    [UiProperty("Distanza minima legature-estremità", "mm", "Legatura", Order = 21)]
-    public double MinStrapDistanceFromEndsMm { get; set; } = 300;
-
-    [UiProperty("Distanza minima tra legature", "mm", "Legatura", Order = 22)]
-    public double MinDistanceBetweenStrapsMm { get; set; } = 500;
-
     /// <summary>
     /// Single o double banking per questo pacco (tabella della schermata Pacchi). Null = come le impostazioni della
     /// simulazione (progetti salvati prima della tabella). Le scelte possibili: <c>BankingOptions</c> nel Core.

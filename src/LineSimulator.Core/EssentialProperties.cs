@@ -23,7 +23,7 @@ public static class EssentialProperties
         ["StrapperGroup"] = new[] { "StrappingTimeS", "ArmingTimeS" },
         ["StopperConfig"] = new[] { "PositionMm" },
         ["AccumulationTransferConfig"] = new[] { "WidthMm", "StepGapMm", "StepSpeed" },
-        ["TransferConfig"] = new[] { "LengthMm", "WidthMm", "LiftTimeS", "TranslationSpeed", "DepositTimeS", "FullCycleTimeS" },
+        ["TransferConfig"] = new[] { "LengthMm", "WidthMm", "LiftTimeS", "TranslationSpeed", "DepositTimeS" },
         ["StrappingStationConfig"] = new[] { "IsEnabled", "Strategy" },
         ["InfeedConfig"] = new[] { "PackageCount", "TypeSequence", "NewPackageDelayS" },
     };

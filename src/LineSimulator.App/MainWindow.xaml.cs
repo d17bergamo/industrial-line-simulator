@@ -372,16 +372,6 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void AddMenu_Click(object sender, RoutedEventArgs e)
-    {
-        var btn = (FrameworkElement)sender;
-        if (btn.ContextMenu == null) return;
-        btn.ContextMenu.DataContext = _vm;
-        btn.ContextMenu.PlacementTarget = btn;
-        btn.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        btn.ContextMenu.IsOpen = true;
-    }
-
     private void SetView(Vector3D direction, Vector3D up)
     {
         var b = ActiveScene.Bounds;

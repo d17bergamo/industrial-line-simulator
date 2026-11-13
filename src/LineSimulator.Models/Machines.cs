@@ -57,7 +57,7 @@ public sealed class StrapperConfig : ComponentBase, IGroupChild
     /// di riferimento a monte della legatrice e, tra le legature dello stesso pattern, in automatico;
     /// a pattern concluso attende il pacco successivo. SMA: riarmo automatico dopo ogni ciclo (sempre armata).
     /// </summary>
-    [UiProperty("Tempo di ricarica filo / riarmo reggia", "s", "Tempi", Order = 9)]
+    [UiProperty("Tempo di ricarica", "s", "Tempi", Order = 9)]
     public double ArmingTimeS { get; set; } = KncaArmingTimeS;
 
     [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]
@@ -297,7 +297,6 @@ public sealed class TransferConfig : ComponentBase
         : TranslationSpeed > 0 ? TranslationStrokeMm / 1000.0 / TranslationSpeed : double.PositiveInfinity;
 
     [JsonIgnore]
-    [UiProperty("Ciclo completo trasferitore", "s", "Tempi", ReadOnly = true, Order = 16)]
     public double FullCycleTimeS => LiftTimeS + EffectiveTranslationTimeS + LowerTimeS + DepositTimeS + EffectiveTranslationTimeS;
 
     [JsonIgnore]
@@ -312,7 +311,7 @@ public sealed class StrapperGroup : ComponentBase
     [UiProperty("Ingombro lungo la linea (multipli di 100 mm)", "mm", "Geometria", Order = 2)]
     public double FootprintLengthMm { get; set; } = 1200;
 
-    [UiProperty("Tempo di ricarica filo / riarmo reggia", "s", "Tempi", Order = 9)]
+    [UiProperty("Tempo di ricarica", "s", "Tempi", Order = 9)]
     public double ArmingTimeS { get; set; } = StrapperConfig.KncaArmingTimeS;
 
     [UiProperty("Tempo di preparazione aggiuntivo", "s", "Tempi", Order = 10)]

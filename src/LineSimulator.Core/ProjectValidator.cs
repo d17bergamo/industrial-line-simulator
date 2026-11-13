@@ -143,11 +143,11 @@ public static class ProjectValidator
             if (t.WeightKg <= 0) r.Error("PKG_WEIGHT", "Peso pacco deve essere > 0.", t.Id);
             var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
             foreach (var x in pos)
-                if (x < t.MinStrapDistanceFromEndsMm - 1e-6 || x > t.LengthMm - t.MinStrapDistanceFromEndsMm + 1e-6)
-                    r.Error("STRAP_POS", $"Legatura a {F(x)} mm fuori dai limiti [{F(t.MinStrapDistanceFromEndsMm)}; {F(t.LengthMm - t.MinStrapDistanceFromEndsMm)}].", t.Id);
+                if (x <= 0 || x >= t.LengthMm)
+                    r.Error("STRAP_POS", $"Legatura a {F(x)} mm fuori dal pacco [0; {F(t.LengthMm)}].", t.Id);
             for (int i = 1; i < pos.Count; i++)
-                if (pos[i] - pos[i - 1] < t.MinDistanceBetweenStrapsMm - 1e-6)
-                    r.Error("STRAP_GAP", $"Legature a {F(pos[i - 1])} e {F(pos[i])} mm più vicine del minimo {F(t.MinDistanceBetweenStrapsMm)} mm.", t.Id);
+                if (pos[i] - pos[i - 1] < 1e-6)
+                    r.Error("STRAP_GAP", $"Due legature nello stesso punto ({F(pos[i])} mm).", t.Id);
             if (pos.Count > 10) r.Warn("STRAP_MANY", "Più di 10 legature: l'ottimizzazione esatta può richiedere tempo.", t.Id);
         }
     }

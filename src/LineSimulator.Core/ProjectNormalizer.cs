@@ -9,6 +9,34 @@ public static class ProjectNormalizer
     public const double DefaultEntryOffsetMm = 0;
 
     /// <summary>
+    /// Nomi delle fotocellule: "FC" + progressivo da monte a valle, con lo scopo tra parentesi ("FC2 (accumulo)").
+    /// Gli Id restano invariati (sono usati da regole e comandi). True se qualche nome è cambiato.
+    /// </summary>
+    public static bool RenumberPhotocellNames(LineProject p)
+    {
+        bool changed = false;
+        int n = 0;
+        foreach (var pc in p.Photocells.OrderBy(x => x.PositionMm))
+        {
+            n++;
+            var m = System.Text.RegularExpressions.Regex.Match((pc.Name ?? "").Trim(), @"^FC\w*\s*(?:\((.*)\))?\s*(.*)$");
+            string purpose = (m.Success ? (m.Groups[1].Success && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value : m.Groups[2].Value) : pc.Name ?? "").Trim();
+            if (purpose.Length == 0 || purpose.Equals("Nuova fotocellula", StringComparison.OrdinalIgnoreCase))
+                purpose = pc.Purpose switch
+                {
+                    PhotocellPurpose.TransferStop => "arresto davanti al trasferitore",
+                    PhotocellPurpose.StrappingReference => "riferimento encoder di legatura",
+                    PhotocellPurpose.StrappingExit => "uscita via rulli di legatura",
+                    _ => pc.IsEntryPhotocell ? "ingresso (identificazione)" : "generica"
+                };
+            string name = $"FC{n} ({purpose})";
+            if (pc.Name != name) { pc.Name = name; changed = true; }
+        }
+        return changed;
+    }
+
+
+    /// <summary>
     /// Garantisce la presenza della fotocellula di ingresso (obbligatoria). Se nessuna fotocellula è marcata
     /// come ingresso ne aggiunge una (solo segnale) a 300 mm dall'inizio linea. Restituisce true se ha modificato il progetto.
     /// </summary>
@@ -22,7 +50,7 @@ public static class ProjectNormalizer
         p.Photocells.Insert(0, new PhotocellConfig
         {
             Id = id,
-            Name = "Fotocellula di ingresso",
+            Name = "FC1 (ingresso identificazione)",
             PositionMm = start + DefaultEntryOffsetMm,
             ResponseTimeMs = 20,
             IsEntryPhotocell = true,

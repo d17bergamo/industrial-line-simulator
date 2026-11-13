@@ -33,7 +33,6 @@
         <Style x:Key="HomeCard" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,16,16"/>
-            <Setter Property="Width" Value="360"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -54,24 +53,24 @@
 
         <!-- Passo del percorso Pacchi → Layout → Ciclo → Simula: Tag = True sul passo attivo -->
         <Style x:Key="StepButton" TargetType="Button">
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Padding" Value="14,0"/>
-            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="Margin" Value="4,0"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="#5B6673"/>
-            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="#0B5FC0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="18" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="White" BorderBrush="#0B5FC0" BorderThickness="1.5" CornerRadius="19" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#F0F4F9"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#E6F0FC"/></Trigger>
                             <Trigger Property="Tag" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E6F0FC"/>
-                                <Setter Property="Foreground" Value="#0B5FC0"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#0B5FC0"/>
+                                <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

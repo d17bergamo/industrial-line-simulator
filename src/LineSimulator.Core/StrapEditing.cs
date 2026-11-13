@@ -3,23 +3,23 @@ using LineSimulator.Models;
 namespace LineSimulator.Core;
 
 /// <summary>
-/// Modifica delle legature di una tipologia di pacco. Regola: le posizioni (misurate dalla testa) stanno su passi di 100 mm,
-/// quindi anche le distanze tra legature sono multipli di 100 mm.
+/// Modifica delle legature di una tipologia di pacco. Regola: le posizioni (misurate dalla testa) stanno su passi di 50 mm,
+/// quindi anche le distanze tra legature sono multipli di 50 mm. Nessuna distanza minima tra legature né dalle estremità.
 /// </summary>
 public static class StrapEditing
 {
-    public const double StepMm = 100;
+    public const double StepMm = 50;
 
     public static double Snap(double mm) => Math.Round(mm / StepMm, MidpointRounding.AwayFromZero) * StepMm;
 
-    /// <summary>Porta tutte le posizioni su multipli di 100 mm, dentro il pacco, senza doppioni e in ordine.</summary>
+    /// <summary>Porta tutte le posizioni su multipli di 50 mm, dentro il pacco, senza doppioni e in ordine.</summary>
     public static void SnapAll(PackageType p)
     {
         p.StrapPositionsMm = p.StrapPositionsMm.Select(Snap).Where(v => v > 0 && v < p.LengthMm).Distinct().OrderBy(v => v).ToList();
     }
 
     /// <summary>
-    /// Cambiata la lunghezza del pacco, le legature si spostano in proporzione (a passi di 100 mm) senza cambiarne il numero:
+    /// Cambiata la lunghezza del pacco, le legature si spostano in proporzione (a passi di 50 mm) senza cambiarne il numero:
     /// se due legature cadrebbero sullo stesso punto, la successiva scorre di un passo.
     /// </summary>
     public static void ScaleToLength(PackageType p, double oldLengthMm)
@@ -42,8 +42,8 @@ public static class StrapEditing
     }
 
     /// <summary>
-    /// Aggiunge una legatura nel punto più libero (al centro del tratto più lungo), su multipli di 100 mm e nel rispetto
-    /// delle distanze minime. Restituisce false se non c'è posto.
+    /// Aggiunge una legatura nel punto più libero (al centro del tratto più lungo), su multipli di 50 mm e nel rispetto
+    /// Restituisce false se non c'è posto.
     /// </summary>
     public static bool TryAdd(PackageType p, out double added)
     {
@@ -52,8 +52,7 @@ public static class StrapEditing
         double best = -1, bestClearance = -1;
         for (double x = StepMm; x < p.LengthMm; x += StepMm)
         {
-            if (x < p.MinStrapDistanceFromEndsMm || x > p.LengthMm - p.MinStrapDistanceFromEndsMm) continue;
-            if (existing.Any(e => Math.Abs(e - x) < p.MinDistanceBetweenStrapsMm || e == x)) continue;
+            if (existing.Any(e => e == x)) continue;
             double clearance = Math.Min(x, p.LengthMm - x);
             foreach (var e in existing) clearance = Math.Min(clearance, Math.Abs(e - x));
             if (clearance > bestClearance) { bestClearance = clearance; best = x; }
@@ -67,8 +66,8 @@ public static class StrapEditing
 
     /// <summary>
     /// Mette <paramref name="count"/> legature in modo simmetrico rispetto al centro del pacco: la distanza dalle estremità
-    /// (quella attuale della prima legatura, almeno il minimo) resta, le altre sono equidistanti, a passi di 100 mm.
-    /// Restituisce false (senza modificare nulla) se le distanze minime non sono rispettate.
+    /// (quella attuale della prima legatura) resta, le altre sono equidistanti, a passi di 50 mm.
+    /// Restituisce false (senza modificare nulla) se non ci stanno a passi di 50 mm dentro il pacco.
     /// </summary>
     public static bool TrySetSymmetric(PackageType p, int count)
     {
@@ -76,8 +75,8 @@ public static class StrapEditing
         if (count < 0 || len <= 0) return false;
         if (count == 0) { p.StrapPositionsMm = new List<double>(); return true; }
         var cur = p.StrapPositionsMm.OrderBy(v => v).ToList();
-        double end = cur.Count > 0 ? Math.Min(cur[0], len - cur[^1]) : p.MinStrapDistanceFromEndsMm;
-        end = Snap(Math.Max(end, p.MinStrapDistanceFromEndsMm));
+        double end = cur.Count > 0 ? Math.Min(cur[0], len - cur[^1]) : PackageNaming.DefaultEndDistanceMm;
+        end = Math.Max(StepMm, Snap(end));
         var pos = new double[count];
         if (count == 1) pos[0] = Snap(len / 2);
         else
@@ -92,8 +91,8 @@ public static class StrapEditing
         }
         for (int i = 0; i < count; i++)
         {
-            if (pos[i] < p.MinStrapDistanceFromEndsMm || pos[i] > len - p.MinStrapDistanceFromEndsMm) return false;
-            if (i > 0 && pos[i] - pos[i - 1] < Math.Max(p.MinDistanceBetweenStrapsMm, StepMm)) return false;
+            if (pos[i] < StepMm || pos[i] > len - StepMm) return false;
+            if (i > 0 && pos[i] - pos[i - 1] < StepMm) return false;
         }
         p.StrapPositionsMm = pos.ToList();
         return true;
