@@ -605,13 +605,20 @@ public sealed partial class SimulationEngine : ILogicContext
     private readonly HashSet<PackageRuntime> _releasedFromStation = new();
 
     /// <summary>
-    /// Via di legatura e svincolo sotto un unico inverter: il pacco legato libera la stazione quando la sua coda supera la
-    /// fotocellula di uscita della via di legatura (prima della fine della zona). Il pacco successivo può allora essere
-    /// posizionato: fermando l'inverter si ferma anche il precedente sullo svincolo (stesso azionamento).
+    /// Il pacco legato libera la stazione appena ha completato l'ultimo ciclo di legatura, se il pacco successivo è già
+    /// partito da FC0 (regola dell'utente del 2026-11-13: i due pacchi avanzano insieme). Il successivo viene allora preso
+    /// in carico e posizionato; fermando l'inverter si ferma anche il precedente (stesso azionamento).
+    /// Senza pacco successivo vale la regola precedente: libera quando la coda supera la fotocellula di uscita legatura.
     /// </summary>
     private bool ReleasedFromStrappingZone(ZoneRuntime z, PackageRuntime res)
     {
         if (Station == null || z != Station.Zone || Station.Package != res || Station.State != StationState.Releasing) return false;
+        if (Project.Infeed.Mode == InfeedMode.AfterStrapping && res.StrapStatus == StrapStatus.Done
+            && _packages.Any(n => n.Sequence == res.Sequence + 1 && n.InfeedReleased && n.OnRollers))
+        {
+            _releasedFromStation.Add(res);
+            return true;
+        }
         double exit = StrappingExitM;
         if (exit >= z.Info.EndM - 1e-6 || res.TailM <= exit + 1e-9) return false;
         // svincolo lungo sotto lo stesso inverter: il pacco legato si libera solo uscendo dalla zona (vedi StrappingClearM)
