@@ -63,7 +63,7 @@ public class SimultaneousStartTests
             foreach (var f in frames)
             {
                 var prev = f.Packages.FirstOrDefault(k => k.Id == prevId);
-                if (prev == null || prev.HeadM >= fct - 0.5) break;
+                if (prev.Id == null || prev.HeadM >= fct - 0.5) break;
                 Assert.True(Math.Abs(prev.Velocity) > 1e-3, $"{prevId} fermo a {f.TimeS:0.0} s sullo svincolo dopo la partenza di {next.Id}");
             }
         }

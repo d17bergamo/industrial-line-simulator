@@ -30,6 +30,7 @@ public class DoubleBankingReviewTests
                     // trasferitore collo di bottiglia: pesatura lunga, i pacchi legati si accumulano davanti al trasferitore
                     foreach (var b in p.Scales) b.StabilizationTimeS = 150;
                 }
+                bool hadStop = p.IntermediateStops.Any(s => s.IsEnabled);
                 if (withStop && !hadStop)
                 {
                     p.IntermediateStops.Add(new IntermediateStopConfig
