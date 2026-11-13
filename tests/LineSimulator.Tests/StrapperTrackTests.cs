@@ -295,7 +295,7 @@ public class StrapperTrackTests
     [Fact]
     public void ReleaseDrive_FrontAccumulationAlwaysOwn_ReleaseParksOnlyIfShortestPackageFits()
     {
-        // solo pacchi da 6 m: la legatura non impegna lo svincolo (5 m), il pacco non ci sta → unito alla via finale
+        // solo pacchi da 6 m: la legatura non impegna lo svincolo (5 m), il pacco non ci sta → inverter dedicato, senza parcheggio
         var p = SampleProjects.CreateTwoStrappers12m();
         p.PackageTypes.RemoveAll(t => t.LengthMm != 6000);
         p.Infeed.TypeSequence = p.PackageTypes.Select(t => t.Id).ToList();
@@ -304,8 +304,9 @@ public class StrapperTrackTests
         var trf = LayoutRules.TransferModule(p)!;
         StrappingAreaRules.DecideReleaseInverters(p);
         Assert.Equal(trf.Id, trf.EffectiveZoneId);
-        Assert.Equal(trf.Id, rel.EffectiveZoneId);
-        Assert.Contains("via finale", StrappingAreaRules.DescribeDrive(p, rel));
+        Assert.Equal(rel.Id, rel.EffectiveZoneId);
+        Assert.Contains("inverter dedicato", StrappingAreaRules.DescribeDrive(p, rel));
+        Assert.DoesNotContain("parcheggio", StrappingAreaRules.DescribeDrive(p, rel));
         // svincolo lungo abbastanza (6000 + 2000 + 500): parcheggio con inverter proprio
         Assert.False(StrappingAreaRules.CanPark(p, rel));
         double oldEnd = rel.EndMm;

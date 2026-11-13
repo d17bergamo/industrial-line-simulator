@@ -59,11 +59,20 @@ public class StrappingAreaTests
     [Fact]
     public void ReleaseModule_JoinedWhenStrappingNeedsIt_SeparateWhenTheStrappingTrackIsLongEnough()
     {
-        // Modello: la legatura di coda del pacco più lungo porta la testa oltre la via di legatura → svincolo sotto lo stesso inverter
+        // Modello: la legatura di coda del pacco più lungo porta la testa oltre la via di legatura → svincolo con inverter
+        // dedicato e motori commutabili sull'inverter di legatura (regola dell'utente del 2026-11-13 23:20)
         var p = SampleProjects.CreateTwoStrappers12m();
         var topo = new LineTopology(p);
-        Assert.Same(topo.Zone("M1"), topo.Zone("M2"));
+        Assert.NotSame(topo.Zone("M1"), topo.Zone("M2"));
+        Assert.True(p.Sections.Single(s => s.Id == "M2").FollowsStrapping);
         Assert.True(StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > p.Sections.Single(s => s.Id == "M1").EndMm);
+        // unito alla legatura solo se scelto (proposta di risparmio dell'ottimizzatore)
+        var j = SampleProjects.CreateTwoStrappers12m();
+        j.Sections.Single(s => s.Id == "M2").JoinStrappingInverter = true;
+        Assert.Contains(StrappingAreaRules.DecideReleaseInverters(j), c => c.Contains("un inverter in meno", StringComparison.Ordinal));
+        var tj = new LineTopology(j);
+        Assert.Same(tj.Zone("M1"), tj.Zone("M2"));
+        Assert.False(j.Sections.Single(s => s.Id == "M2").FollowsStrapping);
 
         // Solo pacchi da 6 m nella simulazione (non basta toglierli dall'ingresso: si guardano tutte le tipologie)
         var q = SampleProjects.CreateTwoStrappers12m();
@@ -71,25 +80,26 @@ public class StrappingAreaTests
         Assert.Empty(StrappingAreaRules.DecideReleaseInverters(q));
         q.PackageTypes.RemoveAll(t => t.Id != "P6 (Wire)");
         var changes = StrappingAreaRules.DecideReleaseInverters(q);
-        // regola dell'utente (2026-11-06): lo svincolo non impegnato dalla legatura fa da parcheggio solo se ci sta il pacco
-        // più corto con i margini; qui (5 m < 6 m + 2,5 m) va con la via finale, che resta sempre con il suo inverter
-        Assert.Contains(changes, c => c.Contains("via finale", StringComparison.Ordinal));
+        // la legatura non impegna più lo svincolo: inverter dedicato, motori commutabili non necessari
+        Assert.Contains(changes, c => c.Contains("non necessari", StringComparison.Ordinal));
         var tq = new LineTopology(q);
         Assert.NotSame(tq.Zone("M1"), tq.Zone("M2"));
-        Assert.Same(tq.Zone("M2"), tq.Zone("M3"));
+        Assert.NotSame(tq.Zone("M2"), tq.Zone("M3"));
+        Assert.False(q.Sections.Single(s => s.Id == "M2").FollowsStrapping);
         q.Infeed.PackageCount = 4;
         var e = new SimulationEngine(q);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
 
-        // Tornando ai pacchi da 12 m il software li riunisce (anche dalla preparazione all'avvio)
+        // Tornando ai pacchi da 12 m il software rimette i motori commutabili (anche dalla preparazione all'avvio)
         q.PackageTypes.Add(SampleProjects.Package(12));
         q.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
         var r = SimulationPreparation.Prepare(q);
-        Assert.Contains(r.Changes, c => c.Contains("stesso inverter", StringComparison.Ordinal));
+        Assert.Contains(r.Changes, c => c.Contains("motori commutabili", StringComparison.Ordinal));
         var tq2 = new LineTopology(q);
-        Assert.Same(tq2.Zone("M1"), tq2.Zone("M2"));
+        Assert.NotSame(tq2.Zone("M1"), tq2.Zone("M2"));
+        Assert.True(q.Sections.Single(s => s.Id == "M2").FollowsStrapping);
     }
 
     [Fact]
@@ -98,6 +108,7 @@ public class StrappingAreaTests
         var p = SampleProjects.CreateTwoStrappers12m();
         p.Infeed.TypeSequence = new List<string> { "P12 (Wire)" };
         p.Infeed.PackageCount = 3;
+        p.Sections.Single(s => s.Id == "M2").JoinStrappingInverter = true;   // proposta di risparmio applicata
         var e = new SimulationEngine(p);
         e.RunToCompletion();
         Assert.True(e.CompletedNormally, Diag(e));

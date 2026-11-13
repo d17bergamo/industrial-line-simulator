@@ -117,7 +117,7 @@ public class TwoPickTransferTests
     {
         string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
-        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese (esempio);t/h svincolo motori commutabili;t/h parcheggio svincolo;partenze a legatura finita esempio/commutabili/parcheggio" };
+        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese (esempio: svincolo dedicato);t/h svincolo unito alla legatura;t/h parcheggio svincolo;partenze a legatura finita esempio/unito/parcheggio" };
         foreach (var (name, create) in SampleProjects.All)
         {
             (double Tph, int Together) Run(Func<LineProject, bool> change)
@@ -138,7 +138,7 @@ public class TwoPickTransferTests
             {
                 var m = StrappingAreaRules.ReleaseModules(p).LastOrDefault();
                 if (m == null) return false;
-                m.CommandZoneId = string.Empty; m.FollowsStrapping = true; return true;
+                m.JoinStrappingInverter = true; StrappingAreaRules.DecideReleaseInverters(p); return true;
             });
             var park = Run(p => SimultaneousStartTests.ApplyParking(p));
             string F(double v) => double.IsNaN(v) ? "-" : v.ToString("0.0");

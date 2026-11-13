@@ -183,40 +183,37 @@ public static class StrappingAreaRules
         double reach = strap.EndMm;
         if (!p.Simulation.AutoReleaseInverters) return done;
         var trf = LayoutRules.TransferModule(p);
+        // Regola dell'utente (2026-11-13 23:20): di default lo svincolo ha l'inverter dedicato; se la legatura lo impegna
+        // (legature di coda dei pacchi lunghi) i suoi motori vengono commutati sull'inverter di legatura solo in quel momento.
+        // Se fisicamente ci sta il pacco più corto fa anche da parcheggio. Unito alla legatura solo se scelto
+        // (JoinStrappingInverter, proposto dall'ottimizzatore quando la linea supera l'obiettivo di oltre il 25%).
         foreach (var m in ReleaseModules(p))
         {
-            bool join = need > reach + 1e-6;
+            bool engaged = need > reach + 1e-6;
             bool joined = m.EffectiveZoneId == zone;
-            if (!join && m.FollowsStrapping)
+            if (m.JoinStrappingInverter)
+            {
+                if (m.FollowsStrapping) { m.FollowsStrapping = false; done.Add($"{m.Id} (svincolo) unito all'inverter di legatura: motori commutabili non servono"); }
+                if (!joined) { m.CommandZoneId = zone; done.Add($"{m.Id} (svincolo) unito all'inverter di legatura {strap.Id} (scelta: un inverter in meno)"); }
+                if (engaged) reach = m.EndMm;
+                continue;
+            }
+            if (m.EffectiveZoneId != m.Id)
+            {
+                m.CommandZoneId = string.Empty;
+                done.Add($"{m.Id} (svincolo) con inverter dedicato" + (CanPark(p, m) ? $": fa anche da parcheggio, ci sta il pacco più corto ({ShortestPackageMm(p):0} mm) con i margini" : ""));
+            }
+            if (engaged && !m.FollowsStrapping)
+            {
+                m.FollowsStrapping = true;
+                done.Add($"{m.Id} (svincolo): motori commutabili sull'inverter di legatura {strap.Id} durante le legature di coda (la testa del pacco più lungo arriva a {need:0} mm, oltre la fine della via di legatura)");
+            }
+            else if (!engaged && m.FollowsStrapping)
             {
                 m.FollowsStrapping = false;
                 done.Add($"{m.Id} (svincolo): motori commutabili non necessari, la legatura si fa tutta sulla via di legatura {strap.Id}");
             }
-            if (join && m.FollowsStrapping)
-            {
-                // motori commutabili: inverter proprio, commutato sull'inverter di legatura solo quando serve
-                if (joined && m.Id != zone) { m.CommandZoneId = string.Empty; done.Add($"{m.Id} (svincolo) con inverter proprio e motori commutabili sull'inverter di legatura {strap.Id}"); }
-                reach = m.EndMm;
-                continue;
-            }
-            if (join && !joined)
-            {
-                m.CommandZoneId = zone;
-                done.Add($"{m.Id} (svincolo) sotto lo stesso inverter della via di legatura {strap.Id}: durante la legatura la testa del pacco arriva a {need:0} mm, oltre la fine della via di legatura");
-            }
-            else if (!join)
-            {
-                // la legatura non lo impegna: parcheggio (inverter proprio) se ci sta il pacco più corto, altrimenti unito alla via finale
-                string target = CanPark(p, m) || trf == null || Math.Abs(m.EndMm - trf.StartMm) > 1 ? m.Id : trf.Id;
-                if (m.EffectiveZoneId != target)
-                {
-                    m.CommandZoneId = target == m.Id ? string.Empty : target;
-                    done.Add(target == m.Id
-                        ? $"{m.Id} (svincolo) con inverter proprio: fa da parcheggio, ci sta il pacco più corto ({ShortestPackageMm(p):0} mm) con i margini"
-                        : $"{m.Id} (svincolo) unito all'inverter della via finale {trf!.Id}: non ci sta il pacco più corto ({ShortestPackageMm(p):0} mm + {ParkingMarginMm:0} mm di margini), quindi niente parcheggio");
-                }
-            }
-            if (join) reach = m.EndMm;
+            if (engaged) reach = m.EndMm;
         }
         // la via davanti al trasferitore (fronte accumulo) ha sempre il suo inverter
         if (trf != null && trf.EffectiveZoneId != trf.Id)
@@ -248,13 +245,14 @@ public static class StrappingAreaRules
         var trf = LayoutRules.TransferModule(p);
         if (ReferenceEquals(m, strap)) return "inverter proprio";
         if (ReferenceEquals(m, trf)) return "inverter proprio (sempre, è il fronte accumulo)";
-        if (m.FollowsStrapping) return "inverter proprio, motori commutati sull'inverter di legatura solo durante le legature di coda";
+        string park = CanPark(p, m) ? $"; fa da parcheggio per un pacco fino a {m.LengthMm - ParkingMarginMm:0} mm" : "";
+        if (m.FollowsStrapping) return "inverter dedicato, motori commutati sull'inverter di legatura solo durante le legature di coda" + park;
         if (strap != null && m.EffectiveZoneId == strap.EffectiveZoneId)
-            return $"unito alla legatura: durante la legatura la testa del pacco più lungo arriva a {RequiredStrappingHeadMaxMm(p):0} mm, oltre la fine della via di legatura ({strap.EndMm:0} mm)";
+            return "unito all'inverter di legatura (un inverter in meno)";
         if (trf != null && m.EffectiveZoneId == trf.EffectiveZoneId)
             return $"unito alla via finale: niente parcheggio, servono {ShortestPackageMm(p) + ParkingMarginMm:0} mm, lo svincolo è {m.LengthMm:0} mm";
         if (m.EffectiveZoneId == m.Id)
-            return CanPark(p, m) ? $"inverter proprio: parcheggio per un pacco fino a {m.LengthMm - ParkingMarginMm:0} mm" : "inverter proprio";
+            return "inverter dedicato" + park;
         return $"unito all'inverter di {m.EffectiveZoneId}";
     }
 

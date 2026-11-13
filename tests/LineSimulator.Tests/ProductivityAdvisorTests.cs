@@ -30,7 +30,9 @@ public class ProductivityAdvisorTests
         Assert.True(r.BaselineTonnesPerHour > 0);
         Assert.NotEmpty(r.Options);
         Assert.Contains(r.Options, o => o.Id == "ADD_STRAPPER");
-        Assert.Contains(r.Options, o => o.Id.StartsWith("SWITCHABLE_", StringComparison.Ordinal));
+        // svincolo con inverter dedicato e motori commutabili è già il default: non è più una proposta
+        Assert.DoesNotContain(r.Options, o => o.Id.StartsWith("SWITCHABLE_", StringComparison.Ordinal));
+        Assert.Null(r.Saving);                                 // obiettivo non raggiunto: niente proposta di risparmio
         Assert.NotEmpty(r.Path);
         Assert.True(r.BestTonnesPerHour > r.BaselineTonnesPerHour);
         Assert.False(r.TargetReached);
@@ -83,6 +85,40 @@ public class ProductivityAdvisorTests
         var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning).Select(x => $"{x.TimeS:0.0} {x.Message}").Take(10).ToList();
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Contains(ControlLogicGenerator.Generate(p).Rules, r => r.Id == "M2.COMMUTA_MOTORI");
+    }
+
+    [Fact]
+    public void ReleaseModule_DedicatedByDefault_JoinProposedOnlyAbove25PercentOverTarget()
+    {
+        // regola dell'utente (2026-11-13 23:20): di default svincolo con inverter dedicato
+        var p = SampleProjects.CreateTwoStrappers12m();
+        var topo = new LineTopology(p);
+        Assert.NotSame(topo.Zone("M1"), topo.Zone("M2"));
+        Assert.True(p.Sections.Single(x => x.Id == "M2").FollowsStrapping);
+        var baseline = ProductivityAdvisor.Analyze(p, 0, maxSteps: 0).BaselineTonnesPerHour;
+        Assert.True(baseline > 0);
+
+        // obiettivo superato di oltre il 25% → proposta di unire gli inverter, con l'obiettivo ancora raggiunto
+        double low = baseline / 1.4;
+        var r = ProductivityAdvisor.Analyze(p, low, maxSteps: 1);
+        Assert.True(r.TargetReached);
+        Assert.NotNull(r.Saving);
+        Assert.NotNull(r.SavingProject);
+        Assert.True(r.Saving!.TonnesPerHour >= low);
+        Assert.Contains("Proposta di risparmio", r.Summary, StringComparison.Ordinal);
+        var q = r.SavingProject!;
+        Assert.True(q.Sections.Single(x => x.Id == "M2").JoinStrappingInverter);
+        var tq = new LineTopology(q);
+        Assert.Same(tq.Zone("M1"), tq.Zone("M2"));
+        var e = new SimulationEngine(ProjectSerializer.Clone(q));
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(0, e.Collisions);
+
+        // margine sotto il 25% → nessuna proposta
+        var r2 = ProductivityAdvisor.Analyze(p, baseline / 1.1, maxSteps: 1);
+        Assert.True(r2.TargetReached);
+        Assert.Null(r2.Saving);
     }
 
     [Fact]

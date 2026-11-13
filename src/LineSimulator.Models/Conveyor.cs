@@ -94,6 +94,13 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     [UiProperty("Motori commutabili sull'inverter di legatura", "", "Inverter", Order = 27)]
     public bool FollowsStrapping { get; set; }
 
+    /// <summary>
+    /// Svincolo unito all'inverter di legatura (un inverter in meno). Di default lo svincolo ha l'inverter dedicato
+    /// (regola dell'utente del 2026-11-13); l'unione la propone l'ottimizzatore quando la linea supera l'obiettivo di oltre il 25%.
+    /// </summary>
+    [UiProperty("Unito all'inverter di legatura (un inverter in meno)", "", "Inverter", Order = 28)]
+    public bool JoinStrappingInverter { get; set; }
+
     /// <summary>Identificativo della zona di comando effettiva (il modulo stesso se non indicata).</summary>
     [JsonIgnore]
     public string EffectiveZoneId => string.IsNullOrWhiteSpace(CommandZoneId) ? Id : CommandZoneId.Trim();

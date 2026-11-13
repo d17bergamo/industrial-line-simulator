@@ -51,6 +51,20 @@ public sealed partial class MainViewModel
             var report = await Task.Run(() => ProductivityAdvisor.Analyze(snapshot, target, progress: progress));
             if (report.BestProject == null || report.Path.Count == 0)
             {
+                if (report.SavingProject != null)
+                {
+                    // linea oltre l'obiettivo di più del 25%: proposta di unire lo svincolo all'inverter di legatura
+                    if (MessageBox.Show(report.Summary + "\nApplicare la proposta di risparmio (un inverter in meno)?", "Obiettivo di produttività",
+                                        MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                    {
+                        LoadProject(report.SavingProject, _filePath);
+                        _modified = true;
+                        Raise(nameof(SimTargetTph));
+                        Status = $"Svincolo unito all'inverter di legatura: {report.Saving!.TonnesPerHour:0.0} t/h (obiettivo {target:0.0} t/h).";
+                    }
+                    else Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
+                    return;
+                }
                 MessageBox.Show(report.Summary, "Obiettivo di produttività", MessageBoxButton.OK,
                     report.TargetReached ? MessageBoxImage.Information : MessageBoxImage.Warning);
                 Status = "Obiettivo di produttività: nessuna modifica applicata.";
@@ -61,10 +75,14 @@ public sealed partial class MainViewModel
             if (answer == MessageBoxResult.Yes)
             {
                 var path = _filePath;
-                LoadProject(report.BestProject, path);
+                bool saving = report.SavingProject != null
+                              && MessageBox.Show("Con il percorso applicato la linea supera l'obiettivo di oltre il 25%.\n" + report.Saving!.Description +
+                                                 "\nUnire anche lo svincolo all'inverter di legatura (un inverter in meno)?", "Obiettivo di produttività",
+                                                 MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+                LoadProject(saving ? report.SavingProject! : report.BestProject, path);
                 _modified = true;
                 Raise(nameof(SimTargetTph));
-                Status = $"Applicate {report.Path.Count} modifiche: {report.BestTonnesPerHour:0.0} t/h (obiettivo {target:0.0} t/h).";
+                Status = $"Applicate {report.Path.Count + (saving ? 1 : 0)} modifiche: {(saving ? report.Saving!.TonnesPerHour : report.BestTonnesPerHour):0.0} t/h (obiettivo {target:0.0} t/h).";
             }
             else Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
         }

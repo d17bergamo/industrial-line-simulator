@@ -28,6 +28,9 @@ public sealed class AdvisorReport
     public bool TargetReached => TargetTonnesPerHour > 0 && BestTonnesPerHour >= TargetTonnesPerHour - 1e-9;
     /// <summary>Progetto con le modifiche del percorso applicate (null se nessuna modifica migliora).</summary>
     public LineProject? BestProject { get; set; }
+    /// <summary>Proposta di risparmio: svincolo unito all'inverter di legatura (solo se la linea supera l'obiettivo di oltre il 25%).</summary>
+    public AdvisorOption? Saving { get; set; }
+    public LineProject? SavingProject { get; set; }
     public string Summary { get; set; } = string.Empty;
 }
 
@@ -42,6 +45,9 @@ public static class ProductivityAdvisor
     private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
 
     private sealed record Candidate(string Id, string Title, string Description, Func<LineProject, bool> Apply);
+
+    /// <summary>Margine sopra l'obiettivo oltre il quale si propone di unire l'inverter dello svincolo a quello di legatura.</summary>
+    public const double SavingMargin = 0.25;
 
     public static AdvisorReport Analyze(LineProject source, double targetTph, int maxSteps = 3, IProgress<string>? progress = null, CancellationToken ct = default)
     {
@@ -81,6 +87,28 @@ public static class ProductivityAdvisor
             if (report.TargetReached) break;
         }
         if (!baseOk && report.Path.Count == 0) report.BestTonnesPerHour = 0;
+        // Proposta di risparmio (regola dell'utente del 2026-11-13 23:20): se la linea supera l'obiettivo di oltre il 25%,
+        // si propone di unire l'inverter dello svincolo a quello di legatura, purché l'obiettivo resti raggiunto.
+        if (targetTph > 0 && report.BestTonnesPerHour >= targetTph * (1 + SavingMargin) - 1e-9)
+        {
+            var basis = report.BestProject ?? current;
+            var joinable = StrappingAreaRules.ReleaseModules(basis).Where(m => !m.JoinStrappingInverter).Select(m => m.Id).ToList();
+            if (joinable.Count > 0)
+            {
+                var trial = ProjectSerializer.Clone(basis);
+                foreach (var s in trial.Sections.Where(x => joinable.Contains(x.Id))) s.JoinStrappingInverter = true;
+                trial = Prepared(trial);
+                progress?.Report("risparmio: svincolo unito all'inverter di legatura");
+                var (tph, pph, ok, problem, _) = Evaluate(trial);
+                if (ok && tph >= targetTph - 1e-9)
+                {
+                    report.Saving = new AdvisorOption("JOIN_INVERTERS", $"Unire lo svincolo ({string.Join(", ", joinable)}) all'inverter di legatura",
+                        $"La linea supera l'obiettivo di oltre il {SavingMargin * 100:0}%: con un inverter in meno fa {tph.ToString("0.0", It)} t/h, obiettivo {targetTph.ToString("0.0", It)} t/h ancora raggiunto.",
+                        tph, pph, true, null) { GainTph = tph - report.BestTonnesPerHour };
+                    report.SavingProject = trial;
+                }
+            }
+        }
         report.Summary = Describe(report, baseOk, baseProblem);
         return report;
     }
@@ -143,11 +171,7 @@ public static class ProductivityAdvisor
                     return true;
                 });
         }
-        foreach (var m in StrappingAreaRules.ReleaseModules(p).Where(m => !m.FollowsStrapping)
-                     .Where(m => StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > (StrappingAreaRules.StrappingModule(p)?.EndMm ?? double.MaxValue) + 1e-6))
-            yield return new Candidate("SWITCHABLE_" + m.Id, $"Motori commutabili sullo svincolo {m.Id}",
-                $"Lo svincolo {m.Id} ha il suo inverter; i motori vengono commutati sull'inverter di legatura solo mentre il pacco in legatura lo impegna per le legature di coda. Negli altri momenti porta via il pacco già legato, e il pacco nuovo può partire insieme a lui.",
-                q => { var s = q.Sections.First(x => x.Id == m.Id); s.FollowsStrapping = true; return true; });
+        // (svincolo con inverter dedicato e motori commutabili: è il default, regola dell'utente del 2026-11-13 23:20)
         // Parcheggio sullo svincolo (decisione dell'utente del 2026-11-13: inverter proprio e parcheggio si valutano sulla
         // produttività, "una non esclude l'altra"): svincolo allungato a rulli interi finché ci sta il pacco più corto con i
         // margini, inverter proprio; se la legatura lo impegna, motori commutabili sull'inverter di legatura.
@@ -156,9 +180,9 @@ public static class ProductivityAdvisor
             double need = StrappingAreaRules.ShortestPackageMm(p) + StrappingAreaRules.ParkingMarginMm;
             int rollers = (int)Math.Ceiling((need - m.LengthMm) / Math.Max(1, m.RollerPitchMm) - 1e-9);
             bool engaged = StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > (StrappingAreaRules.StrappingModule(p)?.EndMm ?? double.MaxValue) + 1e-6;
-            yield return new Candidate("PARK_" + m.Id, $"Parcheggio sullo svincolo {m.Id} (+{rollers} rulli, inverter proprio)",
+            yield return new Candidate("PARK_" + m.Id, $"Parcheggio sullo svincolo {m.Id} (+{rollers} rulli): flessibilità, non produttività",
                 $"Lo svincolo {m.Id} si allunga di {rollers} {(rollers == 1 ? "rullo" : "rulli")} ({(rollers * m.RollerPitchMm).ToString("0", It)} mm, la linea si allunga) e ha il suo inverter: " +
-                $"ci sta il pacco più corto ({StrappingAreaRules.ShortestPackageMm(p).ToString("0", It)} mm) con frenata e margine, così il pacco legato aspetta il trasferitore fuori dalla via di legatura." +
+                $"ci sta il pacco più corto ({StrappingAreaRules.ShortestPackageMm(p).ToString("0", It)} mm) con frenata e margine, così il pacco legato può aspettare il trasferitore fuori dalla via di legatura. Non aumenta la produttività: dà flessibilità; da prevedere se nel layout c'è lo spazio." +
                 (engaged ? " Mentre il pacco in legatura lo impegna, i motori sono commutati sull'inverter di legatura." : ""),
                 q =>
                 {
@@ -228,6 +252,11 @@ public static class ProductivityAdvisor
             sb.AppendLine("Percorso proposto:");
             for (int i = 0; i < r.Path.Count; i++)
                 sb.AppendLine($"{i + 1}. {r.Path[i].Title} → {T(r.Path[i].TonnesPerHour)} t/h. {r.Path[i].Description}");
+        }
+        if (r.Saving != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Proposta di risparmio: {r.Saving.Title} → {T(r.Saving.TonnesPerHour)} t/h. {r.Saving.Description}");
         }
         if (r.TargetTonnesPerHour > 0)
             sb.AppendLine(r.TargetReached
