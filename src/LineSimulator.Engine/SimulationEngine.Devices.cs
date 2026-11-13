@@ -971,6 +971,9 @@ public sealed partial class SimulationEngine
     /// <summary>Gruppo di pacchi pronto per il trasferitore (null se non ancora pronto).</summary>
     private List<PackageRuntime>? ReadyBatch(double t)
     {
+        // Mai sollevare mentre un altro pacco sta entrando nell'area del trasferitore: prima si ferma (e, se ci sta, entra nel gruppo)
+        if (_active.Any(x => x.OnRollers && Math.Abs(x.Velocity) > 1e-3 && x.HeadM > Transfer.StartM + 1e-6 && x.TailM < Transfer.EndM - 1e-6))
+            return null;
         if (_stops.Count == 0)
             return Stopper.State == StopperState.Aligned && Stopper.Package != null ? new List<PackageRuntime> { Stopper.Package } : null;
 

@@ -683,7 +683,8 @@ public sealed partial class SimulationEngine : ILogicContext
             }
         }
         // Fotocellula di arresto davanti al trasferitore: con il trasferitore sollevato il materiale si ferma sulla via a rulli
-        bool transferRaised = Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination;
+        bool transferRaised = Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination
+                              || (Transfer.TwoPick && Transfer.State != TransferState.Home);   // a due prese le forche ripassano sotto la linea
         foreach (var pc in _photocells)
         {
             if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output || !transferRaised) continue;
