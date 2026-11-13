@@ -246,7 +246,7 @@ public sealed partial class MainViewModel : ObservableObject
     public bool ShowLibrary { get => _showLibrary; set => Set(ref _showLibrary, value); }
     /// <summary>Pannello proprietà / struttura / stato (destra): mostrato o nascosto.</summary>
     public bool ShowInspector { get => _showInspector; set => Set(ref _showInspector, value); }
-    private bool _showPackageProps = true;
+    private bool _showPackageProps = false;
     /// <summary>Colonna "Caratteristiche del pacco" nella schermata Pacchi: si chiude e si riapre.</summary>
     private double _packagePropsWidth = 340;
     /// <summary>Larghezza della colonna "Caratteristiche" nella schermata Pacchi.</summary>
@@ -705,26 +705,41 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Tree.Clear();
         var p = _project;
+        ProjectNormalizer.RenumberPhotocellNames(p);
         var root = new TreeNodeViewModel("Progetto: " + p.Name, p, "Project");
         root.Children.Add(Group("Moduli via a rulli", "Section", p.Sections.OrderBy(s => s.StartMm), p.SectionDefaults));
         root.Children.Add(Group("Fotocellule", "Photocell", p.Photocells.OrderBy(s => s.PositionMm), p.PhotocellDefaults));
-        root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
-        var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
-        var knof = new TreeNodeViewModel("Famiglia stringifascio", null, "KnofGroup");
-        knof.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio", p.BundleClamp), p.BundleClamp, "BundleClamp"));
-        station.Children.Add(knof);
-        var compactor = new TreeNodeViewModel("Famiglia compattatori laterali", null, "CompactorGroup");
-        compactor.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
-        station.Children.Add(compactor);
-        var strapGroup = new TreeNodeViewModel("Legatrici", p.StrapperDefaults, "StrapperGroup");
-        foreach (var s in p.Strappers) strapGroup.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
-        station.Children.Add(strapGroup);
-        root.Children.Add(station);
-        root.Children.Add(Group("Fermi scomparenti", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
+        if (p.Rejector.IsEnabled)
+            root.Children.Add(new TreeNodeViewModel(DeviceHeader("Rigettatrice SMA", p.Rejector), p.Rejector, "Rejector"));
+        bool anyStation = p.BundleClamp.IsEnabled || p.Compactor.IsEnabled || p.Strappers.Count > 0;
+        if (anyStation)
+        {
+            var station = new TreeNodeViewModel("Stazione di legatura", p.StrappingStation, "Station");
+            if (p.BundleClamp.IsEnabled)
+            {
+                var knof = new TreeNodeViewModel("Famiglia stringifascio", p.BundleClamp, "KnofGroup");
+                knof.Children.Add(new TreeNodeViewModel(DeviceHeader("Stringifascio", p.BundleClamp), p.BundleClamp, "BundleClamp"));
+                station.Children.Add(knof);
+            }
+            if (p.Compactor.IsEnabled)
+            {
+                var compactor = new TreeNodeViewModel("Famiglia compattatori laterali", p.Compactor, "CompactorGroup");
+                compactor.Children.Add(new TreeNodeViewModel(DeviceHeader("Compattatore laterale", p.Compactor), p.Compactor, "Compactor"));
+                station.Children.Add(compactor);
+            }
+            if (p.Strappers.Count > 0)
+            {
+                var strapGroup = new TreeNodeViewModel("Legatrici", p.StrapperDefaults, "StrapperGroup");
+                foreach (var s in p.Strappers) strapGroup.Children.Add(new TreeNodeViewModel(s.ToString(), s, "Strapper"));
+                station.Children.Add(strapGroup);
+            }
+            root.Children.Add(station);
+        }
+        if (p.IntermediateStops.Count > 0) root.Children.Add(Group("Fermi scomparenti", "Stop", p.IntermediateStops.OrderBy(s => s.PositionMm)));
         root.Children.Add(new TreeNodeViewModel("Stopper", p.Stopper, "Stopper"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore", p.Transfer, "Transfer"));
         root.Children.Add(new TreeNodeViewModel("Trasferitore d'accumulo", p.AccumulationTransfer, "AccumulationTransfer"));
-        root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm), p.ScaleDefaults));
+        if (p.Scales.Count > 0) root.Children.Add(Group("Bilici di pesatura", "Scale", p.Scales.OrderBy(s => s.StartMm), p.ScaleDefaults));
         root.Children.Add(Group("Tipologie pacco", "PackageType", p.PackageTypes));
         root.Children.Add(new TreeNodeViewModel("Ingresso pacchi", p.Infeed, "Infeed"));
         root.Children.Add(Group("Regole logiche", "Rule", p.Rules));
@@ -1458,7 +1473,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (p == null) return;
         if (!StrapEditing.AddSymmetric(p))
         {
-            Status = "Non c'è posto per un'altra legatura in modo simmetrico: servono le distanze minime tra legature e dalle estremità.";
+            Status = "Non c'è posto per un'altra legatura in modo simmetrico: non ci stanno a passi di 50 mm dentro il pacco.";
             return;
         }
         SelectedStrapIndex = -1;
@@ -1545,8 +1560,8 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Name = src.Name, BindingType = src.BindingType, LengthMm = src.LengthMm, WeightKg = src.WeightKg,
             GraphicWidthMm = src.GraphicWidthMm, GraphicHeightMm = src.GraphicHeightMm,
-            StrapPositionsMm = new List<double>(src.StrapPositionsMm), MinStrapDistanceFromEndsMm = src.MinStrapDistanceFromEndsMm,
-            MinDistanceBetweenStrapsMm = src.MinDistanceBetweenStrapsMm, Banking = src.Banking, Heading = src.Heading
+            StrapPositionsMm = new List<double>(src.StrapPositionsMm),
+            Banking = src.Banking, Heading = src.Heading
         };
         t.Id = PackageNaming.UniqueId(_project, t);
         t.Name = t.Id;

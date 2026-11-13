@@ -19,8 +19,10 @@ public enum PhotocellDetectionMode
 public enum ScaleMounting
 {
     /// <summary>Bancale accanto alla linea: il trasferitore deposita il pacco sul bilico.</summary>
+    [System.ComponentModel.Description("Bancale (bridge)")]
     Pallet = 0,
     /// <summary>Integrato nella via a rulli davanti al trasferitore: il pacco si pesa in battuta, poi il trasferitore lo preleva.</summary>
+    [System.ComponentModel.Description("Sulla via rulli (on roller table)")]
     InLine = 1
 }
 

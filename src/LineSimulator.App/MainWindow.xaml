@@ -142,10 +142,10 @@
             <!-- Avvio guidato: schede con il disegno della linea, un clic per partire -->
             <ScrollViewer Background="{StaticResource PanelBg}" VerticalScrollBarVisibility="Auto" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
                 <StackPanel Margin="40,32" MaxWidth="1180" HorizontalAlignment="Center">
-                    <TextBlock Text="Cosa vuoi fare?" FontSize="32" FontWeight="SemiBold" Foreground="#1B2430"/>
-                    <TextBlock Text="Scegli una linea: un clic e sei pronto per simulare." Foreground="#5B6673" FontSize="15" Margin="0,4,0,24"/>
+                    <TextBlock Text="Cosa vuoi fare?" FontSize="32" FontWeight="SemiBold" Foreground="#1B2430" HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock Text="Scegli una linea: un clic e sei pronto per simulare." Foreground="#5B6673" FontSize="15" Margin="0,4,0,24" HorizontalAlignment="Center" TextAlignment="Center"/>
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
                         <!-- Nuovo layout -->
                         <Button Style="{StaticResource HomeCard}" VerticalAlignment="Top" Command="{Binding StartFromScratchCommand}" ToolTip="Parti dai pacchi, poi dati area e layout: le macchine si aggiungono dalla libreria">
                             <StackPanel>
@@ -176,7 +176,7 @@
                         </Button>
                         <!-- Esempi pronti -->
                         <ItemsControl Grid.Column="1" ItemsSource="{Binding StartOptions}">
-                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" Rows="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button Style="{StaticResource HomeCard}" Command="{Binding DataContext.StartFromExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
@@ -222,20 +222,6 @@
                     <TextBlock Text="{Binding ProjectSubtitle}" Foreground="#5B6673" MaxWidth="520" TextTrimming="CharacterEllipsis" ToolTip="{Binding ProjectSubtitle}"/>
                 </StackPanel>
                 <Border DockPanel.Dock="Left" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Dati area" Command="{Binding GoStepCommand}" CommandParameter="Area" Tag="{Binding IsStepCycle}"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Layout e simulazione" Command="{Binding GoStepCommand}" CommandParameter="Layout" Tag="{Binding IsStepLayout}"/></StackPanel></Border>
-                <Button DockPanel.Dock="Left" x:Name="AddMenuButton" Style="{StaticResource ToolButton}" Content="＋  Aggiungi  ▾" Margin="16,0,0,0" Visibility="{Binding IsStepLayout, Converter={StaticResource BoolVis}}" Click="AddMenu_Click" ToolTip="Aggiunge un componente al progetto (le macchine si trascinano anche dalla libreria)">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Modulo via a rulli" Command="{Binding AddSectionCommand}"/>
-                            <MenuItem Header="Fotocellula" Command="{Binding AddPhotocellCommand}"/>
-                            <MenuItem Header="Legatrice" Command="{Binding AddStrapperCommand}"/>
-                            <MenuItem Header="Fermo scomparente" Command="{Binding AddStopCommand}"/>
-                            <MenuItem Header="Bilico" Command="{Binding AddScaleCommand}"/>
-                            <Separator/>
-                            <MenuItem Header="Tipologia di pacco" Command="{Binding AddPackageTypeCommand}"/>
-                            <MenuItem Header="Regola" Command="{Binding AddRuleCommand}"/>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
             </DockPanel>
         </Border>
         <!-- Passo 4: risultati sempre in vista -->
@@ -732,6 +718,26 @@
             </TabControl>
         </Grid>
                     </TabItem>
+                    <TabItem Header="Riepilogo pacchi">
+                        <DockPanel Background="White">
+                            <TextBlock DockPanel.Dock="Top" Margin="10,8" Foreground="#5A6672" TextWrapping="Wrap"
+                                       Text="Riepilogo in sola lettura di tutti i pacchi. Le caratteristiche si modificano solo dalla pagina Pacchi. Tempo medio e produttività sono calcolati dal simulatore, con ogni pacco da solo sulla linea."/>
+                            <DataGrid ItemsSource="{Binding PackageRows}" AutoGenerateColumns="False" HeadersVisibility="Column" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                                      CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
+                                      BorderThickness="0" Background="White" RowBackground="White" RowHeight="30">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Pacco" Binding="{Binding Id, Mode=OneWay}" Width="1.6*" FontWeight="SemiBold"/>
+                                    <DataGridTextColumn Header="Lunghezza (m)" Binding="{Binding LengthM, Mode=OneWay, StringFormat={}{0:0.00}}" Width="*"/>
+                                    <DataGridTextColumn Header="Peso (kg)" Binding="{Binding WeightKg, Mode=OneWay, StringFormat={}{0:0}}" Width="*"/>
+                                    <DataGridTextColumn Header="N. legate" Binding="{Binding StrapCount, Mode=OneWay}" Width="*"/>
+                                    <DataGridTextColumn Header="Banking" Binding="{Binding BankingLabel, Mode=OneWay}" Width="1.2*"/>
+                                    <DataGridTextColumn Header="Intestatura" Binding="{Binding HeadingLabel, Mode=OneWay}" Width="*"/>
+                                    <DataGridTextColumn Header="Tempo medio (s)" Binding="{Binding CycleTimeText, Mode=OneWay}" Width="*"/>
+                                    <DataGridTextColumn Header="Produttività (t/h)" Binding="{Binding ProductivityText, Mode=OneWay}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
 </TabControl>
             <!-- Ispettore (destra) -->
             <Border Grid.Column="3" Width="{Binding InspectorWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,0,0"
@@ -976,10 +982,15 @@
                     <!-- Resto dello schermo: 3D del pacco sopra, righello 2D sotto -->
                     <Grid Grid.Column="2" Margin="16">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="*" MinHeight="160"/>
-                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*" MinHeight="300"/>
                             <RowDefinition Height="12"/>
                             <RowDefinition Height="280" MinHeight="120"/>
+                        </Grid.RowDefinitions>
+                        <!-- 3D del pacco + righello: allargando la tabella si rimpicciolisce solo il 3D, il righello resta sempre visibile -->
+                        <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="120"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
                             <DockPanel>
@@ -991,7 +1002,7 @@
                                         <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="－ Togli legatura" Command="{Binding RemoveStrapCommand}" Foreground="#B3261E" Margin="0,0,8,0"
                                                 ToolTip="Toglie una legatura e rimette le altre in posizione simmetrica"/>
                                         <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="＋ Aggiungi legatura" Command="{Binding AddStrapCommand}" Foreground="#1E7A45" Margin="0,0,8,0"
-                                                ToolTip="Aggiunge una legatura e rimette tutte in posizione simmetrica (passi di 100 mm)"/>
+                                                ToolTip="Aggiunge una legatura e rimette tutte in posizione simmetrica (passi di 50 mm)"/>
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                             <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
@@ -1001,7 +1012,7 @@
                                     </DockPanel>
                                 </Border>
                                 <TextBlock DockPanel.Dock="Bottom" Margin="16,2,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
-                                           Text="Tieni premuto il tasto sinistro o destro sullo sfondo per ruotare · clic su una legatura (nel 3D o sul righello) e trascinala per spostarla a passi di 100 mm"/>
+                                           Text="Tieni premuto il tasto sinistro o destro sullo sfondo per ruotare · clic su una legatura (nel 3D o sul righello) e trascinala per spostarla a passi di 50 mm"/>
                                 <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="#F7F9FB" Margin="8,0" RotateGesture2="LeftClick"
                                                    PreviewMouseLeftButtonDown="PackageViewport_MouseDown" PreviewMouseMove="PackageViewport_MouseMove"
                                                    PreviewMouseLeftButtonUp="PackageViewport_MouseUp">
@@ -1012,16 +1023,17 @@
                         <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,4">
                             <StackPanel>
                                 <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO (TRASCINA I SEGNI)" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
-                                <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 100 mm)"
+                                <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 50 mm)"
                                         MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
                             </StackPanel>
                         </Border>
+                        </Grid>
                         <!-- Separatore trascinabile: la tabella si allarga verso l'alto o verso il basso, il 3D si riadatta -->
-                        <GridSplitter Grid.Row="2" Height="12" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                        <GridSplitter Grid.Row="1" Height="12" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
                                       Background="Transparent" Cursor="SizeNS" ShowsPreview="False" ToolTip="Trascina per ingrandire o ridurre la tabella dei pacchi"/>
-                        <Border Grid.Row="2" Width="44" Height="4" CornerRadius="2" Background="#C9D0D8" IsHitTestVisible="False" VerticalAlignment="Center"/>
+                        <Border Grid.Row="1" Width="44" Height="4" CornerRadius="2" Background="#C9D0D8" IsHitTestVisible="False" VerticalAlignment="Center"/>
                         <!-- Tabella delle configurazioni: una riga per pacco -->
-                        <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12">
+                        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12">
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Top" Text="CONFIGURAZIONI DEI PACCHI" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
                                 <TextBlock DockPanel.Dock="Top" Margin="0,2,0,8" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"

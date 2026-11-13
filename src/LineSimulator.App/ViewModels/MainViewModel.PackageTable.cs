@@ -117,6 +117,9 @@ public sealed class PackageRowViewModel : ObservableObject
         }
     }
 
+    public string BankingLabel => Banking == AccumulationMode.DoubleBanking ? "Double banking" : "Single banking";
+    public string HeadingLabel => Heading == StopReference.Tail ? "Di coda" : "Di testa";
+
     public StopReference Heading
     {
         get => BankingOptions.Heading(_project(), Type);

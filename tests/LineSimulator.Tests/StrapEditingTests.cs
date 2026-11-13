@@ -8,11 +8,11 @@ public class StrapEditingTests
     private static PackageType Pack(params double[] straps) => new() { Id = "P", LengthMm = 12000, StrapPositionsMm = straps.ToList() };
 
     [Theory]
-    [InlineData(1549, 1500)]
-    [InlineData(1550, 1600)]
+    [InlineData(1524, 1500)]
+    [InlineData(1525, 1550)]
     [InlineData(6000, 6000)]
     [InlineData(10490, 10500)]
-    public void Snap_GoesToMultiplesOf100(double input, double expected) => Assert.Equal(expected, StrapEditing.Snap(input));
+    public void Snap_GoesToMultiplesOf50(double input, double expected) => Assert.Equal(expected, StrapEditing.Snap(input));
 
     [Fact]
     public void ScaleToLength_KeepsCountAndMovesInProportion()
@@ -20,7 +20,7 @@ public class StrapEditingTests
         var p = Pack(1500, 6000, 10500);
         p.LengthMm = 6000;
         StrapEditing.ScaleToLength(p, 12000);
-        Assert.Equal(new double[] { 800, 3000, 5300 }, p.StrapPositionsMm);
+        Assert.Equal(new double[] { 750, 3000, 5250 }, p.StrapPositionsMm);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class StrapEditingTests
         StrapEditing.ScaleToLength(p, 12000);
         Assert.Equal(4, p.StrapPositionsMm.Count);
         Assert.Equal(4, p.StrapPositionsMm.Distinct().Count());
-        Assert.All(p.StrapPositionsMm, v => Assert.InRange(v, 100, 900));
+        Assert.All(p.StrapPositionsMm, v => Assert.InRange(v, 50, 950));
     }
 
     [Theory]
@@ -39,7 +39,7 @@ public class StrapEditingTests
     [InlineData(2, new double[] { 1500, 10500 })]
     [InlineData(3, new double[] { 1500, 6000, 10500 })]
     [InlineData(4, new double[] { 1500, 4500, 7500, 10500 })]
-    [InlineData(5, new double[] { 1500, 3800, 6000, 8200, 10500 })]
+    [InlineData(5, new double[] { 1500, 3750, 6000, 8250, 10500 })]
     public void SetSymmetric_KeepsEndDistanceAndMirrorsAroundTheCentre(int n, double[] expected)
     {
         var p = Pack(1500, 6000, 10500);
@@ -60,12 +60,11 @@ public class StrapEditingTests
     }
 
     [Fact]
-    public void AddSymmetric_FailsWithoutChangesWhenMinimumsWouldBeBroken()
+    public void AddSymmetric_FailsWithoutChangesWhenTheyDoNotFitIn50mmSteps()
     {
-        var p = Pack(1500, 6000, 10500);
-        p.MinDistanceBetweenStrapsMm = 4000;
+        var p = new PackageType { Id = "P", LengthMm = 200, StrapPositionsMm = new() { 50, 100, 150 } };
         Assert.False(StrapEditing.AddSymmetric(p));
-        Assert.Equal(new double[] { 1500, 6000, 10500 }, p.StrapPositionsMm);
+        Assert.Equal(new double[] { 50, 100, 150 }, p.StrapPositionsMm);
     }
 
     [Fact]
@@ -73,19 +72,17 @@ public class StrapEditingTests
     {
         var p = Pack(10540, 1510, 1490, 0, 12000, 6000);
         StrapEditing.SnapAll(p);
-        Assert.Equal(new[] { 1500.0, 6000, 10500 }, p.StrapPositionsMm);
+        Assert.Equal(new[] { 1500.0, 6000, 10550 }, p.StrapPositionsMm);
     }
 
     [Fact]
-    public void TryAdd_PlacesInLargestGap_OnMultiplesOf100_RespectingMinimums()
+    public void TryAdd_PlacesInLargestGap_OnMultiplesOf50()
     {
         var p = Pack(1500, 10500);
         Assert.True(StrapEditing.TryAdd(p, out var a));
         Assert.Equal(6000, a);
         Assert.Equal(3, p.StrapPositionsMm.Count);
-        Assert.All(p.StrapPositionsMm, v => Assert.Equal(0, v % 100));
-        for (int i = 1; i < p.StrapPositionsMm.Count; i++)
-            Assert.True(p.StrapPositionsMm[i] - p.StrapPositionsMm[i - 1] >= p.MinDistanceBetweenStrapsMm);
+        Assert.All(p.StrapPositionsMm, v => Assert.Equal(0, v % 50));
     }
 
     [Fact]
@@ -99,7 +96,7 @@ public class StrapEditingTests
     [Fact]
     public void TryAdd_FailsWhenThereIsNoRoom()
     {
-        var p = new PackageType { Id = "P", LengthMm = 1000, MinStrapDistanceFromEndsMm = 300, MinDistanceBetweenStrapsMm = 500, StrapPositionsMm = new() { 400, 900 - 200 } };
+        var p = new PackageType { Id = "P", LengthMm = 150, StrapPositionsMm = new() { 50, 100 } };
         Assert.False(StrapEditing.TryAdd(p, out _));
         Assert.Equal(2, p.StrapPositionsMm.Count);
     }

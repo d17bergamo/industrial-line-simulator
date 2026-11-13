@@ -41,13 +41,12 @@ public sealed class PackageScene
         var floor = MeshFactory.Box(new Point3D(0, 0, -0.01), L + 1.0, W + 1.0, 0.02, Color.FromArgb(70, 0xC8, 0xCE, 0xD6), out _);   // pavimento trasparente
         g.Children.Add(floor);
 
-        double minEnd = p.MinStrapDistanceFromEndsMm / 1000.0, minGap = p.MinDistanceBetweenStrapsMm / 1000.0;
         HeightM = H; LengthM = L;
         var pos = p.StrapPositionsMm.OrderBy(v => v).Select(v => v / 1000.0).ToList();
         for (int i = 0; i < pos.Count; i++)
         {
             double s = pos[i];
-            bool bad = s < minEnd || s > L - minEnd || pos.Where((_, j) => j != i).Any(o => Math.Abs(o - s) < minGap);
+            bool bad = s <= 0 || s >= L || pos.Where((_, j) => j != i).Any(o => Math.Abs(o - s) < 1e-6);
             double x = L / 2 - s, t = 0.06, e = 0.02;
             var f = new MeshFactory();
             f.AddBox(new Point3D(x, 0, H + e / 2), t, W + 2 * e, e);       // sopra
@@ -59,13 +58,16 @@ public sealed class PackageScene
             _straps.Add(sm);
         }
         if (ShowDimensions && pos.Count > 0) AddDimensions(g, pos, L, W, H);
-        Bounds = new Rect3D(-L / 2 - 0.5, -W / 2 - 0.5, 0, L + 1.0, W + 1.0, H);
+        Bounds = new Rect3D(-L / 2 - 0.5, -W / 2 - 0.5, 0, L + 1.0, W + 1.0, ShowDimensions && pos.Count > 0 ? H + 0.9 : H);
     }
 
-    /// <summary>Catena di quote lungo il fianco del pacco: testa → prima legatura → … → ultima → coda, in mm.</summary>
+    /// <summary>
+    /// Catena di quote sull'asse verticale: sopra il pacco, al centro, con i richiami che scendono in verticale fino alla
+    /// legatura: testa → prima legatura → … → ultima → coda, in mm.
+    /// </summary>
     private void AddDimensions(Model3DGroup g, List<double> pos, double L, double W, double H)
     {
-        double y = -W / 2 - 0.65, z = H + 0.12;                                      // quote ben staccate dal pacco
+        double y = 0, z = H + 0.55;                                                  // linea di quota sopra il pacco
         var marks = new List<double> { 0 };
         marks.AddRange(pos);
         marks.Add(L);
@@ -75,7 +77,7 @@ public sealed class PackageScene
         {
             double x = L / 2 - m;
             f.AddBox(new Point3D(x, y, z), 0.012, 0.012, 0.16);                            // segno
-            f.AddBox(new Point3D(x, (y - W / 2) / 2, z - 0.06), 0.008, Math.Abs(y + W / 2) - 0.04, 0.006);   // richiamo verso il pacco
+            f.AddBox(new Point3D(x, y, (z + H) / 2), 0.008, 0.008, z - H - 0.02);          // richiamo verticale verso il pacco
         }
         g.Children.Add(MeshFactory.Model(f.ToMesh(), DimColor, out _));
         for (int i = 1; i < marks.Count; i++)
@@ -85,7 +87,7 @@ public sealed class PackageScene
             Visual.Children.Add(new BillboardTextVisual3D
             {
                 Text = $"{(b - a) * 1000:0}",
-                Position = new Point3D(L / 2 - (a + b) / 2, y - 0.12, z + 0.22),
+                Position = new Point3D(L / 2 - (a + b) / 2, y, z + 0.16),
                 FontSize = 12,
                 Foreground = new SolidColorBrush(DimColor),
                 Background = new SolidColorBrush(Color.FromArgb(225, 255, 255, 255)),

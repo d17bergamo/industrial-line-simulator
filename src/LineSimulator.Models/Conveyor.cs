@@ -138,7 +138,7 @@ public sealed class RollerGroup : ComponentBase
     public double WidthMm { get; set; } = 700;
 
     [UiProperty("Altezza via a rulli", "mm", "Geometria", Order = 1)]
-    public double RollerTopElevationMm { get; set; } = 800;
+    public double RollerTopElevationMm { get; set; } = 1294;
 
     [UiProperty("Passo rulli (multipli di 50 mm)", "mm", "Geometria", Order = 5)]
     public double RollerPitchMm { get; set; } = RollerSection.DefaultPitchMm;

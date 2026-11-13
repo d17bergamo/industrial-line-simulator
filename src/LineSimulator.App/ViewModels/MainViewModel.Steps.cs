@@ -70,7 +70,7 @@ public sealed partial class MainViewModel
             var f = Fam(title, _project.StrapperDefaults);
             foreach (var i in f?.Items ?? Array.Empty<PropertyItemViewModel>())
             {
-                if (i.Name == nameof(StrapperGroup.ArmingTimeS)) i.LabelOverride = wire && strap ? "Ricarica filo / riarmo reggia" : strap ? "Tempo di riarmo reggia" : "Tempo di ricarica filo";
+                if (i.Name == nameof(StrapperGroup.ArmingTimeS)) i.LabelOverride = "Tempo di ricarica";
                 if (i.Name == nameof(StrapperGroup.StrappingTimeS)) i.LabelOverride = strap && !wire ? "Ciclo di reggettatura" : "Ciclo di legatura";
             }
         }
@@ -213,7 +213,11 @@ public sealed partial class MainViewModel
     }
 
     private IReadOnlyList<StartOption>? _startOptions;
-    public IReadOnlyList<StartOption> StartOptions => _startOptions ??= SampleProjects.All.Select(x =>
+    // Ordine nella schermata iniziale (a due colonne, riga per riga): 1 legatrice | 2 legatrici 6-18 m, poi 2 legatrici 6-12 m | 3 legatrici
+    private static readonly string[] StartOrder = { "1 legatrice", "2 legatrici - pacchi 6/9/12/18", "2 legatrici - pacchi 6/9/12 m", "3 legatrici" };
+    public IReadOnlyList<StartOption> StartOptions => _startOptions ??= SampleProjects.All
+        .OrderBy(x => { int i = Array.FindIndex(StartOrder, o => x.Name.StartsWith(o, StringComparison.Ordinal)); return i < 0 ? 99 : i; })
+        .Select(x =>
     {
         var p = x.Factory();
         var sec = p.Sections.OrderBy(s => s.StartMm).ToList();
