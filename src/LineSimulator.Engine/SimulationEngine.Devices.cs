@@ -769,8 +769,14 @@ public sealed partial class SimulationEngine
                 if (FitsAtStop(p, k)) return k + 1;
             return 0;
         }
+        // Double banking: secondo pacco solo se lui e quello davanti hanno il double banking (tabella Pacchi) e ci sta;
+        // altrimenti aspetta e andrà da solo sul fermo finale
+        var first = Stopper.Package ?? _finalAssigned;
+        if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return -1;
         return FitsAtStop(p, idx - 1) ? idx : -1;
     }
+
+    private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.Banking(Project, p.Type) == AccumulationMode.DoubleBanking;
 
     private double StopTargetHead(StopRuntime s, PackageRuntime p)
     {

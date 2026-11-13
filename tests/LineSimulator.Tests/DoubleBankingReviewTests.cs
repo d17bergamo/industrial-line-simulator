@@ -27,13 +27,9 @@ public class DoubleBankingReviewTests
                 var p = create();
                 if (close)
                 {
-                    // pacchi ravvicinati: legatrici disabilitate e ingresso a intervallo fisso, così il secondo pacco arriva
-                    // mentre il primo è ancora sul fermo e il trasferitore può prenderli insieme
-                    foreach (var st in p.Strappers) st.IsEnabled = false;
-                    p.Infeed.Mode = InfeedMode.FixedInterval;
-                    p.Infeed.IntervalS = 15;
+                    // trasferitore collo di bottiglia: pesatura lunga, i pacchi legati si accumulano davanti al trasferitore
+                    foreach (var b in p.Scales) b.StabilizationTimeS = 150;
                 }
-                bool hadStop = p.IntermediateStops.Any(s => s.IsEnabled);
                 if (withStop && !hadStop)
                 {
                     p.IntermediateStops.Add(new IntermediateStopConfig
@@ -44,7 +40,7 @@ public class DoubleBankingReviewTests
                 }
                 if (!withStop) p.IntermediateStops.Clear();
                 BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
-                string cfg = (withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)") + (close ? ", pacchi ravvicinati (senza legatura, ogni 15 s)" : "");
+                string cfg = (withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)") + (close ? ", pesatura lunga (150 s): trasferitore collo di bottiglia" : "");
                 var e = new SimulationEngine(p);
                 e.RunToCompletion();
                 var warn = e.Events.Where(x => x.Severity >= EventSeverity.Warning).ToList();
@@ -70,5 +66,25 @@ public class DoubleBankingReviewTests
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "double-banking.csv"), sb.ToString());
         File.WriteAllText(Path.Combine(dir, "double-banking-dettagli.txt"), details.Length > 0 ? details.ToString() : "Nessuna anomalia.");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DoubleBanking_PairsTwoPackages_WhenTheTransferIsTheBottleneck(bool withStop)
+    {
+        var p = SampleProjects.All.Single(m => m.Name.StartsWith("3 legatrici")).Factory();
+        if (!withStop) p.IntermediateStops.Clear();
+        foreach (var b in p.Scales) b.StabilizationTimeS = 150;
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.Equal(AccumulationMode.DoubleBanking, e.EffectiveBanking);
+        var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning).Select(x => x.ToString()).Take(10).ToList();
+        Assert.True(bad.Count == 0, string.Join("\n", bad));
+        Assert.Equal(0, e.Collisions);
+        Assert.Contains(e.Events, x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento ("));
+        Assert.True(e.Transfer.Cycles < e.Packages.Count, $"{e.Transfer.Cycles} cicli per {e.Packages.Count} pacchi");
     }
 }
