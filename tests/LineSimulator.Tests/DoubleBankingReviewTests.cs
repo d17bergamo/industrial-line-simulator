@@ -88,7 +88,7 @@ public class DoubleBankingReviewTests
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Equal(0, e.Collisions);
         Assert.True(e.Events.Any(x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento (")),
-            "nessun ciclo con due pacchi\n" + string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting or SimEventType.StopperPhase or SimEventType.InfeedWaiting || x.Message.Contains("fermo") || x.Message.Contains("POS")).Take(45).Select(x => x.ToString())));
+            "nessun ciclo con due pacchi\n" + string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting or SimEventType.InfeedWaiting || x.Message.Contains("fermo") || x.Message.Contains("POS")).Take(45).Select(x => x.ToString())));
         Assert.True(e.Transfer.Cycles < e.Packages.Count, $"{e.Transfer.Cycles} cicli per {e.Packages.Count} pacchi");
     }
 }
