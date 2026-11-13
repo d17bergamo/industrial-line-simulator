@@ -569,7 +569,7 @@ public static class ProjectValidator
             {
                 var need = t.BindingType == BindingType.SteelStrap ? StrapperMachineType.SMA : StrapperMachineType.KNCA;
                 if (!p.Strappers.Any(s => s.IsEnabled && s.MachineType == need))
-                    r.Error("STR_TYPE", $"Il pacco {t.Id} richiede {(need == StrapperMachineType.SMA ? "reggettature (SMA)" : "legature a filo (KNCA)")}, ma nella stazione non c'è una macchina di quel tipo abilitata.", t.Id);
+                    r.Error("STR_TYPE", $"Il pacco {t.Id} è impostato su \"{PackageNaming.BindingLabel(t.BindingType)}\" ({(need == StrapperMachineType.SMA ? "reggia d'acciaio: serve una reggettatrice SMA" : "filo: serve una legatrice KNCA")}), ma nella linea non c'è: aggiungila o cambia il tipo di legatura del pacco.", t.Id);
             }
         }
     }

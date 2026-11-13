@@ -351,8 +351,26 @@ public static class SimulationPreparation
             problems = Infeasible(p, types);
         }
         foreach (var (t, why) in problems)
+        {
+            if (MissingMachine(p, t) is string machine)
+            {
+                // Regola dell'utente (2026-11-13): un pacco è sempre legabile; può fallire solo se il tipo di legatura scelto
+                // (Wire / Still Strapp) non ha la sua macchina nella linea
+                r.Errors.Add($"Il pacco {t.Id} è impostato su \"{PackageNaming.BindingLabel(t.BindingType)}\" ma nella linea non c'è {machine}: " +
+                             $"aggiungi {machine} oppure cambia il tipo di legatura del pacco.");
+                continue;
+            }
             r.Errors.Add($"Con le legatrici abilitate ogni pacco deve essere legato: il pacco {t.Id} ({t.LengthMm.ToString("0", Ci)} mm) non è legabile con la disposizione attuale ({why}). " +
                          "Sposta le legatrici (o le legature del pacco) oppure disabilita tutte le legatrici per mandarlo al trasferitore senza legatura.");
+        }
+    }
+
+    /// <summary>Macchina che manca per il tipo di legatura del pacco (null se c'è): filo → legatrice KNCA, reggia → reggettatrice SMA.</summary>
+    public static string? MissingMachine(LineProject p, PackageType t)
+    {
+        var need = t.BindingType == BindingType.SteelStrap ? StrapperMachineType.SMA : StrapperMachineType.KNCA;
+        if (p.Strappers.Any(s => s.IsEnabled && s.MachineType == need)) return null;
+        return need == StrapperMachineType.SMA ? "una reggettatrice SMA (reggia d'acciaio)" : "una legatrice a filo KNCA";
     }
 
     private static List<(PackageType Type, string Why)> Infeasible(LineProject p, List<PackageType> types)
@@ -363,6 +381,7 @@ public static class SimulationPreparation
         foreach (var t in types)
         {
             if (t.StrapPositionsMm.Count == 0) { list.Add((t, "il pacco non ha legature definite")); continue; }
+            if (MissingMachine(p, t) != null) { list.Add((t, "manca la macchina per il suo tipo di legatura")); continue; }
             var cmp = StrappingPlanner.Compare(p, topo, t);
             if (!cmp.Selected.IsFeasible) list.Add((t, cmp.Selected.InfeasibleReason ?? cmp.Error ?? "nessun piano di legatura"));
         }

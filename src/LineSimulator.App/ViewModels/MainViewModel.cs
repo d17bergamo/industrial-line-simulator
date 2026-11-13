@@ -971,7 +971,13 @@ public sealed partial class MainViewModel : ObservableObject
         int extra = 0;
         try
         {
-            foreach (var c in ProjectAutoFix.Preview(_project).Changes.Where(c => c.Source != ProjectAutoFix.SourceCheck))
+            var preview = ProjectAutoFix.Preview(_project);
+            foreach (var err in preview.Errors)
+            {
+                CheckItems.Add(new CheckRow("⚠", "Simulazione non avviabile: " + err, true));   // es. pacco Still Strapp senza reggettatrice
+                extra++;
+            }
+            foreach (var c in preview.Changes.Where(c => c.Source != ProjectAutoFix.SourceCheck))
             {
                 CheckItems.Add(new CheckRow("⚠", "All'avvio della simulazione: " + c.Message, true));
                 extra++;
