@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Icon="Assets/app.ico" Title="Velocità di linea e produttività" Width="400" SizeToContent="Height" ResizeMode="NoResize"
-        ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual" Background="White">
+        ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual" Background="{DynamicResource Surface}">
     <StackPanel Margin="14">
         <TextBlock Text="Velocità di trasporto" FontWeight="SemiBold" FontSize="14"/>
-        <TextBlock Foreground="#5A6672" TextWrapping="Wrap" Margin="0,2,0,8"
+        <TextBlock Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,8"
                    Text="Valore libero tra 0,5 e 1,5 m/s. La modifica vale subito, anche con la simulazione in corso."/>
         <DockPanel>
             <TextBox DockPanel.Dock="Right" Width="64" Margin="10,0,0,0" VerticalContentAlignment="Center" HorizontalContentAlignment="Right"
@@ -16,7 +16,7 @@
                     Value="{Binding LineSpeedMps, Mode=TwoWay}" TickFrequency="0.1" IsSnapToTickEnabled="False"
                     SmallChange="0.01" LargeChange="0.1" TickPlacement="BottomRight" VerticalAlignment="Center"/>
         </DockPanel>
-        <Border Margin="0,12,0,0" Padding="10" Background="#F2F5F8" BorderBrush="#D0D4D9" BorderThickness="1">
+        <Border Margin="0,12,0,0" Padding="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
             <StackPanel>
                 <TextBlock Text="Produttività oraria" FontWeight="SemiBold"/>
                 <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding ProductivityText}"/>

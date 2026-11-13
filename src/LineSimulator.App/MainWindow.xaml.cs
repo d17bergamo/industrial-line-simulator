@@ -372,6 +372,12 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+        Theme.Toggle();
+        _vm.RefreshTheme();
+    }
+
     private void SetView(Vector3D direction, Vector3D up)
     {
         var b = ActiveScene.Bounds;

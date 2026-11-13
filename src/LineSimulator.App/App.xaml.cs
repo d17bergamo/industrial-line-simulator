@@ -10,6 +10,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         DispatcherUnhandledException += OnUnhandled;
+        Theme.LoadSaved();
     }
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)

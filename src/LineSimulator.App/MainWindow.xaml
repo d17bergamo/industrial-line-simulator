@@ -6,7 +6,7 @@
         xmlns:mvvm="clr-namespace:LineSimulator.App.Mvvm"
         xmlns:ctl="clr-namespace:LineSimulator.App.Controls"
         Icon="Assets/app.ico" Title="{Binding Title}" Height="900" Width="1500" WindowState="Maximized"
-        FontFamily="Segoe UI" FontSize="12" Background="{StaticResource PanelBg}">
+        FontFamily="Segoe UI" FontSize="12" Background="{DynamicResource PanelBg}">
     <Window.Resources>
         <mvvm:EqualsToVisibilityConverter x:Key="EqVis"/>
         <mvvm:NullToCollapsedConverter x:Key="NullVis"/>
@@ -30,14 +30,14 @@
                                                 <Style TargetType="TextBox">
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsInherited}" Value="True">
-                                                            <Setter Property="Background" Value="#F4F5F7"/>
-                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                             <Setter Property="ToolTip" Value="Valore della famiglia: spunta «Personalizza» per cambiarlo solo qui"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsCalculated}" Value="True">
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                             <Setter Property="Background" Value="Transparent"/>
-                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                             <Setter Property="ToolTip" Value="Calcolato automaticamente"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -60,13 +60,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Tile" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="2" CornerRadius="10" Padding="18">
+                        <Border x:Name="Tile" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="2" CornerRadius="10" Padding="18">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource Accent}"/>
-                                <Setter TargetName="Tile" Property="Background" Value="#F0F6FC"/>
+                                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="Tile" Property="Background" Value="{DynamicResource HoverBg}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -77,7 +77,7 @@
 
     <DockPanel>
         <!-- Menu -->
-        <Menu DockPanel.Dock="Top" Background="White">
+        <Menu DockPanel.Dock="Top" Background="{DynamicResource Surface}">
             <MenuItem Header="_Home" Command="{Binding GoHomeCommand}"/>
             <MenuItem Header="_File">
                 <MenuItem Header="_Nuovo progetto" Command="{Binding NewCommand}"/>
@@ -130,9 +130,10 @@
                 <MenuItem Header="Ottimizza zone di comando (minimo numero di inverter)..." Command="{Binding OptimizeCommandZonesCommand}"/>
                 <MenuItem Header="Raggiungi l'obiettivo di produttività..." Command="{Binding ReachTargetCommand}"/>
             </MenuItem>
+            <MenuItem Header="_Tema chiaro / scuro" Click="ToggleTheme_Click" ToolTip="Passa dal tema chiaro a quello scuro e viceversa"/>
         </Menu>
         <!-- Barra di stato -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource HeaderBg}">
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource HeaderBg}">
             <DockPanel Margin="8,3">
                 <TextBlock DockPanel.Dock="Right" Foreground="#BDC3C7" Text="Strumento di progettazione - non è un sistema di sicurezza certificato"/>
                 <TextBlock Foreground="White" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
@@ -140,17 +141,17 @@
         </Border>
         <Grid>
             <!-- Avvio guidato: schede con il disegno della linea, un clic per partire -->
-            <ScrollViewer Background="{StaticResource PanelBg}" VerticalScrollBarVisibility="Auto" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
+            <ScrollViewer Background="{DynamicResource PanelBg}" VerticalScrollBarVisibility="Auto" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Home}">
                 <StackPanel Margin="40,32" MaxWidth="1180" HorizontalAlignment="Center">
-                    <TextBlock Text="Cosa vuoi fare?" FontSize="32" FontWeight="SemiBold" Foreground="#1B2430" HorizontalAlignment="Center" TextAlignment="Center"/>
-                    <TextBlock Text="Scegli una linea: un clic e sei pronto per simulare." Foreground="#5B6673" FontSize="15" Margin="0,4,0,24" HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock Text="Cosa vuoi fare?" FontSize="32" FontWeight="SemiBold" Foreground="{DynamicResource Text}" HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock Text="Scegli una linea: un clic e sei pronto per simulare." Foreground="{DynamicResource TextMuted}" FontSize="15" Margin="0,4,0,24" HorizontalAlignment="Center" TextAlignment="Center"/>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
                         <!-- Nuovo layout -->
                         <Button Style="{StaticResource HomeCard}" VerticalAlignment="Top" Command="{Binding StartFromScratchCommand}" ToolTip="Parti dai pacchi, poi dati area e layout: le macchine si aggiungono dalla libreria">
                             <StackPanel>
                                 <Grid>
-                                    <Border Background="#F4F6F9" CornerRadius="10" Height="124" Margin="0,0,0,12">
+                                    <Border Background="{DynamicResource PanelBg}" CornerRadius="10" Height="124" Margin="0,0,0,12">
                                     <Viewbox Stretch="Uniform" Margin="8">
                                         <ItemsControl ItemsSource="{Binding DataContext.EmptyPicture, RelativeSource={RelativeSource AncestorType=Window}}" Width="320" Height="110">
                                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -171,7 +172,7 @@
                                     </Border>
                                 </Grid>
                                 <TextBlock Text="Nuovo layout" FontSize="18" FontWeight="Bold"/>
-                                <TextBlock Text="Parti da zero: pacchi → dati area → layout" Foreground="#5B6673" Margin="0,2,0,0"/>
+                                <TextBlock Text="Parti da zero: pacchi → dati area → layout" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Button>
                         <!-- Esempi pronti -->
@@ -181,7 +182,7 @@
                                 <DataTemplate>
                                     <Button Style="{StaticResource HomeCard}" Command="{Binding DataContext.StartFromExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
                                         <StackPanel>
-                                            <Border Background="#F4F6F9" CornerRadius="10" Height="124" Margin="0,0,0,12">
+                                            <Border Background="{DynamicResource PanelBg}" CornerRadius="10" Height="124" Margin="0,0,0,12">
                                     <Viewbox Stretch="Uniform" Margin="8">
                                         <ItemsControl ItemsSource="{Binding Picture}" Width="320" Height="110">
                                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -198,7 +199,7 @@
                                     </Viewbox>
                                 </Border>
                                             <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding Summary}" Foreground="#5B6673" Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
@@ -213,38 +214,38 @@
             </ScrollViewer>
             <DockPanel Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Layout}">
         <!-- Barra superiore -->
-        <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Height="56">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Height="56">
             <DockPanel Margin="12,0">
                 <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="💾  Salva" Command="{Binding SaveCommand}" Margin="8,0,0,0"/>
                 <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
                 <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,16,0">
-                    <TextBlock Text="{Binding ProjectTitle}" FontWeight="Bold" FontSize="14" Foreground="#1B2430"/>
-                    <TextBlock Text="{Binding ProjectSubtitle}" Foreground="#5B6673" MaxWidth="520" TextTrimming="CharacterEllipsis" ToolTip="{Binding ProjectSubtitle}"/>
+                    <TextBlock Text="{Binding ProjectTitle}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Text}"/>
+                    <TextBlock Text="{Binding ProjectSubtitle}" Foreground="{DynamicResource TextMuted}" MaxWidth="520" TextTrimming="CharacterEllipsis" ToolTip="{Binding ProjectSubtitle}"/>
                 </StackPanel>
                 <Border DockPanel.Dock="Left" VerticalAlignment="Center"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Dati area" Command="{Binding GoStepCommand}" CommandParameter="Area" Tag="{Binding IsStepCycle}"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Layout e simulazione" Command="{Binding GoStepCommand}" CommandParameter="Layout" Tag="{Binding IsStepLayout}"/></StackPanel></Border>
             </DockPanel>
         </Border>
         <!-- Passo 4: risultati sempre in vista -->
-        <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,8"
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="16,8"
                 Visibility="{Binding IsStepLayout, Converter={StaticResource BoolVis}}">
             <UniformGrid Rows="1" Columns="6">
                 <StackPanel Margin="0,0,12,0"><TextBlock Style="{StaticResource KpiLabel}" Text="COSA SIMULO"/>
                     <ComboBox ItemsSource="{Binding PackageTypes}" DisplayMemberPath="Id" SelectedItem="{Binding SimPackageType, Mode=TwoWay}" ToolTip="Tipologia di pacco da vedere nella simulazione (nome della schermata Pacchi)" Margin="0,2"/>
                     <DockPanel Margin="0,2">
-                        <Border DockPanel.Dock="Right" Background="#EEF1F4" CornerRadius="6" Padding="8,3" Margin="4,0,0,0" VerticalAlignment="Center"
+                        <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBg}" CornerRadius="6" Padding="8,3" Margin="4,0,0,0" VerticalAlignment="Center"
                                 ToolTip="Intestatura del pacco simulato: si sceglie nella tabella della schermata Pacchi">
-                            <TextBlock Text="{Binding SimHeadingText}" Foreground="#3D4650" FontSize="12"/>
+                            <TextBlock Text="{Binding SimHeadingText}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                         </Border>
-                        <Border Background="#EEF1F4" CornerRadius="6" Padding="8,3" VerticalAlignment="Center" HorizontalAlignment="Left"
+                        <Border Background="{DynamicResource PanelBg}" CornerRadius="6" Padding="8,3" VerticalAlignment="Center" HorizontalAlignment="Left"
                                 ToolTip="Banking del pacco simulato: si sceglie nella tabella della schermata Pacchi">
-                            <TextBlock Text="{Binding SimBankingText}" Foreground="#3D4650" FontSize="12"/>
+                            <TextBlock Text="{Binding SimBankingText}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                         </Border>
                     </DockPanel>
                     <CheckBox Content="Pacchi senza fine (fino a Stop)" IsChecked="{Binding SimContinuous, Mode=TwoWay}" Margin="0,2,0,0"/>
                 </StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PRODUTTIVITÀ"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.TonnesPerHour, StringFormat='{}{0:0.0} t/h', FallbackValue='—'}"/>
                     <TextBlock Foreground="#9A5A0E" Text="{Binding TargetProgress}"/>
-                    <TextBlock Foreground="#5B6673" Text="{Binding Results.SteadyStateFromS, StringFormat='misurata a regime, da t = {0:0} s', FallbackValue=''}" ToolTip="Si escludono il riempimento e lo svuotamento della linea"/></StackPanel>
+                    <TextBlock Foreground="{DynamicResource TextMuted}" Text="{Binding Results.SteadyStateFromS, StringFormat='misurata a regime, da t = {0:0} s', FallbackValue=''}" ToolTip="Si escludono il riempimento e lo svuotamento della linea"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="PACCHI ALL'ORA"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.PackagesPerHour, StringFormat={}{0:0.0}, FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="CICLO MEDIO"/><TextBlock FontSize="20" FontWeight="Bold" Text="{Binding Results.CycleTimeMeanS, StringFormat='{}{0:0.0} s', FallbackValue='—'}"/></StackPanel>
                 <StackPanel><TextBlock Style="{StaticResource KpiLabel}" Text="COLLO DI BOTTIGLIA"/><TextBlock FontSize="16" FontWeight="Bold" Text="{Binding Results.BottleneckName, FallbackValue='—'}"/>
@@ -258,7 +259,7 @@
                         <ItemsControl.ItemTemplate><DataTemplate><StackPanel Orientation="Horizontal" Margin="0,2,12,2">
                             <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Brush}" Margin="0,0,5,0"/><TextBlock Text="{Binding Name}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"><Border Width="12" Height="12" CornerRadius="3" Background="#F2A900" Margin="0,0,5,0"/><TextBlock Text="macchina in attesa di consenso" Foreground="#5B6673"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0"><Border Width="12" Height="12" CornerRadius="3" Background="#F2A900" Margin="0,0,5,0"/><TextBlock Text="macchina in attesa di consenso" Foreground="{DynamicResource TextMuted}"/></StackPanel>
                 </StackPanel>
             </UniformGrid>
         </Border>
@@ -288,21 +289,21 @@
         </Border>
         <Grid>
         <!-- Passo 3: tutto il ciclo in una pagina -->
-        <ScrollViewer Visibility="{Binding IsStepCycle, Converter={StaticResource BoolVis}}" Background="#F4F5F7" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Visibility="{Binding IsStepCycle, Converter={StaticResource BoolVis}}" Background="{DynamicResource PanelBg}" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="24,18" MaxWidth="1100">
                 <UniformGrid Columns="2">
-                    <Border Background="White" BorderBrush="#B9D4F5" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,8,16">
+                    <Border Background="{DynamicResource Surface}" BorderBrush="#B9D4F5" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,8,16">
                         <StackPanel>
                             <TextBlock Text="1 · Obiettivo" FontSize="16" FontWeight="Bold"/>
                             <DockPanel Margin="0,10,0,0">
                                 <TextBox DockPanel.Dock="Left" Width="90" FontSize="18" FontWeight="Bold" Text="{Binding SimTargetTph, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.#}}"/>
                                 <TextBlock DockPanel.Dock="Left" Text="t/h" Margin="6,0,12,0" VerticalAlignment="Center"/>
                                 <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Raggiungi l'obiettivo" Command="{Binding ReachTargetCommand}"/>
-                                <TextBlock Foreground="#5B6673" TextWrapping="Wrap" VerticalAlignment="Center" Text="Il software simula e propone modifiche al layout e alle logiche per arrivarci."/>
+                                <TextBlock Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" VerticalAlignment="Center" Text="Il software simula e propone modifiche al layout e alle logiche per arrivarci."/>
                             </DockPanel>
                         </StackPanel>
                     </Border>
-                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="8,0,0,16">
+                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="8,0,0,16">
                         <StackPanel>
                             <TextBlock Text="2 · Azionamenti (decisi dal software)" FontSize="16" FontWeight="Bold"/>
                             <ItemsControl ItemsSource="{Binding DriveRows}" Margin="0,8,0,0">
@@ -311,7 +312,7 @@
                                         <Grid Margin="0,3">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock FontWeight="SemiBold"><Run Text="{Binding Module, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Role, Mode=OneWay}"/></TextBlock>
-                                            <TextBlock Grid.Column="1" Text="{Binding Drive}" Foreground="#34465C" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Drive}" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"/>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -319,16 +320,16 @@
                         </StackPanel>
                     </Border>
                 </UniformGrid>
-                <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16">
+                <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="16">
                     <StackPanel>
                         <TextBlock Text="3 · Tempi delle macchine, per famiglia" FontSize="16" FontWeight="Bold"/>
-                        <TextBlock Text="Valgono per tutte le macchine della famiglia; le eccezioni si sbloccano dalla singola macchina (Personalizza) nel passo Layout e simulazione." Foreground="#5B6673" TextWrapping="Wrap" Margin="0,2,0,8"/>
+                        <TextBlock Text="Valgono per tutte le macchine della famiglia; le eccezioni si sbloccano dalla singola macchina (Personalizza) nel passo Layout e simulazione." Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,8"/>
                         <ItemsControl ItemsSource="{Binding CycleFamilies}">
                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,6,16,10">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,0,0,4"/>
                                         <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource PropEditor}"/>
                                     </StackPanel>
                                 </DataTemplate>
@@ -350,7 +351,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <!-- Binario icone: mostra / nasconde i pannelli -->
-            <Border Grid.Column="0" Width="60" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+            <Border Grid.Column="0" Width="60" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
                 <StackPanel Margin="0,10" HorizontalAlignment="Center">
                     <ToggleButton Style="{StaticResource RailToggle}" Content="▦" IsChecked="{Binding ShowLibrary, Mode=TwoWay}" ToolTip="Libreria macchine: mostra / nascondi"/>
                     <ToggleButton Style="{StaticResource RailToggle}" Content="☰" IsChecked="{Binding ShowInspector, Mode=TwoWay}" ToolTip="Proprietà e struttura: mostra / nascondi"/>
@@ -358,14 +359,14 @@
                 </StackPanel>
             </Border>
             <!-- Libreria (sinistra) -->
-            <Border Grid.Column="1" Width="{Binding LibraryWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0"
+            <Border Grid.Column="1" Width="{Binding LibraryWidth}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0"
                     Visibility="{Binding ShowLibrary, Converter={StaticResource BoolVis}}">
-                <DockPanel Background="White">
+                <DockPanel Background="{DynamicResource Surface}">
                         <DockPanel DockPanel.Dock="Top" Margin="12,12,8,4">
                             <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="✕" ToolTip="Nascondi la libreria" Command="{Binding ToggleLibraryCommand}"/>
-                            <TextBlock Text="Libreria macchine" FontSize="15" FontWeight="Bold" Foreground="#1B2430" VerticalAlignment="Center"/>
+                            <TextBlock Text="Libreria macchine" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource Text}" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Foreground="#5A6672" Margin="6,0,6,6" TextWrapping="Wrap" Text="Trascina una macchina nell'area 3D per inserirla."/>
+                        <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource TextMuted}" Margin="6,0,6,6" TextWrapping="Wrap" Text="Trascina una macchina nell'area 3D per inserirla."/>
                         <ListBox x:Name="LibraryList" ItemsSource="{Binding LibraryView}" BorderThickness="0" HorizontalContentAlignment="Stretch"
                                  PreviewMouseLeftButtonDown="Library_PreviewMouseLeftButtonDown" PreviewMouseMove="Library_PreviewMouseMove"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -373,7 +374,7 @@
                                 <GroupStyle>
                                     <GroupStyle.HeaderTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="2,8,0,2"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="2,8,0,2"/>
                                         </DataTemplate>
                                     </GroupStyle.HeaderTemplate>
                                 </GroupStyle>
@@ -385,12 +386,12 @@
                                             <ColumnDefinition Width="44"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Background="#F0F3F6" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="3" Width="38" Height="32">
+                                        <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="3" Width="38" Height="32">
                                             <Path Data="{Binding Icon}" Stroke="#4A5560" StrokeThickness="1.6" Stretch="Uniform" Margin="4"/>
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Category}" Foreground="#5A6672" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Category}" Foreground="{DynamicResource TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -404,16 +405,16 @@
                    ToolTip="Trascina per allargare o stringere il pannello delle proprietà" Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}"/>
             <TabControl Grid.Column="2" Style="{StaticResource FlatTabs}">
 <TabItem Header="Layout e simulazione 3D"><Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                    <Border Grid.Row="0" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
                         <Grid>
                             <h:HelixViewport3D x:Name="LayoutViewport" ShowCoordinateSystem="True" ShowViewCube="True" ViewCubeHorizontalPosition="Right" ViewCubeVerticalPosition="Bottom" ViewCubeWidth="90" ViewCubeHeight="90" Margin="0,0,0,46" ZoomExtentsWhenLoaded="True" RotateGesture2="LeftClick"
                                                PreviewMouseLeftButtonDown="LayoutViewport_PreviewMouseLeftButtonDown" PreviewMouseMove="MoveViewport_PreviewMouseMove"
                                                PreviewMouseLeftButtonUp="MoveViewport_PreviewMouseLeftButtonUp"
                                                AllowDrop="True" DragEnter="LayoutViewport_DragOver" DragOver="LayoutViewport_DragOver"
-                                               DragLeave="LayoutViewport_DragLeave" Drop="LayoutViewport_Drop" Background="White">
+                                               DragLeave="LayoutViewport_DragLeave" Drop="LayoutViewport_Drop" Background="{DynamicResource Surface}">
                                 <h:DefaultLights/>
                             </h:HelixViewport3D>
-                        <Border VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="4">
+                        <Border VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0,0,0" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="4">
                             <StackPanel>
                                 <Button Style="{StaticResource IconButton}" Content="⧉" FontSize="16" Command="{Binding DuplicateSelectedCommand}" ToolTip="Duplica i componenti selezionati"/>
                                 <Button Style="{StaticResource IconButton}" Content="↻" FontSize="18" Command="{Binding RotateSelectedCommand}" ToolTip="Ruota di 180°: porta il dispositivo sul lato opposto"/>
@@ -421,7 +422,7 @@
                                 <Button Style="{StaticResource IconButton}" Content="🗑" FontSize="15" Foreground="#B42318" Command="{Binding DeleteCommand}" ToolTip="Elimina i componenti selezionati"/>
                             </StackPanel>
                         </Border>
-                        <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,8,0,0" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3" MaxWidth="720">
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,8,0,0" Background="{DynamicResource Overlay}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="10" Padding="3" MaxWidth="720">
 <WrapPanel>
                 <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
                 <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
@@ -442,11 +443,11 @@
 </WrapPanel>
                         </Border>
                         <!-- Velocità della linea: riquadro grande in alto a destra con + e − -->
-                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,8,0" Width="132" Background="#F2FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="10,8">
+                        <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,8,0" Width="132" Background="{DynamicResource Overlay}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="10,8">
                             <StackPanel>
                                 <TextBlock Text="VELOCITÀ LINEA" Style="{StaticResource KpiLabel}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="{Binding LineSpeedMps, StringFormat='{}{0:0.00}'}" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#1B2430"/>
-                                <TextBlock Text="m/s" Foreground="#5B6673" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
+                                <TextBlock Text="{Binding LineSpeedMps, StringFormat='{}{0:0.00}'}" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource Text}"/>
+                                <TextBlock Text="m/s" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,-4,0,6"/>
                                 <UniformGrid Columns="2">
                                     <Button Style="{StaticResource ToolButton}" Content="−" FontSize="20" FontWeight="Bold" Command="{Binding LineSpeedDownCommand}" ToolTip="Riduci la velocità di linea (0,1 m/s)" Margin="0,0,3,0" HorizontalContentAlignment="Center"/>
                                     <Button Style="{StaticResource ToolButton}" Content="+" FontSize="20" FontWeight="Bold" Command="{Binding LineSpeedUpCommand}" ToolTip="Aumenta la velocità di linea (0,1 m/s)" Margin="3,0,0,0" HorizontalContentAlignment="Center"/>
@@ -454,7 +455,7 @@
                             </StackPanel>
                         </Border>
                         <!-- Viste in basso a destra (il cubo 3D è subito sopra) -->
-                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,8,6" Background="#E6FFFFFF" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="3">
+                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,8,6" Background="{DynamicResource Overlay}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="10" Padding="3">
                             <WrapPanel>
                                 <Button Style="{StaticResource ToolButton}" Content="Alto" Click="ViewTop_Click"/>
                                 <Button Style="{StaticResource ToolButton}" Content="Frontale" Click="ViewFront_Click"/>
@@ -466,7 +467,7 @@
                         </Grid>
                     </Border>
                 <!-- Timeline -->
-                <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
+                <Border Grid.Row="1" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Left" Text="Timeline" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock DockPanel.Dock="Right" Text="{Binding DisplayTimeText}" Width="80" VerticalAlignment="Center" TextAlignment="Right" FontFamily="Consolas"/>
@@ -474,13 +475,13 @@
                     </DockPanel>
                 </Border>
 <Grid Grid.Row="2" Visibility="{Binding ShowCyclogram, Converter={StaticResource BoolVis}}">
-<Border x:Name="CyclogramBorder" Height="240" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0">
+<Border x:Name="CyclogramBorder" Height="240" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,1,1,0">
     <DockPanel>
         <DockPanel DockPanel.Dock="Top" Margin="8,4,4,2">
             <Button DockPanel.Dock="Right" Content="✕" Padding="8,0" ToolTip="Nascondi il ciclogramma" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
             <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="🖨  Da stampare (PDF)" Command="{Binding ExportPrintCyclogramCommand}" ToolTip="Ciclogramma del ciclo a regime in bianco e nero, A3 orizzontale, con velocità, spazi e tempi" Margin="0,0,6,0"/>
-            <TextBlock Text="Ciclogramma" FontWeight="SemiBold" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/>
-            <TextBlock Text="  Clic sul diagramma: porta il 3D a quell'istante" Foreground="#5A6672" VerticalAlignment="Center"/>
+            <TextBlock Text="Ciclogramma" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+            <TextBlock Text="  Clic sul diagramma: porta il 3D a quell'istante" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
         </DockPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ctl:CyclogramControl x:Name="DockedCyclogram" Recorder="{Binding Recorder}" CursorTime="{Binding DisplayTime, Mode=TwoWay}"
@@ -501,7 +502,7 @@
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
             <DockPanel Grid.Row="0">
-                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="3">
+                <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="3">
 <WrapPanel>
                 <Button Style="{StaticResource ToolButton}" Content="▶ Play" Command="{Binding PlayCommand}" Click="Play_Click" FontWeight="SemiBold" Foreground="#1E8449"/>
                 <Button Style="{StaticResource ToolButton}" Content="❚❚ Pausa" Command="{Binding PauseCommand}"/>
@@ -543,19 +544,19 @@
                                                       MaxTime="{Binding MaxTime}" Version="{Binding CyclogramVersion}"/>
                             </ScrollViewer>
             </DockPanel>
-                <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
+                <Border Grid.Row="1" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,0,1,1" Padding="6,4">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Left" Text="Timeline" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock DockPanel.Dock="Right" Text="{Binding DisplayTimeText}" Width="80" VerticalAlignment="Center" TextAlignment="Right" FontFamily="Consolas"/>
                         <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </DockPanel>
                 </Border>
-            <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="{StaticResource Border}"/>
+            <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="{DynamicResource Border}"/>
             <TabControl Grid.Row="3">
                     <TabItem Header="Risultati e produttività">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel Margin="8">
-                                <TextBlock Text="Eseguire la simulazione fino al termine (o Stop) per calcolare i risultati." Foreground="#5A6672" Margin="0,0,0,8">
+                                <TextBlock Text="Eseguire la simulazione fino al termine (o Stop) per calcolare i risultati." Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
@@ -567,37 +568,37 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                                 <WrapPanel DataContext="{Binding Results}">
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Pacchi/ora effettivi"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Text="{Binding PackagesPerHour, StringFormat={}{0:0.0}, TargetNullValue=-}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Tonnellate/ora effettive"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Text="{Binding TonnesPerHour, StringFormat={}{0:0.0}, TargetNullValue=-}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Tempo ciclo medio [s]"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Text="{Binding CycleTimeMeanS, StringFormat={}{0:0.0}, TargetNullValue=-}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Teorico senza spaziatura [pacchi/h]"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Foreground="#7F8C8D" Text="{Binding TheoreticalPackagesPerHour, StringFormat={}{0:0.0}}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Collisioni"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Foreground="#C0392B" Text="{Binding Collisions}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Rigettati / pesati"/>
                                             <TextBlock Style="{StaticResource KpiValue}">
@@ -605,13 +606,13 @@
                                             </TextBlock>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="170">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Allarmi dispositivi"/>
                                             <TextBlock Style="{StaticResource KpiValue}" Foreground="#C0392B" Text="{Binding DeviceAlarms}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="340">
+                                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="10" Margin="0,0,8,8" Width="340">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource KpiLabel}" Text="Collo di bottiglia"/>
                                             <TextBlock Style="{StaticResource KpiValue}" FontSize="16" Text="{Binding BottleneckName}"/>
@@ -626,12 +627,12 @@
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" Margin="0,1">
                                                 <TextBlock Text="{Binding Name}" Width="220" TextTrimming="CharacterEllipsis"/>
-                                                <Border Width="300" Background="#ECEFF1">
-                                                    <Rectangle HorizontalAlignment="Left" Height="12" Fill="{StaticResource Accent}"
+                                                <Border Width="300" Background="{DynamicResource PanelBg}">
+                                                    <Rectangle HorizontalAlignment="Left" Height="12" Fill="{DynamicResource Accent}"
                                                                Width="{Binding Utilization, Converter={StaticResource RatioWidth}, ConverterParameter=300}"/>
                                                 </Border>
                                                 <TextBlock Text="{Binding Utilization, StringFormat={}{0:P0}}" Width="50" Margin="6,0,0,0"/>
-                                                <TextBlock Text="{Binding BusyPerPackageS, StringFormat={}{0:0.0} s/pacco}" Foreground="#5A6672"/>
+                                                <TextBlock Text="{Binding BusyPerPackageS, StringFormat={}{0:0.0} s/pacco}" Foreground="{DynamicResource TextMuted}"/>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -719,12 +720,12 @@
         </Grid>
                     </TabItem>
                     <TabItem Header="Riepilogo pacchi">
-                        <DockPanel Background="White">
-                            <TextBlock DockPanel.Dock="Top" Margin="10,8" Foreground="#5A6672" TextWrapping="Wrap"
+                        <DockPanel Background="{DynamicResource Surface}">
+                            <TextBlock DockPanel.Dock="Top" Margin="10,8" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
                                        Text="Riepilogo in sola lettura di tutti i pacchi. Le caratteristiche si modificano solo dalla pagina Pacchi. Tempo medio e produttività sono calcolati dal simulatore, con ogni pacco da solo sulla linea."/>
                             <DataGrid ItemsSource="{Binding PackageRows}" AutoGenerateColumns="False" HeadersVisibility="Column" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
-                                      CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
-                                      BorderThickness="0" Background="White" RowBackground="White" RowHeight="30">
+                                      CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Border}"
+                                      BorderThickness="0" Background="{DynamicResource Surface}" RowBackground="{DynamicResource Surface}" RowHeight="30">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Pacco" Binding="{Binding Id, Mode=OneWay}" Width="1.6*" FontWeight="SemiBold"/>
                                     <DataGridTextColumn Header="Lunghezza (m)" Binding="{Binding LengthM, Mode=OneWay, StringFormat={}{0:0.00}}" Width="*"/>
@@ -740,15 +741,15 @@
                     </TabItem>
 </TabControl>
             <!-- Ispettore (destra) -->
-            <Border Grid.Column="3" Width="{Binding InspectorWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1,0,0,0"
+            <Border Grid.Column="3" Width="{Binding InspectorWidth}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,0,0,0"
                     Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}">
                 <DockPanel>
                     <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Content="✕" Margin="0,6,8,0" ToolTip="Nascondi il pannello" Command="{Binding ToggleInspectorCommand}"/>
                     <TabControl BorderThickness="0" Padding="0" Style="{StaticResource FlatTabs}" SelectedIndex="{Binding InspectorTab, Mode=TwoWay}">
-                        <TabItem Header="Proprietà"><DockPanel Background="White">
-                    <TextBlock DockPanel.Dock="Top" Foreground="#5B6673" Margin="12,8,12,2" TextWrapping="Wrap" Text="Ogni modifica riporta la simulazione a zero."/>
+                        <TabItem Header="Proprietà"><DockPanel Background="{DynamicResource Surface}">
+                    <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource TextMuted}" Margin="12,8,12,2" TextWrapping="Wrap" Text="Ogni modifica riporta la simulazione a zero."/>
                     <StackPanel DockPanel.Dock="Top" Margin="4,0,4,4" Visibility="{Binding TransferSectionsVisible, Converter={StaticResource BoolVis}}">
-                        <TextBlock Text="Sezioni del trasferitore (numero, nome, lunghezza)" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,4,0,2"/>
+                        <TextBlock Text="Sezioni del trasferitore (numero, nome, lunghezza)" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,4,0,2"/>
                         <DataGrid ItemsSource="{Binding TransferSections}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   HeadersVisibility="Column" MaxHeight="150" x:Name="TransferSectionsGrid">
                             <DataGrid.Columns>
@@ -771,7 +772,7 @@
                                 <GroupStyle>
                                     <GroupStyle.HeaderTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,8,0,2"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,8,0,2"/>
                                         </DataTemplate>
                                     </GroupStyle.HeaderTemplate>
                                 </GroupStyle>
@@ -794,14 +795,14 @@
                                                 <Style TargetType="TextBox">
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsInherited}" Value="True">
-                                                            <Setter Property="Background" Value="#F4F5F7"/>
-                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                             <Setter Property="ToolTip" Value="Valore della famiglia: spunta «Personalizza» per cambiarlo solo qui"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsCalculated}" Value="True">
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                             <Setter Property="Background" Value="Transparent"/>
-                                                            <Setter Property="Foreground" Value="#5B6673"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                             <Setter Property="ToolTip" Value="Calcolato automaticamente"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -821,7 +822,7 @@
                     </ScrollViewer>
                 </DockPanel></TabItem>
                         <TabItem Header="Struttura"><DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Foreground="#5B6673" Margin="12,8,12,4" TextWrapping="Wrap" Text="Ctrl + clic: selezione multipla."/>
+                    <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource TextMuted}" Margin="12,8,12,4" TextWrapping="Wrap" Text="Ctrl + clic: selezione multipla."/>
                     <TreeView x:Name="LineTree" ItemsSource="{Binding Tree}" SelectedItemChanged="LineTree_SelectedItemChanged" BorderThickness="0">
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
@@ -850,10 +851,10 @@
                     </TreeView>
                 </DockPanel></TabItem>
                         <TabItem Header="Controllo">
-                            <DockPanel Background="White">
+                            <DockPanel Background="{DynamicResource Surface}">
                                 <StackPanel DockPanel.Dock="Top" Margin="12,10,12,4">
                                     <TextBlock Text="Controllo equipaggiamenti" FontWeight="SemiBold" FontSize="14"/>
-                                    <TextBlock Text="{Binding CheckSummary}" Foreground="#5B6573" Margin="0,2,0,8"/>
+                                    <TextBlock Text="{Binding CheckSummary}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,8"/>
                                     <Button Style="{StaticResource PrimaryButton}" Content="🛠  Sistema automaticamente" Command="{Binding CheckEquipmentCommand}"
                                             HorizontalAlignment="Left" ToolTip="Applica le correzioni sicure agli errori elencati (le anomalie senza correzione automatica restano nell'elenco)"/>
                                 </StackPanel>
@@ -883,7 +884,7 @@
                                                 <TextBlock Grid.Column="1" Text="{Binding State}" FontWeight="SemiBold" Margin="8,0,0,0">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="#1B2430"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                                                             <Style.Triggers><DataTrigger Binding="{Binding Alarm}" Value="True"><Setter Property="Foreground" Value="#B42318"/></DataTrigger></Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>
@@ -900,16 +901,16 @@
         </Grid>
         </Grid>
     </DockPanel>
-            <DockPanel Background="#F4F5F7" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
+            <DockPanel Background="{DynamicResource PanelBg}" Visibility="{Binding CurrentSection, Converter={StaticResource EqVis}, ConverterParameter=Packages}">
                 <!-- Barra superiore -->
-                <Border DockPanel.Dock="Top" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Height="56">
+                <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Height="56">
                     <DockPanel Margin="12,0">
                         <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="＋ Crea pacco" Command="{Binding NewPackageCommand}" Margin="8,0,0,0" ToolTip="Crea una nuova tipologia di pacco"/>
                         <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="⧉ Duplica" Command="{Binding DuplicatePackageCommand}" ToolTip="Duplica la tipologia selezionata"/>
                         <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="⌂" FontSize="18" Command="{Binding GoHomeCommand}" ToolTip="Torna alla schermata iniziale"/>
                         <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,0,0">
                             <TextBlock Text="Tipologie di pacco" FontWeight="Bold" FontSize="14"/>
-                            <TextBlock Text="Indipendenti dal layout della linea" Foreground="#5B6673" FontSize="12"/>
+                            <TextBlock Text="Indipendenti dal layout della linea" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                         </StackPanel>
                         <Border DockPanel.Dock="Left" VerticalAlignment="Center" Margin="24,0,12,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Button Style="{StaticResource StepButton}" Content="1  Pacchi" Command="{Binding GoStepCommand}" CommandParameter="Packages" Tag="True"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="2  Dati area" Command="{Binding GoStepCommand}" CommandParameter="Area"/><TextBlock Text="›" Foreground="#B6BEC8" FontSize="16" VerticalAlignment="Center"/><Button Style="{StaticResource StepButton}" Content="3  Layout e simulazione" Command="{Binding GoStepCommand}" CommandParameter="Layout"/></StackPanel></Border>
                         <Grid/>
@@ -926,7 +927,7 @@
                            Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}"/>
                     <!-- Colonna delle caratteristiche: si chiude e si riapre -->
                     <Grid Grid.Column="1">
-                        <Border Width="{Binding PackagePropsWidth}" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0" Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}">
+                        <Border Width="{Binding PackagePropsWidth}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0" Visibility="{Binding ShowPackageProps, Converter={StaticResource BoolVis}}">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="14,12,8,4">
                                     <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="«" FontSize="16" Command="{Binding TogglePackagePropsCommand}" ToolTip="Chiudi le caratteristiche"/>
@@ -953,7 +954,7 @@
                                                 </GroupStyle.ContainerStyle>
                                                 <GroupStyle.HeaderTemplate>
                                                     <DataTemplate>
-                                                        <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673" Margin="0,0,0,4"/>
+                                                        <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
                                                     </DataTemplate>
                                                 </GroupStyle.HeaderTemplate>
                                             </GroupStyle>
@@ -962,7 +963,7 @@
                                 </ScrollViewer>
                             </DockPanel>
                         </Border>
-                        <Border Width="52" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+                        <Border Width="52" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -973,7 +974,7 @@
                             </Border.Style>
                             <StackPanel Margin="0,10,0,0">
                                 <Button Style="{StaticResource IconButton}" Content="»" FontSize="16" Command="{Binding TogglePackagePropsCommand}" ToolTip="Apri le caratteristiche del pacco" HorizontalAlignment="Center"/>
-                                <TextBlock Text="CARATTERISTICHE DEL PACCO" FontWeight="SemiBold" Foreground="#5B6673" Margin="0,14,0,0" HorizontalAlignment="Center">
+                                <TextBlock Text="CARATTERISTICHE DEL PACCO" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,14,0,0" HorizontalAlignment="Center">
                                     <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
                                 </TextBlock>
                             </StackPanel>
@@ -992,9 +993,9 @@
                             <RowDefinition Height="*" MinHeight="120"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
+                        <Border Grid.Row="0" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Margin="0,0,0,14">
                             <DockPanel>
-                                <Border DockPanel.Dock="Top" BorderBrush="#EEF0F3" BorderThickness="0,0,0,1" Padding="16,10">
+                                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="16,10">
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="🗑" Foreground="#B3261E" FontSize="16" Command="{Binding DeletePackageCommand}"
                                                 ToolTip="Cestino: elimina la tipologia selezionata"/>
@@ -1006,23 +1007,23 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding SelectedPackageType.Id}" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                             <Border Background="#E6F0FC" CornerRadius="12" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
-                                                <TextBlock x:Name="StrapCountChip" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="12"/>
+                                                <TextBlock x:Name="StrapCountChip" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" FontSize="12"/>
                                             </Border>
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
-                                <TextBlock DockPanel.Dock="Bottom" Margin="16,2,16,10" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock DockPanel.Dock="Bottom" Margin="16,2,16,10" Foreground="{DynamicResource TextMuted}" FontSize="12" TextWrapping="Wrap"
                                            Text="Tieni premuto il tasto sinistro o destro sullo sfondo per ruotare · clic su una legatura (nel 3D o sul righello) e trascinala per spostarla a passi di 50 mm"/>
-                                <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="#F7F9FB" Margin="8,0" RotateGesture2="LeftClick"
+                                <h:HelixViewport3D x:Name="PackageViewport" ShowCoordinateSystem="False" ShowViewCube="True" Background="{DynamicResource SoftBg}" Margin="8,0" RotateGesture2="LeftClick"
                                                    PreviewMouseLeftButtonDown="PackageViewport_MouseDown" PreviewMouseMove="PackageViewport_MouseMove"
                                                    PreviewMouseLeftButtonUp="PackageViewport_MouseUp">
                                     <h:DefaultLights/>
                                 </h:HelixViewport3D>
                             </DockPanel>
                         </Border>
-                        <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,4">
+                        <Border Grid.Row="1" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,4">
                             <StackPanel>
-                                <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO (TRASCINA I SEGNI)" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
+                                <TextBlock Text="POSIZIONE DELLE LEGATURE DALLA TESTA DEL PACCO (TRASCINA I SEGNI)" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"/>
                                 <Canvas x:Name="StrapRuler" Height="62" Background="Transparent" Cursor="Hand" SizeChanged="StrapRuler_SizeChanged" ClipToBounds="True" ToolTip="Clic su una legatura e trascinala per spostarla (passi di 50 mm)"
                                         MouseLeftButtonDown="StrapRuler_MouseDown" MouseMove="StrapRuler_MouseMove" MouseLeftButtonUp="StrapRuler_MouseUp"/>
                             </StackPanel>
@@ -1033,21 +1034,21 @@
                                       Background="Transparent" Cursor="SizeNS" ShowsPreview="False" ToolTip="Trascina per ingrandire o ridurre la tabella dei pacchi"/>
                         <Border Grid.Row="1" Width="44" Height="4" CornerRadius="2" Background="#C9D0D8" IsHitTestVisible="False" VerticalAlignment="Center"/>
                         <!-- Tabella delle configurazioni: una riga per pacco -->
-                        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12">
+                        <Border Grid.Row="2" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="16,10,16,12">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="CONFIGURAZIONI DEI PACCHI" FontSize="11" FontWeight="SemiBold" Foreground="#5B6673"/>
-                                <TextBlock DockPanel.Dock="Top" Margin="0,2,0,8" Foreground="#5B6673" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock DockPanel.Dock="Top" Text="CONFIGURAZIONI DEI PACCHI" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"/>
+                                <TextBlock DockPanel.Dock="Top" Margin="0,2,0,8" Foreground="{DynamicResource TextMuted}" FontSize="12" TextWrapping="Wrap"
                                            Text="Seleziona una riga per vederla nel 3D. Le scelte in grigio non sono possibili con questa linea (passa sopra per sapere perché). Tempo medio e produttività li calcola il simulatore, simulando ogni pacco da solo sulla linea."/>
                                 <DataGrid ItemsSource="{Binding PackageRows}" SelectedItem="{Binding SelectedPackageRow, Mode=TwoWay}" AutoGenerateColumns="False" HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
-                                          CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F3"
-                                          BorderThickness="0" Background="White" RowBackground="White" RowHeight="30" VerticalContentAlignment="Center">
+                                          CanUserReorderColumns="False" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Border}"
+                                          BorderThickness="0" Background="{DynamicResource Surface}" RowBackground="{DynamicResource Surface}" RowHeight="30" VerticalContentAlignment="Center">
                                     <DataGrid.CellStyle>
                                         <Style TargetType="DataGridCell">
                                             <Setter Property="BorderThickness" Value="0"/>
                                             <Style.Triggers>
                                                 <Trigger Property="IsSelected" Value="True">
-                                                    <Setter Property="Background" Value="#E6F0FC"/>
-                                                    <Setter Property="Foreground" Value="#1B2430"/>
+                                                    <Setter Property="Background" Value="{DynamicResource HoverBg}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                                                 </Trigger>
                                             </Style.Triggers>
                                         </Style>
