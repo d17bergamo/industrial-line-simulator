@@ -1,17 +1,20 @@
 name: Pulizia artefatti
 
-# Tiene sempre gli ultimi 5 artefatti per ciascun nome (es. 5 eseguibili Windows e 5 risultati dei test)
-# e cancella i più vecchi. Parte dopo ogni build/verifica, ogni giorno e a richiesta.
+# Tiene sempre gli ultimi 5 artefatti per ciascun nome (es. 5 eseguibili Windows e 5 risultati dei test) e cancella i più vecchi.
+# Regola dell'utente (2026-11-10): la pulizia si fa solo se ci sono PIÙ DI 10 artefatti e ad ALMENO 7 GIORNI dalla pulizia
+# precedente. Controllo dopo ogni build/verifica, una volta a settimana (lunedì) e a richiesta; l'avvio a mano ignora solo i 7 giorni.
+# La data dell'ultima pulizia effettiva è nel tag annotato "pulizia-artefatti".
 on:
   workflow_run:
     workflows: ["Build, test e pubblicazione", "Verifica rapida (motore e test)"]
     types: [completed]
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 
 permissions:
   actions: write
+  contents: write
 
 concurrency:
   group: pulizia-artefatti
@@ -21,10 +24,13 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Cancella gli artefatti oltre gli ultimi 5 per nome
+      - name: Cancella gli artefatti oltre gli ultimi 5 per nome (se più di 10 e ad almeno 7 giorni dalla precedente)
         env:
           GH_TOKEN: ${{ github.token }}
           KEEP: '5'
+          MIN_ARTIFACTS: '10'
+          MIN_DAYS: '7'
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           repo="${{ github.repository }}"
@@ -32,15 +38,45 @@ jobs:
           page=1
           while :; do
             n=$(gh api "repos/$repo/actions/artifacts?per_page=100&page=$page" \
-                  -q '.artifacts[] | [.id, .name, .created_at] | @tsv' | tee -a all.tsv | wc -l)
+                  -q '.artifacts[] | select(.expired | not) | [.id, .name, .created_at] | @tsv' | tee -a all.tsv | wc -l)
             [ "$n" -lt 100 ] && break
             page=$((page+1))
           done
-          echo "Artefatti trovati: $(wc -l < all.tsv)"
+          total=$(wc -l < all.tsv)
+          echo "Artefatti trovati: $total"
+          if [ "$total" -le "$MIN_ARTIFACTS" ]; then
+            echo "Al massimo $MIN_ARTIFACTS artefatti: nessuna pulizia."
+            exit 0
+          fi
+
+          # data dell'ultima pulizia effettiva (tag annotato "pulizia-artefatti")
+          last=""
+          if sha=$(gh api "repos/$repo/git/ref/tags/pulizia-artefatti" -q '.object.sha' 2>/dev/null); then
+            last=$(gh api "repos/$repo/git/tags/$sha" -q '.tagger.date' 2>/dev/null || true)
+          fi
+          if [ -n "$last" ] && [ "$MANUAL" != "true" ]; then
+            age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
+            echo "Ultima pulizia: $last ($age giorni fa)"
+            if [ "$age" -lt "$MIN_DAYS" ]; then
+              echo "Meno di $MIN_DAYS giorni dalla pulizia precedente: si rimanda."
+              exit 0
+            fi
+          fi
+
           # per ciascun nome, dal più recente: tiene i primi KEEP, cancella il resto
           sort -t$'\t' -k2,2 -k3,3r all.tsv | awk -F'\t' -v keep="$KEEP" '{ c[$2]++; if (c[$2] > keep) print $1 "\t" $2 "\t" $3 }' > old.tsv
           echo "Da cancellare: $(wc -l < old.tsv)"
+          [ -s old.tsv ] || exit 0
           while IFS=$'\t' read -r id name created; do
             echo "cancello $name ($created)"
             gh api -X DELETE "repos/$repo/actions/artifacts/$id" || echo "non cancellato: $id"
           done < old.tsv
+
+          # segna la data della pulizia: tag annotato sul commit corrente
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          tag=$(gh api -X POST "repos/$repo/git/tags" -f tag=pulizia-artefatti -f message="Pulizia artefatti del $now" \
+                  -f object="${{ github.sha }}" -f type=commit -f "tagger[name]=github-actions" \
+                  -f "tagger[email]=41898282+github-actions[bot]@users.noreply.github.com" -f "tagger[date]=$now" -q .sha)
+          gh api -X PATCH "repos/$repo/git/refs/tags/pulizia-artefatti" -f sha="$tag" -F force=true >/dev/null 2>&1 \
+            || gh api -X POST "repos/$repo/git/refs" -f ref=refs/tags/pulizia-artefatti -f sha="$tag" >/dev/null
+          echo "Pulizia registrata: $now"
