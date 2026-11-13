@@ -774,15 +774,19 @@ public sealed partial class SimulationEngine
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return -1;
         if (!FitsAtStop(p, idx - 1)) return -1;
-        // trasferitore a due prese: i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura)
-        if (first != null && _scales.Count > 0 && Transfer.TwoPick)
-        {
-            double head = StopTargetHead(_stops[idx - 1], p);
-            var mine = ScalesUnder(head - p.LengthM, head);
-            var theirs = ScalesUnder(Stopper.PositionM - first.LengthM, Stopper.PositionM);
-            if (mine.Overlaps(theirs)) return -1;
-        }
+        if (SharesScaleWithFirst(p, idx - 1)) return -1;
         return idx;
+    }
+
+    /// <summary>Trasferitore a due prese: i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura).</summary>
+    private bool SharesScaleWithFirst(PackageRuntime p, int stop)
+    {
+        var first = Stopper.Package ?? _finalAssigned;
+        if (first == null || _scales.Count == 0 || !Transfer.TwoPick || stop < 0 || stop >= _stops.Count) return false;
+        double head = StopTargetHead(_stops[stop], p);
+        var mine = ScalesUnder(head - p.LengthM, head);
+        var theirs = ScalesUnder(Stopper.PositionM - first.LengthM, Stopper.PositionM);
+        return mine.Overlaps(theirs);
     }
 
     private HashSet<ScaleRuntime> ScalesUnder(double tailM, double headM) =>
@@ -796,7 +800,7 @@ public sealed partial class SimulationEngine
     {
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return false;
-        return _stops.Count == 0 || Enumerable.Range(0, _stops.Count).Any(k => FitsAtStop(p, k));
+        return _stops.Count == 0 || Enumerable.Range(0, _stops.Count).Any(k => FitsAtStop(p, k) && !SharesScaleWithFirst(p, k));
     }
 
     /// <summary>Scelta della tabella Pacchi (le tipologie che non ci stanno in due sono già riportate a single dalla preparazione).</summary>
