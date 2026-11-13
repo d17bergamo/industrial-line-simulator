@@ -449,7 +449,10 @@ public sealed partial class SimulationEngine : ILogicContext
             var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
             // Regola dell'utente (2026-11-13): il pacco in attesa su FC0 avanza quando il precedente ha completato l'ultimo
             // ciclo di legatura, quindi i due pacchi possono avanzare insieme
-            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done;
+            // ...purché davanti al precedente non ci sia ancora un pacco sulla via rulli in attesa del trasferitore: con l'inverter
+            // condiviso, fermandosi per la legatura il nuovo pacco fermerebbe anche il precedente, magari dentro l'area del trasferitore
+            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done
+                            && !_active.Any(o => o.OnRollers && o.Sequence < prev.Sequence);
             bool passed = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
             if (!strapped && !passed) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
