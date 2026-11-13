@@ -50,7 +50,7 @@ public class SimultaneousStartTests
         m.CommandZoneId = string.Empty;
         m.FollowsStrapping = true;
         var e = Run(p);
-        var starts = e.Events.Where(x => x.Message.Contains("è legato e la sua coda ha liberato")).ToList();
+        var starts = e.Events.Where(x => x.Message.Contains("liberato la fotocellula di uscita legatura")).ToList();
         Assert.NotEmpty(starts);
         // con lo svincolo su inverter proprio il legato prosegue da solo: non si ferma finché ha la coda sullo svincolo
         // (finché la sua testa non arriva alla fotocellula di arresto davanti al trasferitore, dove può aspettare il trasferitore)
