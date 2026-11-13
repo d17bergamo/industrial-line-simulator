@@ -439,28 +439,6 @@ public sealed partial class SimulationEngine : ILogicContext
     /// avanza appena il precedente ha completato l'ultimo ciclo di legatura (i due pacchi possono avanzare insieme), oppure,
     /// senza legatura, quando la coda del precedente libera la fotocellula di uscita della via rulli di legatura.
     /// </summary>
-    /// <summary>
-    /// Partenza insieme al pacco legato: la coda del legato deve lasciare la zona dell'inverter di legatura prima che il nuovo
-    /// pacco cominci a frenare per la sua prima fermata (entrambi partono da fermi con la stessa via). Se lo svincolo è sotto
-    /// lo stesso inverter della legatura, davanti al legato non devono esserci altri pacchi in attesa del trasferitore
-    /// (il legato potrebbe fermarsi dentro la zona e fermare anche il nuovo).
-    /// </summary>
-    private bool SyncStartOk(PackageRuntime waiting, PackageRuntime prev)
-    {
-        if (!prev.OnRollers) return true;
-        var zone = Station!.Zone;
-        double zoneEnd = zone.Info.EndM;
-        double strapEnd = (StrappingAreaRules.StrappingModule(Project)?.EndMm ?? zoneEnd * 1000) / 1000.0;
-        bool joined = zoneEnd > strapEnd + 1e-6;
-        if (joined && _active.Any(o => o.OnRollers && o.Sequence < prev.Sequence)) return false;
-        if (!_plans.TryGetValue(waiting.Type.Id, out var cmp) || !cmp.Selected.IsFeasible || cmp.Selected.Stops.Count == 0) return true;
-        var sec = Project.Sections.FirstOrDefault(x => x.EffectiveZoneId == zone.Id) ?? Project.Sections.First();
-        double v = Math.Max(0.1, sec.HighSpeed), dec = Math.Max(0.1, sec.Deceleration);
-        double newRun = cmp.Selected.Stops[0].HeadPositionM - waiting.HeadM - v * v / (2 * dec) - 0.3;
-        double prevRun = Math.Max(0, zoneEnd - prev.TailM);
-        return prevRun <= newRun + 1e-9;
-    }
-
     private void InfeedAfterStrapping(double t)
     {
         var cfg = Project.Infeed;
@@ -469,18 +447,16 @@ public sealed partial class SimulationEngine : ILogicContext
         if (waiting != null)
         {
             var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
-            // Regola dell'utente (2026-11-13): il pacco in attesa su FC0 parte insieme a quello che ha completato l'ultimo ciclo
-            // di legatura. Non hanno l'inverter in comune: il legato prosegue per la sua strada, il nuovo fa il suo ciclo.
-            // Partenza sincronizzata: il nuovo parte quando il legato uscirà dalla zona dell'inverter di legatura prima che il
-            // nuovo debba frenare per la sua prima fermata, così fermandosi il pacco a monte non ferma quello a valle.
-            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done && SyncStartOk(waiting, prev);
+            // Regola dell'utente (2026-11-13 17:55, solo le tre fotocellule della via di legatura): il pacco in attesa su FC0
+            // parte quando il precedente è legato e la sua coda ha liberato la fotocellula di uscita legatura.
+            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done && prev.TailM > StrappingExitM + 1e-9;
             bool passed = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
             if (!strapped && !passed) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
             _lastProgressTime = t;
             Emit(SimEventType.InfeedWaiting, EventSeverity.Info,
                 prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
-                : strapped && !passed ? $"{waiting.Id} parte insieme a {prev.Id}: {prev.Id} ha completato l'ultimo ciclo di legatura e lascerà l'inverter di legatura prima della prima fermata di {waiting.Id}"
+                : strapped && !passed ? $"{waiting.Id} avanza: {prev.Id} è legato e la sua coda ha liberato la fotocellula di uscita legatura ({StrappingExitM * 1000:0} mm)"
                 : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
             return;
         }

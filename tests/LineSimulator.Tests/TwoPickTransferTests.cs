@@ -117,7 +117,7 @@ public class TwoPickTransferTests
     {
         string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
-        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese (esempio);t/h svincolo motori commutabili;t/h parcheggio svincolo;partenze insieme esempio/commutabili/parcheggio" };
+        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese (esempio);t/h svincolo motori commutabili;t/h parcheggio svincolo;partenze a legatura finita esempio/commutabili/parcheggio" };
         foreach (var (name, create) in SampleProjects.All)
         {
             (double Tph, int Together) Run(Func<LineProject, bool> change)
@@ -129,7 +129,7 @@ public class TwoPickTransferTests
                 if (!e.CompletedNormally || e.Collisions > 0) return (double.NaN, 0);
                 var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
                 double span = exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS);
-                int together = e.Events.Count(x => x.Message.Contains("parte insieme"));
+                int together = e.Events.Count(x => x.Message.Contains("è legato e la sua coda ha liberato"));
                 return (span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0, together);
             }
             var full = Run(p => { p.Transfer.ScaleAtMidStroke = false; return true; });

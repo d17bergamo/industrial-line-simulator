@@ -8,9 +8,9 @@ using Xunit;
 namespace LineSimulator.Tests;
 
 /// <summary>
-/// Decisione dell'utente (2026-11-13 14:01): il pacco nuovo parte insieme a quello che sta finendo di legare, senza inverter
-/// in comune; se si ferma quello a monte, quello a valle prosegue da solo. Svincolo con inverter proprio e parcheggio valutati
-/// dall'ottimizzatore sulla produttività.
+/// Decisioni dell'utente (2026-11-13): il pacco nuovo parte da FC0 quando il precedente è legato e la sua coda ha liberato la
+/// fotocellula di uscita legatura (solo le tre fotocellule della via di legatura; aree completamente svincolate): se si ferma
+/// quello a monte, quello a valle prosegue da solo. Svincolo con inverter proprio e parcheggio valutati dall'ottimizzatore.
 /// </summary>
 public class SimultaneousStartTests
 {
@@ -43,17 +43,18 @@ public class SimultaneousStartTests
     }
 
     [Fact]
-    public void WithOwnInverterOnTheReleaseModule_TheNewPackageStartsTogether_AndNeverStopsTheStrappedOne()
+    public void WithOwnInverterOnTheReleaseModule_TheNewPackageStartsAfterTheExitPhotocell_AndNeverStopsTheStrappedOne()
     {
         var p = SampleProjects.CreateTwoStrappers12m();
         var m = StrappingAreaRules.ReleaseModules(p).Last();
         m.CommandZoneId = string.Empty;
         m.FollowsStrapping = true;
         var e = Run(p);
-        var starts = e.Events.Where(x => x.Message.Contains("parte insieme")).ToList();
+        var starts = e.Events.Where(x => x.Message.Contains("è legato e la sua coda ha liberato")).ToList();
         Assert.NotEmpty(starts);
-        // dopo la partenza insieme il legato lascia la via di legatura senza fermarsi finché ha la coda su di essa
-        double strapEnd = StrappingAreaRules.StrappingModule(e.Project)!.EndMm / 1000.0;
+        // con lo svincolo su inverter proprio il legato prosegue da solo: non si ferma finché ha la coda sullo svincolo
+        // (finché la sua testa non arriva alla fotocellula di arresto davanti al trasferitore, dove può aspettare il trasferitore)
+        double fct = e.Project.Photocells.Where(x => x.IsEnabled && x.ActsAsTransferStop).Select(x => x.PositionMm / 1000.0).DefaultIfEmpty(double.MaxValue).Min();
         foreach (var ev in starts)
         {
             var next = e.Packages.Single(k => k.Id == ev.PackageId);
@@ -62,8 +63,8 @@ public class SimultaneousStartTests
             foreach (var f in frames)
             {
                 var prev = f.Packages.FirstOrDefault(k => k.Id == prevId);
-                if (prev == null || prev.HeadM - prev.LengthM >= strapEnd) break;
-                Assert.True(Math.Abs(prev.Velocity) > 1e-3, $"{prevId} fermo a {f.TimeS:0.0} s con la coda sulla via di legatura dopo la partenza di {next.Id}");
+                if (prev == null || prev.HeadM >= fct - 0.5) break;
+                Assert.True(Math.Abs(prev.Velocity) > 1e-3, $"{prevId} fermo a {f.TimeS:0.0} s sullo svincolo dopo la partenza di {next.Id}");
             }
         }
     }

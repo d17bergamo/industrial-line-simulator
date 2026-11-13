@@ -101,9 +101,9 @@ public class LineModelsTests
                     if (k.Sequence > 1)
                     {
                         var prev = e.Packages.Single(x => x.Sequence == k.Sequence - 1);
-                        // il pacco in attesa su FC0 avanza quando il precedente ha completato l'ultimo ciclo di legatura
-                        Assert.True(!prev.OnRollers || prev.StrapStatus == StrapStatus.Done || prev.TailM > exit - 0.01,
-                            $"{k.Id} avanza con {prev.Id} non ancora legato (coda a {prev.TailM:0.00} m)");
+                        // il pacco in attesa su FC0 avanza quando il precedente è legato e la sua coda ha liberato l'uscita legatura
+                        Assert.True(!prev.OnRollers || prev.TailM > exit - 0.01,
+                            $"{k.Id} avanza con la coda di {prev.Id} a {prev.TailM:0.00} m (uscita {exit:0.00} m)");
                         if (prev.OnRollers && prev.TailM <= exit - 0.01) together.Add(k.Sequence);
                     }
                 }
@@ -111,9 +111,8 @@ public class LineModelsTests
         }
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.Equal(4, created.Count);
-        // la partenza insieme è possibile solo se il legato lascia l'inverter di legatura prima della prima fermata del nuovo:
-        // con lo svincolo sotto lo stesso inverter (questo esempio) di norma non succede (vedi SimultaneousStartTests)
-        Assert.All(together, seq => Assert.Contains(e.Events, x => x.PackageId == $"P{seq:000}" || x.Message.Contains("parte insieme")));
+        // regola del 2026-11-13: il nuovo parte quando il precedente è legato e ha liberato la fotocellula di uscita legatura
+        Assert.Empty(together);
     }
 
     [Fact]
