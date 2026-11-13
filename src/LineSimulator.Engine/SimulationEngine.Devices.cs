@@ -788,6 +788,17 @@ public sealed partial class SimulationEngine
     private HashSet<ScaleRuntime> ScalesUnder(double tailM, double headM) =>
         _scales.Where(s => Math.Min(s.EndM, headM) - Math.Max(s.StartM, tailM) > 0.05).ToHashSet();
 
+    /// <summary>
+    /// Il pacco può fare da secondo del gruppo in double banking per motivi stabili: tipologie di entrambi con double banking
+    /// e pacco che ci sta dietro al primo (non conta se il posto è momentaneamente occupato).
+    /// </summary>
+    private bool CanBeSecond(PackageRuntime p)
+    {
+        var first = Stopper.Package ?? _finalAssigned;
+        if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return false;
+        return _stops.Count == 0 || Enumerable.Range(0, _stops.Count).Any(k => FitsAtStop(p, k));
+    }
+
     /// <summary>Scelta della tabella Pacchi (le tipologie che non ci stanno in due sono già riportate a single dalla preparazione).</summary>
     private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.ChosenBanking(Project, p.Type) == AccumulationMode.DoubleBanking;
 
