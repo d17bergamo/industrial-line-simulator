@@ -19,6 +19,9 @@ public class TwoPickTransferTests
     {
         var e = new SimulationEngine(p);
         e.RunToCompletion();
+        var first = e.Events.FirstOrDefault(x => x.Type == SimEventType.TransferInterference);
+        if (first != null)
+            Assert.Fail("Interferenza:\n" + string.Join("\n", e.Events.Where(x => x.TimeS >= first.TimeS - 25 && x.TimeS <= first.TimeS + 0.5 && x.Severity >= EventSeverity.Info).Select(x => x.ToString())));
         Assert.True(e.CompletedNormally, e.FinishReason);
         return e;
     }
