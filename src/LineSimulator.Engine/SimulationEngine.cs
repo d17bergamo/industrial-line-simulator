@@ -691,9 +691,9 @@ public sealed partial class SimulationEngine : ILogicContext
             // In single banking il pacco si ferma anche se nell'area del trasferitore c'è già un altro pacco (consenso "fermo libero")
             // (contano solo i pacchi già usciti dalla zona comandata: quello ancora a cavallo deve poter proseguire)
             double zoneEnd = _zoneById.TryGetValue(pc.ControlledZoneId, out var cz) ? cz.Info.EndM : Transfer.StartM;
-            // In double banking passa solo il pacco che ha un posto libero e compatibile dietro al primo (secondo pacco)
-            bool canJoin = DoubleBanking && pc.OutputPackage != null && NextFreeStopFor(pc.OutputPackage) > 0;
-            bool areaBusy = !canJoin && _active.Any(o => o != pc.OutputPackage && o.OnRollers && o.TailM >= zoneEnd - 1e-6
+            // In double banking si ferma solo il pacco che non ha un posto libero e compatibile dietro al primo
+            bool noPlace = !DoubleBanking || (pc.OutputPackage != null && NextFreeStopFor(pc.OutputPackage) < 0);
+            bool areaBusy = noPlace && _active.Any(o => o != pc.OutputPackage && o.OnRollers && o.TailM >= zoneEnd - 1e-6
                                                                && o.HeadM > Transfer.StartM + 1e-6 && o.TailM < Transfer.EndM - 1e-6);
             if (!transferRaised && !areaBusy) continue;
             if (_requests.TryGetValue(pc.ControlledZoneId, out var req))
