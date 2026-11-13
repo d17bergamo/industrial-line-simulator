@@ -231,7 +231,11 @@ public static class ProjectValidator
         if (StrappingAreaRules.ExitToTransferMm(p) < StrappingAreaRules.MinExitToTransferMm - 0.5)
             r.Warn("EXIT_TRF_DIST", $"La fine della via di legatura (fotocellula di uscita) è a {F(Math.Round(StrappingAreaRules.ExitToTransferMm(p)))} mm dal trasferitore: servono almeno 1000 mm (allungare o inserire lo svincolo).", p.Transfer.Id);
         foreach (var (a, b) in StrappingAreaRules.SameSideConflicts(p))
-            r.Error("STR_SIDE_DIST", $"{a.Id} e {b.Id} sono sullo stesso lato a {F(Math.Round(b.PositionMm - a.PositionMm))} mm: servono almeno 2 m (su lati opposti nessun vincolo).", b.Id);
+            r.Error("STR_SIDE_DIST", $"{a.Id} e {b.Id} sono sullo stesso lato a {F(Math.Round(b.PositionMm - a.PositionMm))} mm: servono almeno 2 m.", b.Id);
+        foreach (var (a, b) in StrappingAreaRules.OppositeSideConflicts(p))
+            r.Error("STR_OPP_DIST", $"{a.Id} e {b.Id} sono su lati opposti a {F(Math.Round(b.PositionMm - a.PositionMm))} mm: se non sono frontali servono almeno 500 mm tra i piani di legatura.", b.Id);
+        foreach (var (a, b) in StrappingAreaRules.FacingBothEnabled(p))
+            r.Error("STR_FACING", $"{a.Id} e {b.Id} sono frontali ed entrambe abilitate: una delle due va disabilitata (resta arretrata).", b.Id);
         foreach (var s in LayoutRules.StrappersTooCloseToTransfer(p))
             r.Error("STR_TRF_MIN", $"La legatrice deve stare ad almeno 3 m dal trasferitore sollevabile (massimo {F(Math.Round(LayoutRules.MaxStrapperPositionMm(p)))} mm).", s.Id);
     }

@@ -107,7 +107,7 @@ public class StrappingAreaTests
     }
 
     [Fact]
-    public void SameSideMachines_AtLeast2mApart_OthersArePushed_OppositeSidesFree()
+    public void SameSideMachines_AtLeast2mApart_OppositeSides500mm_FacingOnlyWithOneDisabled()
     {
         var p = SampleProjects.CreateThreeStrappers24m();           // 4000, 6500, 9000 sullo stesso lato
         var l1 = p.Strappers[0]; var l2 = p.Strappers[1]; var l3 = p.Strappers[2];
@@ -124,12 +124,27 @@ public class StrappingAreaTests
         Assert.Equal(6500, l2.PositionMm, 6);
         Assert.Equal(4500, l1.PositionMm, 6);
 
-        // Lati opposti: nessun vincolo
+        // Lati opposti (regola del 2026-11-13): non frontali almeno 500 mm tra i piani di legatura
         l2.Side = l1.Side == LateralSide.Left ? LateralSide.Right : LateralSide.Left;
         l2.PositionMm = l1.PositionMm + 300;
-        Assert.Empty(StrappingAreaRules.SpreadStrappers(p, l2));
+        Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_OPP_DIST");
+        Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "STR_OPPOSITE");
+        Assert.NotEmpty(StrappingAreaRules.SpreadStrappers(p, l2));            // resta L2 (spostata dall'utente), arretra L1
+        Assert.Equal(l2.PositionMm - 500, l1.PositionMm, 6);
+        Assert.Empty(StrappingAreaRules.OppositeSideConflicts(p));
         Assert.Empty(StrappingAreaRules.SameSideConflicts(p));
-        Assert.DoesNotContain(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_SIDE_DIST");
+        Assert.DoesNotContain(ProjectValidator.Validate(p).Errors, x => x.Code is "STR_SIDE_DIST" or "STR_OPP_DIST");
+
+        // Frontali: ammesse solo con una delle due disabilitata (arretrata)
+        l2.PositionMm = l1.PositionMm;
+        Assert.Empty(StrappingAreaRules.SpreadStrappers(p, l2));                // non si spostano: decide l'utente
+        Assert.Contains(ProjectValidator.Validate(p).Errors, x => x.Code == "STR_FACING");
+        Assert.Contains(EquipmentCheck.Run(p, fix: false), c => c.Code == "STR_FACING");
+        l2.IsEnabled = false;
+        Assert.DoesNotContain(ProjectValidator.Validate(p).Errors, x => x.Code is "STR_FACING" or "STR_OPP_DIST");
+        Assert.DoesNotContain(EquipmentCheck.Run(p, fix: false), c => c.Code is "STR_FACING" or "STR_OPPOSITE");
+        l2.IsEnabled = true;
+        l2.PositionMm = l1.PositionMm + 2500;
 
         // Stesso lato a meno di 2 m: errore di validazione
         l2.Side = l1.Side;

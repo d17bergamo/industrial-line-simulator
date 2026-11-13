@@ -5,7 +5,7 @@ namespace LineSimulator.Core;
 /// <summary>
 /// Regole dell'area di legatura (sessione B):
 /// - legatrici/reggettatrici sullo stesso lato ad almeno 2 m l'una dall'altra; se una si avvicina troppo le altre vengono
-///   spinte (spostamento dinamico); macchine su lati opposti nessun vincolo;
+///   spinte (spostamento dinamico); su lati opposti almeno 500 mm, frontali solo con una delle due disabilitata (arretrata);
 /// - via rulli di svincolo tra la via di legatura e la via del trasferitore: il software decide se va sotto lo stesso
 ///   inverter della via di legatura (quando durante la legatura la testa del pacco deve entrare nello svincolo) o se resta
 ///   un inverter a sé;
@@ -15,6 +15,32 @@ public static class StrappingAreaRules
 {
     /// <summary>Distanza minima tra due macchine di legatura sullo stesso lato della linea.</summary>
     public const double MinSameSideDistanceMm = 2000;
+
+    /// <summary>
+    /// Macchine su lati opposti (regola dell'utente del 2026-11-13): se non sono frontali, almeno 500 mm tra i piani di legatura;
+    /// frontali (stessa posizione) solo se una delle due è disabilitata, cioè fisicamente arretrata.
+    /// </summary>
+    public const double MinOppositeSideDistanceMm = 500;
+
+    /// <summary>Tolleranza per considerare due macchine frontali (stessa posizione lungo la linea).</summary>
+    public const double FacingToleranceMm = 0.5;
+
+    /// <summary>Coppie di macchine abilitate su lati opposti a meno di 500 mm ma non frontali (si correggono distanziandole).</summary>
+    public static IEnumerable<(StrapperConfig A, StrapperConfig B)> OppositeSideConflicts(LineProject p) =>
+        OppositePairs(p).Where(x => Math.Abs(x.B.PositionMm - x.A.PositionMm) > FacingToleranceMm
+                                    && Math.Abs(x.B.PositionMm - x.A.PositionMm) < MinOppositeSideDistanceMm - 0.5);
+
+    /// <summary>Coppie di macchine frontali entrambe abilitate: una delle due va disabilitata (arretrata).</summary>
+    public static IEnumerable<(StrapperConfig A, StrapperConfig B)> FacingBothEnabled(LineProject p) =>
+        OppositePairs(p).Where(x => Math.Abs(x.B.PositionMm - x.A.PositionMm) <= FacingToleranceMm);
+
+    private static IEnumerable<(StrapperConfig A, StrapperConfig B)> OppositePairs(LineProject p)
+    {
+        var en = p.Strappers.Where(s => s.IsEnabled).OrderBy(s => s.PositionMm).ToList();
+        for (int i = 0; i < en.Count; i++)
+            for (int j = i + 1; j < en.Count && en[j].PositionMm - en[i].PositionMm < MinOppositeSideDistanceMm; j++)
+                if (en[i].Side != en[j].Side) yield return (en[i], en[j]);
+    }
 
     /// <summary>Rulli dello svincolo nei modelli.</summary>
     public const int ReleaseModuleRollers = 4;
@@ -39,6 +65,37 @@ public static class StrappingAreaRules
     /// della via e 3 m dal trasferitore (se serve anche la macchina spostata arretra o avanza). Restituisce le correzioni.
     /// </summary>
     public static List<string> SpreadStrappers(LineProject p, StrapperConfig? moved = null)
+    {
+        var done = new List<string>();
+        for (int round = 0; round < 4; round++)
+        {
+            int n = done.Count;
+            done.AddRange(SpreadSameSide(p, moved));
+            done.AddRange(SpreadOppositeSide(p, moved));
+            if (done.Count == n) break;
+        }
+        return done;
+    }
+
+    /// <summary>
+    /// Macchine abilitate su lati opposti a meno di 500 mm (non frontali): si allontana quella non spostata dall'utente
+    /// (di norma quella a valle avanza). Le frontali restano: una delle due va disabilitata dall'utente.
+    /// </summary>
+    private static List<string> SpreadOppositeSide(LineProject p, StrapperConfig? moved)
+    {
+        var done = new List<string>();
+        foreach (var (a, b) in OppositeSideConflicts(p).ToList())
+        {
+            const double d = MinOppositeSideDistanceMm;
+            var shift = b == moved ? a : b;
+            double before = shift.PositionMm;
+            shift.PositionMm = shift == b ? Math.Round(a.PositionMm + d) : Math.Round(b.PositionMm - d);
+            done.Add($"{shift.Id}: {before:0} → {shift.PositionMm:0} mm (almeno 500 mm dalla macchina sul lato opposto)");
+        }
+        return done;
+    }
+
+    private static List<string> SpreadSameSide(LineProject p, StrapperConfig? moved)
     {
         var done = new List<string>();
         double min = StrapperTrack.MinStrapperPositionMm(p);

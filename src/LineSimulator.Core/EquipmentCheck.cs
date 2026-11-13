@@ -134,6 +134,14 @@ public static class EquipmentCheck
             if (fix) StrappingAreaRules.SpreadStrappers(p);
             r.Add(new("STR_SIDE", $"Legatrici o reggettatrici sullo stesso lato a meno di 2 m: {(fix ? "distanziate" : "da distanziare")}.", fix, true));
         }
+        if (StrappingAreaRules.OppositeSideConflicts(p).Any())
+        {
+            var pairs = string.Join(", ", StrappingAreaRules.OppositeSideConflicts(p).Select(x => $"{x.A.Id}-{x.B.Id}"));
+            if (fix) StrappingAreaRules.SpreadStrappers(p);
+            r.Add(new("STR_OPPOSITE", $"Macchine su lati opposti a meno di 500 mm tra i piani di legatura ({pairs}): {(fix ? "distanziate" : "da distanziare")}.", fix, true));
+        }
+        foreach (var (a, b) in StrappingAreaRules.FacingBothEnabled(p))
+            r.Add(new("STR_FACING", $"{a.Id} e {b.Id} sono frontali (una di fronte all'altra) ed entrambe abilitate: disabilita una delle due, che resta arretrata.", false, true));
         if (r.Count == 0) r.Add(new("OK", "Equipaggiamenti a posto: nessuna anomalia.", false, false));
         return r;
     }
