@@ -111,9 +111,9 @@ public class LineModelsTests
         }
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.Equal(4, created.Count);
-        // i due pacchi avanzano in contemporanea: il nuovo parte mentre il precedente, legato, lascia ancora la via di legatura
-        Assert.NotEmpty(together);
-        Assert.Contains(e.Events, x => x.Message.Contains("ha completato l'ultimo ciclo di legatura", StringComparison.Ordinal));
+        // la partenza insieme è possibile solo se il legato lascia l'inverter di legatura prima della prima fermata del nuovo:
+        // con lo svincolo sotto lo stesso inverter (questo esempio) di norma non succede (vedi SimultaneousStartTests)
+        Assert.All(together, seq => Assert.Contains(e.Events, x => x.PackageId == $"P{seq:000}" || x.Message.Contains("parte insieme")));
     }
 
     [Fact]

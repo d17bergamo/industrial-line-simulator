@@ -111,28 +111,38 @@ public class TwoPickTransferTests
         Assert.DoesNotContain(ProjectValidator.Validate(p).Warnings, w => w.Code == "TRF_OVERHANG_MAX");
     }
 
-    /// <summary>Confronto di produttività due prese / corsa intera sui modelli (solo per le anteprime della CI).</summary>
+    /// <summary>Confronto di produttività (solo per le anteprime della CI): due prese / corsa intera e configurazioni dello svincolo.</summary>
     [Fact]
     public void ProductivityReport_ForThePreviews()
     {
         string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
-        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese;cicli trasferitore corsa intera;cicli due prese" };
+        var lines = new List<string> { "Modello;t/h corsa intera;t/h due prese (esempio);t/h svincolo motori commutabili;t/h parcheggio svincolo;partenze insieme esempio/commutabili/parcheggio" };
         foreach (var (name, create) in SampleProjects.All)
         {
-            double Tph(bool twoPick, out int cycles)
+            (double Tph, int Together) Run(Func<LineProject, bool> change)
             {
                 var p = create();
-                p.Transfer.ScaleAtMidStroke = twoPick;
+                if (!change(p)) return (double.NaN, 0);
                 var e = new SimulationEngine(p);
                 e.RunToCompletion();
-                cycles = e.Transfer.Cycles;
+                if (!e.CompletedNormally || e.Collisions > 0) return (double.NaN, 0);
                 var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
                 double span = exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS);
-                return span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
+                int together = e.Events.Count(x => x.Message.Contains("parte insieme"));
+                return (span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0, together);
             }
-            double a = Tph(false, out int ca), b = Tph(true, out int cb);
-            lines.Add($"{name};{a:0.0};{b:0.0};{ca};{cb}");
+            var full = Run(p => { p.Transfer.ScaleAtMidStroke = false; return true; });
+            var two = Run(_ => true);
+            var sw = Run(p =>
+            {
+                var m = StrappingAreaRules.ReleaseModules(p).LastOrDefault();
+                if (m == null) return false;
+                m.CommandZoneId = string.Empty; m.FollowsStrapping = true; return true;
+            });
+            var park = Run(p => SimultaneousStartTests.ApplyParking(p));
+            string F(double v) => double.IsNaN(v) ? "-" : v.ToString("0.0");
+            lines.Add($"{name};{F(full.Tph)};{F(two.Tph)};{F(sw.Tph)};{F(park.Tph)};{two.Together}/{sw.Together}/{park.Together}");
         }
         Directory.CreateDirectory(dir);
         File.WriteAllLines(Path.Combine(dir, "confronto-due-prese.csv"), lines);

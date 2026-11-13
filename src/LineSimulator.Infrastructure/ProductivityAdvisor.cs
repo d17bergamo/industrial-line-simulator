@@ -146,8 +146,32 @@ public static class ProductivityAdvisor
         foreach (var m in StrappingAreaRules.ReleaseModules(p).Where(m => !m.FollowsStrapping)
                      .Where(m => StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > (StrappingAreaRules.StrappingModule(p)?.EndMm ?? double.MaxValue) + 1e-6))
             yield return new Candidate("SWITCHABLE_" + m.Id, $"Motori commutabili sullo svincolo {m.Id}",
-                $"Lo svincolo {m.Id} ha il suo inverter; i motori vengono commutati sull'inverter di legatura solo mentre il pacco in legatura lo impegna per le legature di coda. Negli altri momenti porta via il pacco già legato.",
+                $"Lo svincolo {m.Id} ha il suo inverter; i motori vengono commutati sull'inverter di legatura solo mentre il pacco in legatura lo impegna per le legature di coda. Negli altri momenti porta via il pacco già legato, e il pacco nuovo può partire insieme a lui.",
                 q => { var s = q.Sections.First(x => x.Id == m.Id); s.FollowsStrapping = true; return true; });
+        // Parcheggio sullo svincolo (decisione dell'utente del 2026-11-13: inverter proprio e parcheggio si valutano sulla
+        // produttività, "una non esclude l'altra"): svincolo allungato a rulli interi finché ci sta il pacco più corto con i
+        // margini, inverter proprio; se la legatura lo impegna, motori commutabili sull'inverter di legatura.
+        foreach (var m in StrappingAreaRules.ReleaseModules(p).Where(m => !StrappingAreaRules.CanPark(p, m)).TakeLast(1))
+        {
+            double need = StrappingAreaRules.ShortestPackageMm(p) + StrappingAreaRules.ParkingMarginMm;
+            int rollers = (int)Math.Ceiling((need - m.LengthMm) / Math.Max(1, m.RollerPitchMm) - 1e-9);
+            bool engaged = StrappingAreaRules.RequiredStrappingHeadMaxMm(p) > (StrappingAreaRules.StrappingModule(p)?.EndMm ?? double.MaxValue) + 1e-6;
+            yield return new Candidate("PARK_" + m.Id, $"Parcheggio sullo svincolo {m.Id} (+{rollers} rulli, inverter proprio)",
+                $"Lo svincolo {m.Id} si allunga di {rollers} {(rollers == 1 ? "rullo" : "rulli")} ({(rollers * m.RollerPitchMm).ToString("0", It)} mm, la linea si allunga) e ha il suo inverter: " +
+                $"ci sta il pacco più corto ({StrappingAreaRules.ShortestPackageMm(p).ToString("0", It)} mm) con frenata e margine, così il pacco legato aspetta il trasferitore fuori dalla via di legatura." +
+                (engaged ? " Mentre il pacco in legatura lo impegna, i motori sono commutati sull'inverter di legatura." : ""),
+                q =>
+                {
+                    var s = q.Sections.First(x => x.Id == m.Id);
+                    double oldEnd = s.EndMm;
+                    LineReflow.Fit(s, s.StartMm, oldEnd + rollers * s.RollerPitchMm);
+                    LineReflow.AfterResize(q, s, oldEnd);
+                    ProjectNormalizer.AlignStopperToLastRoller(q);
+                    s.CommandZoneId = string.Empty;
+                    if (engaged) s.FollowsStrapping = true;
+                    return true;
+                });
+        }
         if (BankingOptions.ForSimulation(p).Banking == AccumulationMode.SingleBanking)
             yield return new Candidate("DOUBLE_BANKING", "Double banking",
                 "Il trasferitore preleva due pacchi per ciclo (il secondo sul fermo scomparente o fermato per posizionamento).",
