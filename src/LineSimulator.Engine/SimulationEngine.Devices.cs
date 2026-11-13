@@ -788,7 +788,8 @@ public sealed partial class SimulationEngine
     private HashSet<ScaleRuntime> ScalesUnder(double tailM, double headM) =>
         _scales.Where(s => Math.Min(s.EndM, headM) - Math.Max(s.StartM, tailM) > 0.05).ToHashSet();
 
-    private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.Banking(Project, p.Type) == AccumulationMode.DoubleBanking;
+    /// <summary>Scelta della tabella Pacchi (le tipologie che non ci stanno in due sono già riportate a single dalla preparazione).</summary>
+    private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.ChosenBanking(Project, p.Type) == AccumulationMode.DoubleBanking;
 
     private double StopTargetHead(StopRuntime s, PackageRuntime p)
     {

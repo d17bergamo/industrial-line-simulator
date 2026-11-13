@@ -106,7 +106,7 @@ public static class BankingOptions
         if (types.Count == 0) return (p.Simulation.Banking, p.Simulation.Heading);
         // Double banking attivo se è scelto per almeno una tipologia: la simulazione abbina solo i pacchi che lo hanno e ci
         // stanno (prima bastava una tipologia troppo lunga, riportata a single, per spegnerlo su tutta la simulazione)
-        var banking = types.Any(t => Banking(p, t) == AccumulationMode.DoubleBanking) ? AccumulationMode.DoubleBanking : AccumulationMode.SingleBanking;
+        var banking = types.Any(t => ChosenBanking(p, t) == AccumulationMode.DoubleBanking) ? AccumulationMode.DoubleBanking : AccumulationMode.SingleBanking;
         return (banking, ChosenHeading(p, types[0]));
     }
 
