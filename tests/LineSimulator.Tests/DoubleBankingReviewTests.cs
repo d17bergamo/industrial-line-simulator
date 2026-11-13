@@ -22,9 +22,10 @@ public class DoubleBankingReviewTests
         var details = new StringBuilder();
         foreach (var (name, create) in SampleProjects.All)
         {
-            foreach (var withStop in new[] { true, false })
+            foreach (var (withStop, longWait) in new[] { (true, false), (false, false), (true, true), (false, true) })
             {
                 var p = create();
+                if (longWait) p.Transfer.BatchWaitTimeoutS = 900;     // forza l'abbinamento di due pacchi per ciclo
                 bool hadStop = p.IntermediateStops.Any(s => s.IsEnabled);
                 if (withStop && !hadStop)
                 {
@@ -36,7 +37,7 @@ public class DoubleBankingReviewTests
                 }
                 if (!withStop) p.IntermediateStops.Clear();
                 BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
-                string cfg = withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)";
+                string cfg = (withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)") + (longWait ? ", attesa gruppo 900 s" : "");
                 var e = new SimulationEngine(p);
                 e.RunToCompletion();
                 var warn = e.Events.Where(x => x.Severity >= EventSeverity.Warning).ToList();
