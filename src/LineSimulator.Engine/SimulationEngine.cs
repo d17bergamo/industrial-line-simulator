@@ -451,8 +451,10 @@ public sealed partial class SimulationEngine : ILogicContext
             // ciclo di legatura, quindi i due pacchi possono avanzare insieme
             // ...purché davanti al precedente non ci sia ancora un pacco sulla via rulli in attesa del trasferitore: con l'inverter
             // condiviso, fermandosi per la legatura il nuovo pacco fermerebbe anche il precedente, magari dentro l'area del trasferitore
+            // (con i motori commutabili sullo svincolo vale la regola precedente: lo svincolo ha un inverter suo)
             bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done
-                            && !_active.Any(o => o.OnRollers && o.Sequence < prev.Sequence);
+                            && !_active.Any(o => o.OnRollers && o.Sequence < prev.Sequence)
+                            && !Project.Sections.Any(s => s.FollowsStrapping);
             bool passed = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
             if (!strapped && !passed) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
@@ -686,13 +688,15 @@ public sealed partial class SimulationEngine : ILogicContext
             }
         }
         // Fotocellula di arresto davanti al trasferitore: con il trasferitore sollevato il materiale si ferma sulla via a rulli
-        bool transferRaised = Transfer.State is TransferState.Lifting or TransferState.Translating or TransferState.WaitingDestination
-                              || (Transfer.TwoPick && Transfer.State != TransferState.Home);   // a due prese le forche ripassano sotto la linea
+        // il materiale resta fermo finché il trasferitore non è tornato a riposo: al ritorno le forche ripassano sotto la linea
+        bool transferRaised = Transfer.State != TransferState.Home;
         foreach (var pc in _photocells)
         {
             if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output) continue;
             // In single banking il pacco si ferma anche se nell'area del trasferitore c'è già un altro pacco (consenso "fermo libero")
-            bool areaBusy = !DoubleBanking && _active.Any(o => o != pc.OutputPackage && o.OnRollers
+            // (contano solo i pacchi già usciti dalla zona comandata: quello ancora a cavallo deve poter proseguire)
+            double zoneEnd = _zoneById.TryGetValue(pc.ControlledZoneId, out var cz) ? cz.Info.EndM : Transfer.StartM;
+            bool areaBusy = !DoubleBanking && _active.Any(o => o != pc.OutputPackage && o.OnRollers && o.TailM >= zoneEnd - 1e-6
                                                                && o.HeadM > Transfer.StartM + 1e-6 && o.TailM < Transfer.EndM - 1e-6);
             if (!transferRaised && !areaBusy) continue;
             if (_requests.TryGetValue(pc.ControlledZoneId, out var req))
