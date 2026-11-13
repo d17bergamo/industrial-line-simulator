@@ -80,12 +80,15 @@ public class DoubleBankingReviewTests
         BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
         var e = new SimulationEngine(p);
         e.RunToCompletion();
-        Assert.True(e.CompletedNormally, e.FinishReason);
+        string Dump() => string.Join("\n", e.Events.Where(x => x.Severity >= EventSeverity.Info && x.TimeS <= (e.Events.LastOrDefault()?.TimeS ?? 0))
+                                                    .TakeLast(45).Select(x => x.ToString()));
+        Assert.True(e.CompletedNormally, e.FinishReason + "\n" + Dump());
         Assert.Equal(AccumulationMode.DoubleBanking, e.EffectiveBanking);
         var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning).Select(x => x.ToString()).Take(10).ToList();
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Equal(0, e.Collisions);
-        Assert.Contains(e.Events, x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento ("));
+        Assert.True(e.Events.Any(x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento (")),
+            "nessun ciclo con due pacchi\n" + string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting or SimEventType.StopperPhase or SimEventType.InfeedWaiting || x.Message.Contains("fermo") || x.Message.Contains("POS")).Take(45).Select(x => x.ToString())));
         Assert.True(e.Transfer.Cycles < e.Packages.Count, $"{e.Transfer.Cycles} cicli per {e.Packages.Count} pacchi");
     }
 }

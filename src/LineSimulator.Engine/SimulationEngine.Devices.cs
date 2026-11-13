@@ -774,8 +774,8 @@ public sealed partial class SimulationEngine
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return -1;
         if (!FitsAtStop(p, idx - 1)) return -1;
-        // i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura)
-        if (first != null && _scales.Count > 0)
+        // trasferitore a due prese: i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura)
+        if (first != null && _scales.Count > 0 && Transfer.TwoPick)
         {
             double head = StopTargetHead(_stops[idx - 1], p);
             var mine = ScalesUnder(head - p.LengthM, head);
