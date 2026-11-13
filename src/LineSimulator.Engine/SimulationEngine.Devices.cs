@@ -972,7 +972,9 @@ public sealed partial class SimulationEngine
     private List<PackageRuntime>? ReadyBatch(double t)
     {
         // Mai sollevare mentre un altro pacco sta entrando nell'area del trasferitore: prima si ferma (e, se ci sta, entra nel gruppo)
-        if (_active.Any(x => x.OnRollers && Math.Abs(x.Velocity) > 1e-3 && x.HeadM > Transfer.StartM + 1e-6 && x.TailM < Transfer.EndM - 1e-6))
+        // né mentre un pacco in arrivo è così vicino da non potersi più fermare prima dell'area (spazio di frenata + 0,5 m)
+        if (_active.Any(x => x.OnRollers && Math.Abs(x.Velocity) > 1e-3 && x.TailM < Transfer.EndM - 1e-6
+                             && x.HeadM > Transfer.StartM - (x.Velocity * x.Velocity / (2 * 0.8) + 0.5)))
             return null;
         if (_stops.Count == 0)
             return Stopper.State == StopperState.Aligned && Stopper.Package != null ? new List<PackageRuntime> { Stopper.Package } : null;
