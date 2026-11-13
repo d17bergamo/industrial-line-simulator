@@ -773,8 +773,20 @@ public sealed partial class SimulationEngine
         // altrimenti aspetta e andrà da solo sul fermo finale
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return -1;
-        return FitsAtStop(p, idx - 1) ? idx : -1;
+        if (!FitsAtStop(p, idx - 1)) return -1;
+        // i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura)
+        if (first != null && _scales.Count > 0)
+        {
+            double head = StopTargetHead(_stops[idx - 1], p);
+            var mine = ScalesUnder(head - p.LengthM, head);
+            var theirs = ScalesUnder(Stopper.PositionM - first.LengthM, Stopper.PositionM);
+            if (mine.Overlaps(theirs)) return -1;
+        }
+        return idx;
     }
+
+    private HashSet<ScaleRuntime> ScalesUnder(double tailM, double headM) =>
+        _scales.Where(s => Math.Min(s.EndM, headM) - Math.Max(s.StartM, tailM) > 0.05).ToHashSet();
 
     private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.Banking(Project, p.Type) == AccumulationMode.DoubleBanking;
 
