@@ -142,7 +142,16 @@ public static class EquipmentCheck
         }
         foreach (var (a, b) in StrappingAreaRules.FacingBothEnabled(p))
             r.Add(new("STR_FACING", $"{a.Id} e {b.Id} sono frontali (una di fronte all'altra) ed entrambe abilitate: disabilita una delle due, che resta arretrata.", false, true));
-        if (r.Count == 0) r.Add(new("OK", "Equipaggiamenti a posto: nessuna anomalia.", false, false));
+        // Controllo delle fotocellule: superflue (da togliere a mano) e quelle che si potrebbero avvicinare al punto di arresto
+        var audit = PhotocellAudit.Run(p);
+        foreach (var a in audit.Where(a => a.Verdict == PhotocellVerdict.Superfluous))
+            r.Add(new("PC_SUPERFLUOUS", $"Fotocellula {a.Photocell.Id} superflua: {a.Note}.", false, true));
+        var far = audit.Where(a => a.Verdict == PhotocellVerdict.AboveMinimum).ToList();
+        bool anyProblem = r.Any(i => i.IsProblem);
+        if (far.Count > 0)
+            r.Add(new("PC_ABOVE_MIN", "Fotocellule più lontane del necessario dal punto di arresto (si possono avvicinare, il pacco frena più tardi): " +
+                string.Join("; ", far.Select(a => $"{a.Photocell.Id} +{a.DistanceMm - a.RequiredMm:0} mm da {a.TargetName}")) + ".", false, false));
+        if (!anyProblem) r.Insert(0, new("OK", "Equipaggiamenti a posto: nessuna anomalia.", false, false));
         return r;
     }
 }

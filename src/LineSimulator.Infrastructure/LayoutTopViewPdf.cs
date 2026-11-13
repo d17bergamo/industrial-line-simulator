@@ -340,21 +340,26 @@ public static class LayoutTopViewPdf
         var pcs = p.Photocells.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).ToList();
         var strappers = p.Strappers.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).ToList();
         var stops = Stops(p);
-        t.Table("Fotocellule", new[] { ("Sigla", 30.0), ("Nome", 110.0), ("Posizione [mm]", 52.0), ("Funzione", 120.0), ("Dalla precedente", 62.0),
-            ("Punto di arresto", 95.0), ("Distanza [mm]", 50.0), ("Richiesta [mm]", 53.0), ("Fermo più vicino a valle", 105.0), ("Legatrice più vicina", 93.0) },
+        var audit = PhotocellAudit.Run(p).ToDictionary(a => a.Photocell);
+        t.Table("Fotocellule", new[] { ("Sigla", 30.0), ("Nome", 95.0), ("Posizione [mm]", 52.0), ("Perché c'è", 200.0), ("Dalla precedente", 62.0),
+            ("Punto di arresto", 85.0), ("Distanza [mm]", 50.0), ("Minima [mm]", 50.0), ("Esito", 146.0) },
             pcs.Select((pc, k) =>
             {
                 double? target = PhotocellRules.TargetMm(p, pc);
                 string targetName = target == null ? "-" : NameAt(p, stops, zones, target.Value);
-                var nextStop = stops.Where(s => s.PosMm >= pc.PositionMm - 1e-6).Select(s => ((string, double)?)s).FirstOrDefault();
-                var nearStr = strappers.OrderBy(s => Math.Abs(s.PositionMm - pc.PositionMm)).FirstOrDefault();
                 return new[]
                 {
-                    Short(pc), Nm(pc), Mm(pc.PositionMm), Purpose(pc), k == 0 ? "-" : Mm(pc.PositionMm - pcs[k - 1].PositionMm),
+                    Short(pc), Nm(pc), Mm(pc.PositionMm), audit.TryGetValue(pc, out var au) ? au.Role : Purpose(pc), k == 0 ? "-" : Mm(pc.PositionMm - pcs[k - 1].PositionMm),
                     targetName, target == null ? "-" : Mm(target.Value - pc.PositionMm),
                     target == null ? "-" : Mm(PhotocellRules.RequiredDistanceMm(p, pc)),
-                    nextStop == null ? "-" : $"{nextStop.Value.Item1}: {Mm(nextStop.Value.Item2 - pc.PositionMm)}",
-                    nearStr == null ? "-" : $"{Short(nearStr)}: {SignedMm(nearStr.PositionMm - pc.PositionMm)}"
+                    au == null ? "-" : au.Verdict switch
+                    {
+                        PhotocellVerdict.AtMinimum => "alla distanza minima",
+                        PhotocellVerdict.AboveMinimum => $"+{au.DistanceMm - au.RequiredMm:0} mm: si può avvicinare",
+                        PhotocellVerdict.BelowMinimum => $"troppo vicina ({au.RequiredMm - au.DistanceMm:0} mm)",
+                        PhotocellVerdict.Superfluous => "SUPERFLUA: " + au.Note,
+                        _ => string.IsNullOrEmpty(au.Note) ? "ok" : au.Note
+                    }
                 };
             }));
 
