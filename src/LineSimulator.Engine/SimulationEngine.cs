@@ -435,8 +435,9 @@ public sealed partial class SimulationEngine : ILogicContext
 
     /// <summary>
     /// Ingresso "un pacco alla volta nella via rulli di legatura": il nuovo pacco si crea a monte della linea quando la coda del
-    /// precedente libera la fotocellula di ingresso della via rulli di legatura, più il ritardo impostato; avanza solo quando la
-    /// coda del precedente libera la fotocellula di uscita della via rulli di legatura.
+    /// precedente libera la fotocellula di ingresso della via rulli di legatura, più il ritardo impostato. Il pacco in attesa su FC0
+    /// avanza appena il precedente ha completato l'ultimo ciclo di legatura (i due pacchi possono avanzare insieme), oppure,
+    /// senza legatura, quando la coda del precedente libera la fotocellula di uscita della via rulli di legatura.
     /// </summary>
     private void InfeedAfterStrapping(double t)
     {
@@ -446,13 +447,17 @@ public sealed partial class SimulationEngine : ILogicContext
         if (waiting != null)
         {
             var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
-            bool clear = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
-            if (!clear) { InfeedWaitingS += Dt; return; }
+            // Regola dell'utente (2026-11-13): il pacco in attesa su FC0 avanza quando il precedente ha completato l'ultimo
+            // ciclo di legatura, quindi i due pacchi possono avanzare insieme
+            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done;
+            bool passed = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
+            if (!strapped && !passed) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
             _lastProgressTime = t;
             Emit(SimEventType.InfeedWaiting, EventSeverity.Info,
                 prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
-                             : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
+                : strapped && !passed ? $"{waiting.Id} avanza insieme a {prev.Id}: {prev.Id} ha completato l'ultimo ciclo di legatura"
+                : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
             return;
         }
         if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;

@@ -72,7 +72,7 @@ public sealed class PackageType : ComponentBase
 /// <summary>Regola di ingresso dei pacchi in linea.</summary>
 public enum InfeedMode
 {
-    /// <summary>Un pacco alla volta nella via rulli di legatura (creazione dopo la fotocellula di ingresso, avanzamento dopo quella di uscita).</summary>
+    /// <summary>Un pacco alla volta in legatura (creazione dopo la fotocellula di ingresso, avanzamento a legatura del precedente completata).</summary>
     AfterStrapping = 0,
     /// <summary>Ingresso a intervallo fisso con distanza minima (comportamento delle versioni precedenti).</summary>
     FixedInterval = 1
@@ -92,8 +92,8 @@ public sealed class InfeedConfig
 
     /// <summary>
     /// Regola di ingresso. Predefinita: il nuovo pacco si crea quando la coda del precedente libera la fotocellula di ingresso
-    /// della via rulli di legatura (+ <see cref="NewPackageDelayS"/>) e avanza solo quando la coda del precedente libera
-    /// la fotocellula di uscita della via rulli di legatura.
+    /// della via rulli di legatura (+ <see cref="NewPackageDelayS"/>) e, in attesa su FC0, avanza quando il precedente ha
+    /// completato l'ultimo ciclo di legatura (i due pacchi possono avanzare insieme).
     /// </summary>
     [UiProperty("Regola di ingresso pacchi", "", "Ingresso", Order = 2)]
     public InfeedMode Mode { get; set; } = InfeedMode.AfterStrapping;

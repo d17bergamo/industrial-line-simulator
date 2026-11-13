@@ -70,7 +70,7 @@ public class LineModelsTests
     }
 
     [Fact]
-    public void Infeed_NewPackageCreatedAfterEntryPhotocellPlusDelay_AdvancesAfterExitPhotocell()
+    public void Infeed_NewPackageCreatedAfterEntryPhotocellPlusDelay_AdvancesWhenPreviousIsStrapped()
     {
         var p = SampleProjects.CreateTwoStrappers12m();
         p.Infeed.PackageCount = 4;
@@ -80,6 +80,7 @@ public class LineModelsTests
         var clearedEntry = new Dictionary<int, double>();
         var created = new Dictionary<int, double>();
         var moved = new HashSet<int>();
+        var together = new HashSet<int>();
         while (e.Step())
         {
             double t = e.Time;
@@ -100,14 +101,19 @@ public class LineModelsTests
                     if (k.Sequence > 1)
                     {
                         var prev = e.Packages.Single(x => x.Sequence == k.Sequence - 1);
-                        Assert.True(!prev.OnRollers || prev.TailM > exit - 0.01, $"{k.Id} avanza con la coda di {prev.Id} a {prev.TailM:0.00} m (uscita {exit:0.00} m)");
+                        // il pacco in attesa su FC0 avanza quando il precedente ha completato l'ultimo ciclo di legatura
+                        Assert.True(!prev.OnRollers || prev.StrapStatus == StrapStatus.Done || prev.TailM > exit - 0.01,
+                            $"{k.Id} avanza con {prev.Id} non ancora legato (coda a {prev.TailM:0.00} m)");
+                        if (prev.OnRollers && prev.TailM <= exit - 0.01) together.Add(k.Sequence);
                     }
                 }
             }
         }
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.Equal(4, created.Count);
-        Assert.Contains(e.Events, x => x.Message.Contains(" avanza: la coda di ", StringComparison.Ordinal) && x.Message.Contains("ha liberato", StringComparison.Ordinal));
+        // i due pacchi avanzano in contemporanea: il nuovo parte mentre il precedente, legato, lascia ancora la via di legatura
+        Assert.NotEmpty(together);
+        Assert.Contains(e.Events, x => x.Message.Contains("ha completato l'ultimo ciclo di legatura", StringComparison.Ordinal));
     }
 
     [Fact]

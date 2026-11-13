@@ -47,12 +47,23 @@ public static class StrapperTrack
     /// <summary>Inizio della via rulli di legatura (prima via), null se non ci sono vie.</summary>
     public static double? TrackStartMm(LineProject p) => p.Sections.Count == 0 ? null : p.Sections.Min(s => s.StartMm);
 
+    /// <summary>Distanza minima della prima legatrice da FC0 (decisa con l'utente il 2026-11-13).</summary>
+    public const double MinStrapperFromEntryMm = 1500;
+
     /// <summary>
-    /// Posizione minima ammessa per una legatrice: 1 m dall'inizio della via e spazio per la regola dell'encoder
-    /// (fotocellula di riferimento ≥ FC0 + 100 mm, encoder 300 mm dopo, encoder ≥ 1 m prima della legatrice).
+    /// Posizione minima ammessa per una legatrice: 1 m dall'inizio della via, almeno 1500 mm da FC0 e comunque lo spazio
+    /// per la regola dell'encoder (fotocellula di riferimento ≥ FC0 + 100 mm, encoder 300 mm dopo, encoder ≥ 1 m prima della legatrice).
     /// </summary>
-    public static double MinStrapperPositionMm(LineProject p) => Math.Max((TrackStartMm(p) ?? 0) + MinStrapperFromTrackStartMm,
-        StrappingAreaRules.MinReferencePhotocellMm(p) + EncoderRule.ReferenceOffsetMm + EncoderRule.MinToStrapperMm);
+    public static double MinStrapperPositionMm(LineProject p)
+    {
+        double fc0 = StrappingAreaRules.MinReferencePhotocellMm(p) - StrappingAreaRules.MinReferenceAfterEntryMm;
+        return new[]
+        {
+            (TrackStartMm(p) ?? 0) + MinStrapperFromTrackStartMm,
+            fc0 + MinStrapperFromEntryMm,
+            StrappingAreaRules.MinReferencePhotocellMm(p) + EncoderRule.ReferenceOffsetMm + EncoderRule.MinToStrapperMm
+        }.Max();
+    }
 
     /// <summary>Riporta a 1 m dall'inizio della via le legatrici più vicine. Restituisce true se ne ha spostata qualcuna.</summary>
     public static bool ClampStrappersToTrackStart(LineProject p)
