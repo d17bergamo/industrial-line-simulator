@@ -28,7 +28,7 @@ public class DoubleBankingReviewTests
                 if (close)
                 {
                     // trasferitore collo di bottiglia: pesatura lunga, i pacchi legati si accumulano davanti al trasferitore
-                    foreach (var b in p.Scales) b.StabilizationTimeS = 150;
+                    foreach (var b in p.Scales) { b.StabilizationTimeS = 150; b.ConfirmTimeoutS = 400; }
                 }
                 bool hadStop = p.IntermediateStops.Any(s => s.IsEnabled);
                 if (withStop && !hadStop)
@@ -76,7 +76,7 @@ public class DoubleBankingReviewTests
     {
         var p = SampleProjects.All.Single(m => m.Name.StartsWith("3 legatrici")).Factory();
         if (!withStop) p.IntermediateStops.Clear();
-        foreach (var b in p.Scales) b.StabilizationTimeS = 150;
+        foreach (var b in p.Scales) { b.StabilizationTimeS = 150; b.ConfirmTimeoutS = 400; }
         BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
         var e = new SimulationEngine(p);
         e.RunToCompletion();
