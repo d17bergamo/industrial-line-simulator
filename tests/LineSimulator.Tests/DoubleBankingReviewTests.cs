@@ -18,14 +18,21 @@ public class DoubleBankingReviewTests
         string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
         var sb = new StringBuilder();
-        sb.AppendLine("Modello;Configurazione;Esito;t/h;Collisioni;Avvisi;Cicli trasferitore;Pacchi");
+        sb.AppendLine("Modello;Configurazione;Esito;t/h;Collisioni;Avvisi;Cicli trasferitore;Cicli con 2 pacchi;Pacchi");
         var details = new StringBuilder();
         foreach (var (name, create) in SampleProjects.All)
         {
-            foreach (var (withStop, longWait) in new[] { (true, false), (false, false), (true, true), (false, true) })
+            foreach (var (withStop, close) in new[] { (true, false), (false, false), (true, true), (false, true) })
             {
                 var p = create();
-                if (longWait) p.Transfer.BatchWaitTimeoutS = 900;     // forza l'abbinamento di due pacchi per ciclo
+                if (close)
+                {
+                    // pacchi ravvicinati: legatrici disabilitate e ingresso a intervallo fisso, così il secondo pacco arriva
+                    // mentre il primo è ancora sul fermo e il trasferitore può prenderli insieme
+                    foreach (var st in p.Strappers) st.IsEnabled = false;
+                    p.Infeed.Mode = InfeedMode.FixedInterval;
+                    p.Infeed.IntervalS = 15;
+                }
                 bool hadStop = p.IntermediateStops.Any(s => s.IsEnabled);
                 if (withStop && !hadStop)
                 {
@@ -37,15 +44,17 @@ public class DoubleBankingReviewTests
                 }
                 if (!withStop) p.IntermediateStops.Clear();
                 BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
-                string cfg = (withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)") + (longWait ? ", attesa gruppo 900 s" : "");
+                string cfg = (withStop ? "double banking con fermo scomparente" : "double banking senza fermo (posizione virtuale)") + (close ? ", pacchi ravvicinati (senza legatura, ogni 15 s)" : "");
                 var e = new SimulationEngine(p);
                 e.RunToCompletion();
                 var warn = e.Events.Where(x => x.Severity >= EventSeverity.Warning).ToList();
+                // cicli con due pacchi dalla via rulli: "Trasferitore: sollevamento (P001+P002)"
+                int pairs = e.Events.Count(x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento ("));
                 var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
                 double span = exits.Count > 0 ? exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS) : 0;
                 double tph = span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
                 string outcome = !e.CompletedNormally ? "NON COMPLETATA: " + e.FinishReason : e.Collisions > 0 ? "collisioni" : warn.Count > 0 ? "avvisi" : "pulita";
-                sb.AppendLine($"{name};{cfg};{outcome};{tph:0.0};{e.Collisions};{warn.Count};{e.Transfer.Cycles};{exits.Count}/{e.Packages.Count}");
+                sb.AppendLine($"{name};{cfg};{outcome};{tph:0.0};{e.Collisions};{warn.Count};{e.Transfer.Cycles};{pairs};{exits.Count}/{e.Packages.Count}");
                 if (warn.Count > 0 || !e.CompletedNormally)
                 {
                     var first = warn.FirstOrDefault();
