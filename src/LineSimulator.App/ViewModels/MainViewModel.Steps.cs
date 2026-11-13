@@ -42,6 +42,14 @@ public sealed partial class MainViewModel
     /// <summary>Passo 3: layout e simulazione nella stessa schermata.</summary>
     public bool IsStepLayout => _step == WorkStep.Layout;
     /// <summary>Passo 2: dati dell'area (obiettivo, azionamenti, tempi per famiglia).</summary>
+    /// <summary>Dopo il cambio di tema ridisegna le scene 3D (sfondo e colori leggibili nei due temi).</summary>
+    public void RefreshTheme()
+    {
+        LayoutScene.Build(_project);
+        LayoutScene.Highlight(SelectedNode?.Model);
+        RefreshPackages();
+    }
+
     public bool IsStepCycle => _step == WorkStep.Area;
 
     /// <summary>Va a un passo: "Packages" apre la schermata Pacchi, gli altri i passi della schermata Layout e simulazione.</summary>

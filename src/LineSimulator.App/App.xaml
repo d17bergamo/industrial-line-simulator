@@ -3,10 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
+        <!-- Valori iniziali (chiaro): Theme.Apply li sostituisce all'avvio e al cambio di tema -->
         <SolidColorBrush x:Key="Accent" Color="#0B5FC0"/>
         <SolidColorBrush x:Key="PanelBg" Color="#F4F6F8"/>
         <SolidColorBrush x:Key="Border" Color="#E3E6EA"/>
         <SolidColorBrush x:Key="HeaderBg" Color="#26323D"/>
+        <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Text" Color="#1B2430"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#5B6673"/>
+        <SolidColorBrush x:Key="HoverBg" Color="#E6F0FC"/>
+        <SolidColorBrush x:Key="SoftBg" Color="#F7F9FB"/>
+        <SolidColorBrush x:Key="Overlay" Color="#E6FFFFFF"/>
 
         <Style x:Key="ToolButton" TargetType="Button">
             <Setter Property="Margin" Value="2"/>
@@ -14,15 +21,15 @@
             <Setter Property="MinWidth" Value="28"/>
             <Setter Property="Height" Value="34"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="#1B2430"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="White" BorderBrush="#D5DAE0" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#F0F4F9"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBg}"/></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -37,13 +44,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="White" BorderBrush="#E3E6EA" BorderThickness="1.5" CornerRadius="14" Padding="16">
+                        <Border x:Name="Bd" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1.5" CornerRadius="14" Padding="16">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#0B5FC0"/>
-                                <Setter TargetName="Bd" Property="Background" Value="#F7FAFE"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBg}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -63,11 +70,11 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="White" BorderBrush="#0B5FC0" BorderThickness="1.5" CornerRadius="19" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{DynamicResource Surface}" BorderBrush="#0B5FC0" BorderThickness="1.5" CornerRadius="19" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#E6F0FC"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBg}"/></Trigger>
                             <Trigger Property="Tag" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#0B5FC0"/>
                                 <Setter Property="Foreground" Value="White"/>
@@ -115,7 +122,7 @@
         </Style>
         <Style x:Key="SegmentButton" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="#5B6673"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -135,7 +142,7 @@
             <Setter Property="Margin" Value="0,3"/>
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="#5B6673"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -145,7 +152,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#EEF2F7"/></Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E6F0FC"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBg}"/>
                                 <Setter Property="Foreground" Value="#0B5FC0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -168,7 +175,7 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="TabItem">
-                                    <Border x:Name="Bd" Padding="16,10" BorderThickness="0,0,0,2" BorderBrush="Transparent" Cursor="Hand" TextElement.Foreground="#5B6673" TextElement.FontWeight="Medium">
+                                    <Border x:Name="Bd" Padding="16,10" BorderThickness="0,0,0,2" BorderBrush="Transparent" Cursor="Hand" TextElement.Foreground="{DynamicResource TextMuted}" TextElement.FontWeight="Medium">
                                         <ContentPresenter ContentSource="Header"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
@@ -192,7 +199,7 @@
         <Style TargetType="TextBlock" x:Key="KpiValue">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
         </Style>
         <Style TargetType="TextBlock" x:Key="KpiLabel">
             <Setter Property="FontSize" Value="11"/>
