@@ -690,8 +690,16 @@ public sealed partial class SimulationEngine : ILogicContext
                               || (Transfer.TwoPick && Transfer.State != TransferState.Home);   // a due prese le forche ripassano sotto la linea
         foreach (var pc in _photocells)
         {
-            if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output || !transferRaised) continue;
-            if (_requests.TryGetValue(pc.ControlledZoneId, out var req)) { req.Stop = true; req.StopReasons.Add($"trasferitore sollevato ({pc.Id})"); }
+            if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output) continue;
+            // In single banking il pacco si ferma anche se nell'area del trasferitore c'è già un altro pacco (consenso "fermo libero")
+            bool areaBusy = !DoubleBanking && _active.Any(o => o != pc.OutputPackage && o.OnRollers
+                                                               && o.HeadM > Transfer.StartM + 1e-6 && o.TailM < Transfer.EndM - 1e-6);
+            if (!transferRaised && !areaBusy) continue;
+            if (_requests.TryGetValue(pc.ControlledZoneId, out var req))
+            {
+                req.Stop = true;
+                req.StopReasons.Add(transferRaised ? $"trasferitore sollevato ({pc.Id})" : $"area del trasferitore occupata ({pc.Id})");
+            }
         }
         LogicEvaluator.ApplyRules(Project.Rules, this, _requests, _nextSignals);
         (_signals, _nextSignals) = (_nextSignals, _signals);
