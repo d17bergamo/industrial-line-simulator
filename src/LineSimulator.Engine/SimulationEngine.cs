@@ -928,6 +928,9 @@ public sealed partial class SimulationEngine : ILogicContext
         // Svincolo con motori commutabili: parte con il consenso "pacco legato in uscita" della stazione, così è già in
         // marcia quando il pacco arriva (la fotocellula di uscita legatura sta proprio sul confine e non darebbe il tempo di accelerare)
         if (Station != null && Station.State == StationState.Releasing && Station.Package != null && Followers.Contains(z)) return false;
+        // ...e resta in marcia anche dopo che la stazione è passata al pacco nuovo (partenza insieme), finché il pacco legato
+        // non l'ha attraversato: altrimenti si fermerebbe e ripartirebbe di colpo sotto il pacco (slittamento)
+        if (Followers.Contains(z) && _releasedFromStation.Any(r => r.OnRollers && r.TailM < z.Info.EndM - 1e-9)) return false;
         if (!z.SensorsEmpty) return false;
         // Il primo modulo resta in marcia per accogliere il pacco che ha il consenso ad avanzare dall'ingresso
         if (z.Info.StartM <= Topology.LineStartM + 1e-6 && _active.Any(p => p.InfeedReleased && p.OnRollers && p.TailM < z.Info.StartM + 1e-6 && p.HeadM <= z.Info.EndM))
