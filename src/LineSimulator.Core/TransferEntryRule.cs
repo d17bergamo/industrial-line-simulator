@@ -38,7 +38,9 @@ public static class TransferEntryRule
 
     /// <summary>Distanza della fotocellula di intestatura dopo un fermo scomparente di coda.</summary>
     public const double TailPhotocellAfterStopMm = 100;
-    private static string TailKey(string stopId) => stopId + ":coda";
+    /// <summary>Suffisso della fotocellula di intestatura di coda di un fermo scomparente.</summary>
+    public const string TailKeySuffix = ":coda";
+    private static string TailKey(string stopId) => stopId + TailKeySuffix;
 
     /// <summary>Punto più a monte occupato da un pacco fermo sul trasferitore, fra tutte le combinazioni (mm in linea).</summary>
     public static double UpstreamFootprintMm(LineProject p)

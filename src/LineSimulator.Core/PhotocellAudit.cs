@@ -37,6 +37,10 @@ public static class PhotocellAudit
     public static string Role(PhotocellConfig pc)
     {
         if (pc.IsEntryPhotocell) return "Ingresso (FC0): identifica e misura il pacco, consenso di ingresso";
+        if (!string.IsNullOrEmpty(pc.CommandsStopId) && !pc.ActsAsTransferStop)
+            return pc.CommandsStopId.EndsWith(TransferEntryRule.TailKeySuffix, StringComparison.Ordinal)
+                ? $"Intestatura di coda: ferma il pacco e solleva il fermo {pc.CommandsStopId[..^TransferEntryRule.TailKeySuffix.Length]}"
+                : $"Comando del fermo scomparente {pc.CommandsStopId}";
         string r = pc.Purpose switch
         {
             PhotocellPurpose.StrappingReference => "Riferimento encoder: posizione del pacco per le legatrici",
@@ -78,7 +82,8 @@ public static class PhotocellAudit
                 rows.Add(new(pc, role, tn, dist, req, v, note));
                 continue;
             }
-            bool process = pc.IsEntryPhotocell || pc.Purpose != PhotocellPurpose.Generic || pc.Action != PhotocellAction.None;
+            bool process = pc.IsEntryPhotocell || pc.Purpose != PhotocellPurpose.Generic || pc.Action != PhotocellAction.None
+                           || !string.IsNullOrEmpty(pc.CommandsStopId);
             bool used = Regex.IsMatch(refs, $@"\b{Regex.Escape(pc.Id)}\b");
             rows.Add(process || used
                 ? new(pc, role, null, null, null, PhotocellVerdict.Ok, used && !process ? "usata dalle regole logiche" : "")
