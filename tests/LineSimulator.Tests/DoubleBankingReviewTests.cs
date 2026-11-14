@@ -84,8 +84,7 @@ public class DoubleBankingReviewTests
                                                     .TakeLast(45).Select(x => x.ToString()));
         Assert.True(e.CompletedNormally, e.FinishReason + "\n" + Dump());
         Assert.Equal(AccumulationMode.DoubleBanking, e.EffectiveBanking);
-        // (resta da sistemare un piccolo slittamento del secondo pacco in posizionamento sul fermo scomparente)
-        var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning && x.Type != SimEventType.Slip).Select(x => x.ToString()).Take(10).ToList();
+        var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning).Select(x => x.ToString()).Take(10).ToList();
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Equal(0, e.Collisions);
         if (!withStop)
@@ -97,5 +96,34 @@ public class DoubleBankingReviewTests
         Assert.True(e.Events.Any(x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento (")),
             "nessun ciclo con due pacchi\n" + string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting or SimEventType.InfeedWaiting || x.Message.Contains("fermo") || x.Message.Contains("POS")).Take(45).Select(x => x.ToString())));
         Assert.True(e.Transfer.Cycles < e.Packages.Count, $"{e.Transfer.Cycles} cicli per {e.Packages.Count} pacchi");
+    }
+
+    /// <summary>
+    /// Revisione 2026-11-14: il secondo pacco in double banking non deve slittare sui rulli. Prima la via del trasferitore
+    /// restava in velocità bassa (fotocellula di rallentamento occupata dal primo pacco già in battuta sul fermo finale) e il
+    /// secondo pacco ci entrava a velocità alta: 0,69 m/s di differenza. Il rallentamento ora vale solo per il pacco in arrivo.
+    /// </summary>
+    [Theory]
+    [InlineData("3 legatrici")]
+    [InlineData("2 legatrici - pacchi 6/9/12/18 m")]
+    [InlineData("2 legatrici - pacchi 6/9/12 m")]
+    [InlineData("1 legatrice")]
+    public void DoubleBanking_SecondPackage_NeverSlipsOnTheRollers(string model)
+    {
+        var p = SampleProjects.All.Single(m => m.Name.StartsWith(model)).Factory();
+        foreach (var b in p.Scales) { b.StabilizationTimeS = 150; b.ConfirmTimeoutS = 400; }
+        if (!p.IntermediateStops.Any(s => s.IsEnabled))
+            p.IntermediateStops.Add(new IntermediateStopConfig
+            {
+                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
+                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+            });
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        var slips = e.Events.Where(x => x.Type == SimEventType.Slip).Select(x => x.ToString()).Take(10).ToList();
+        Assert.True(e.SlipEvents == 0, string.Join("\n", slips));
+        Assert.Equal(0, e.Collisions);
     }
 }

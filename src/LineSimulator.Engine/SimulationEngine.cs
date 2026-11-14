@@ -677,7 +677,11 @@ public sealed partial class SimulationEngine : ILogicContext
             if (!_requests.TryGetValue(pc.ControlledZoneId, out var req)) continue;
             switch (pc.Config.Action)
             {
-                case PhotocellAction.SlowDown: req.Low = true; req.SpeedReasons.Add($"Rallentamento {pc.Id}"); break;
+                case PhotocellAction.SlowDown:
+                    // Il rallentamento serve al pacco in arrivo. Il pacco già in battuta non tiene la via in bassa velocità:
+                    // altrimenti in double banking il secondo pacco entrerebbe a velocità alta su rulli lenti (slittamento).
+                    if (HeldAtStop(pc.RawPackage ?? pc.OutputPackage)) break;
+                    req.Low = true; req.SpeedReasons.Add($"Rallentamento {pc.Id}"); break;
                 case PhotocellAction.SpeedUp: req.High = true; req.SpeedReasons.Add($"Alta {pc.Id}"); break;
                 case PhotocellAction.Stop: req.Stop = true; req.StopReasons.Add($"Arresto {pc.Id}"); break;
             }
@@ -705,6 +709,9 @@ public sealed partial class SimulationEngine : ILogicContext
         LogicEvaluator.ApplyRules(Project.Rules, this, _requests, _nextSignals);
         (_signals, _nextSignals) = (_nextSignals, _signals);
     }
+
+    /// <summary>Pacco già fermo in battuta (fermo finale, fermo scomparente di testa o di coda).</summary>
+    private static bool HeldAtStop(PackageRuntime? p) => p != null && (p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop);
 
     // ------------------------------------------------------------------ 5. Comandi zone (da valle a monte)
 
