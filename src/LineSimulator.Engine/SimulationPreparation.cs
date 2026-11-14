@@ -44,7 +44,8 @@ public static class SimulationPreparation
         r.Changes.AddRange(StrappingAreaRules.DecideReleaseInverters(p));
         FixReferences(p, r);
         FixClampPositions(p, r, force: false);
-        r.Changes.AddRange(BankingOptions.NormalizeChanges(p));   // ogni scelta riportata a una possibile, con il suo motivo
+        // ogni scelta riportata a una possibile, con il suo motivo; via del trasferitore su due inverter se c'è il double banking
+        r.Changes.AddRange(TransferSplitRule.Apply(p));
         SyncAutoSensors(p, r);
         CheckMandatoryStrapping(p, r);
         return r;

@@ -28,7 +28,7 @@ public sealed partial class SimulationEngine : ILogicContext
 
     private readonly List<ZoneRuntime> _zones = new();
     private readonly Dictionary<string, ZoneRuntime> _zoneById = new();
-    private readonly List<(double Start, double End, ZoneRuntime Zone, bool Enabled)> _sections = new();
+    private readonly List<(double Start, double End, ZoneRuntime Zone, bool Enabled, bool Valle)> _sections = new();
     private readonly List<PhotocellRuntime> _photocells = new();
     private readonly Dictionary<string, PhotocellRuntime> _pcById = new();
     private readonly List<StrapperRuntime> _strappers = new();
@@ -83,7 +83,16 @@ public sealed partial class SimulationEngine : ILogicContext
             _zoneOccupants[zr] = new HashSet<PackageRuntime>();
             foreach (var s in z.Sections)
             {
-                _sections.Add((s.StartMm / 1000.0, s.EndMm / 1000.0, zr, s.IsEnabled));
+                // Via del trasferitore su due inverter (double banking): la parte di valle, sotto il primo pacco, ha il suo azionamento
+                double split = z == Topology.StopperZone && s == LayoutRules.TransferModule(project) ? TransferSplitRule.SplitMm(project) / 1000.0 : 0;
+                if (split > s.StartMm / 1000.0 + 1e-6 && split < s.EndMm / 1000.0 - 1e-6)
+                {
+                    TransferSplitM = split;
+                    _sections.Add((s.StartMm / 1000.0, split, zr, s.IsEnabled, false));
+                    _sections.Add((split, s.EndMm / 1000.0, zr, s.IsEnabled, true));
+                }
+                else
+                _sections.Add((s.StartMm / 1000.0, s.EndMm / 1000.0, zr, s.IsEnabled, false));
                 // Alias: un riferimento all'ID del modulo indica la sua zona di comando
                 if (s.Id != z.Id && !string.IsNullOrEmpty(s.Id)) { _zoneById.TryAdd(s.Id, zr); _requests.TryAdd(s.Id, _requests[z.Id]); }
             }
@@ -223,6 +232,7 @@ public sealed partial class SimulationEngine : ILogicContext
         foreach (var z in _zones) z.UpdateDrive(dt, Stopper.Config.AlignmentRollerSpeed, caps.TryGetValue(z, out var cap) ? cap : double.PositiveInfinity);
         // Motori commutabili: commutati sull'inverter di legatura hanno la sua stessa velocità; il pacco in legatura è noto
         foreach (var f in _following) { f.ActualSpeed = Station!.Zone.ActualSpeed; f.EmptyTravelM = 0; }
+        UpdateValleDrive(dt, ramp: true);
         MovePackages(t0, dt);
 
         _step++;
@@ -241,6 +251,7 @@ public sealed partial class SimulationEngine : ILogicContext
         UpdateStatistics(dt);
         // motori commutati: stessa velocità della via di legatura anche dopo l'arresto a fine posizionamento
         foreach (var f in _following) f.ActualSpeed = Station!.Zone.ActualSpeed;
+        UpdateValleDrive(dt, ramp: false);
         RecordStates();
         if (t1 >= _nextRecordTime - 1e-9)
         {
@@ -321,6 +332,7 @@ public sealed partial class SimulationEngine : ILogicContext
         Packages = _active.Select(p => new PackageSnapshot(p.Id, p.Type.Id, p.HeadM, p.LengthM, p.Velocity, p.State,
             p.LiftM, p.LateralM, p.StrapsDone, p.StrapsTotal, p.Type.GraphicWidthMm, p.Type.GraphicHeightMm)).Concat(AccumulationSnapshots()).ToArray(),
         ZoneSpeeds = _zones.Select(z => z.ActualSpeed).ToArray(),
+        ValleSpeed = ValleSpeed,
         ZoneStates = _zones.Select(z => z.CycleStateCode).ToArray(),
         PhotocellOutputs = _photocells.Select(p => p.Output).ToArray(),
         StrapperStates = _strappers.Select(s => s.State).ToArray(),
@@ -811,9 +823,14 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 mode = MultiStopCommand(z, t, dt, out reason, out autoStop);
             }
+            else if (z.Info.Kind == ZoneKind.Stopper && Stopper.Package != null && Stopper.State != StopperState.Aligned)
+            {
+                mode = InverterMode.Align; reason = "Allineamento allo stopper";
+            }
             else if (z.Info.Kind == ZoneKind.Stopper && Stopper.Package != null)
             {
-                mode = InverterMode.Align; reason = Stopper.State == StopperState.Aligned ? "Allineato, attesa trasferitore" : "Allineamento allo stopper";
+                // intestatura finita: i rulli si fermano sotto il pacco in battuta (nessuno strisciamento) fino al prelievo
+                mode = InverterMode.Stop; reason = "Allineato, attesa trasferitore";
             }
             else if (z.Config.AutoStopWhenEmpty && ShouldAutoStop(z))
             {
@@ -1010,31 +1027,111 @@ public sealed partial class SimulationEngine : ILogicContext
     // ------------------------------------------------------------------ 7. Moto pacchi
 
     /// <summary>
-    /// Passaggio tra moduli: se un pacco sta a cavallo tra un modulo a monte e uno a valle e sul modulo a valle non ci sono
-    /// altri pacchi, il modulo a valle non corre più veloce di quello a monte (sincronismo durante il passaggio). Così il
-    /// pacco trattenuto dal modulo a monte (es. svincolo fermo durante la legatura) non slitta quando lo lascia.
+    /// Sincronismo tra zone (regola dell'utente del 2026-11-14: nessuno strisciamento): finché un pacco è a cavallo di più
+    /// zone, tutte hanno la stessa velocità richiesta, quella della più lenta. Vale in ogni modalità (marcia, posizionamento,
+    /// allineamento, arresto) e in entrambi i versi; prima solo la zona a valle seguiva quella a monte, e solo in marcia.
     /// </summary>
     private Dictionary<ZoneRuntime, double> HandoverSpeedCaps()
     {
         var caps = new Dictionary<ZoneRuntime, double>();
+        double align = Stopper.Config.AlignmentRollerSpeed;
+        var under = new List<ZoneRuntime>();
         foreach (var p in _active)
         {
             if (!p.OnRollers) continue;
-            ZoneRuntime? prev = null;
+            under.Clear();
             foreach (var s in _sections)
             {
                 if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
-                if (prev != null && s.Zone != prev)
-                {
-                    var down = s.Zone;
-                    bool others = _active.Any(q => q != p && q.OnRollers && q.HeadM > down.Info.StartM + 1e-9 && q.TailM < down.Info.EndM - 1e-9);
-                    if (!others)
-                        caps[down] = Math.Min(caps.TryGetValue(down, out var c) ? c : double.PositiveInfinity, prev.ActualSpeed);
-                }
-                prev = s.Zone;
+                if (!under.Contains(s.Zone)) under.Add(s.Zone);
             }
+            if (under.Count < 2) continue;
+            double slowest = under.Min(z => Math.Min(z.TargetSpeed(align), caps.TryGetValue(z, out var c0) ? c0 : double.PositiveInfinity));
+            foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var c) ? c : double.PositiveInfinity, slowest);
         }
         return caps;
+    }
+
+    // ------------------------------------------------------------------ Via del trasferitore su due inverter
+
+    /// <summary>Punto di divisione della via del trasferitore (m), se è su due inverter: a valle il primo pacco, a monte il secondo.</summary>
+    public double? TransferSplitM { get; private set; }
+    /// <summary>Velocità dei rulli della parte di valle (dal punto di divisione al fermo finale).</summary>
+    public double ValleSpeed { get; private set; }
+    /// <summary>Nome dell'inverter della parte di monte della via del trasferitore (la valle tiene il nome della via).</summary>
+    public string? MonteInverterId => TransferSplitM == null || Topology.StopperZone == null ? null : Topology.StopperZone.Id + "a";
+    private bool _valleSynced = true;
+
+    /// <summary>
+    /// Primo pacco intestato sul fermo finale e tutto sulla parte di valle: la valle resta ferma fino al prelievo, e i comandi
+    /// della via (ingresso, posizionamento e intestatura del secondo pacco) muovono solo la parte di monte.
+    /// </summary>
+    public bool ValleHeld => TransferSplitM is double s && Stopper.Package is { } a && Stopper.State == StopperState.Aligned
+                             && a.OnRollers && a.TailM >= s - 1e-6;
+
+    private void UpdateValleDrive(double dt, bool ramp)
+    {
+        if (TransferSplitM == null || Topology.StopperZone == null) return;
+        var z = _zoneById[Topology.StopperZone.Id];
+        if (ValleHeld)
+        {
+            if (_valleSynced)
+                Link("VALLE_FERMA", "Primo pacco intestato sul fermo finale, tutto a valle", "L'inverter di valle si ferma fino al prelievo", "STOPPER", InvKey(z), Stopper.Package?.Id);
+            _valleSynced = false;
+            if (ramp) ValleSpeed = Math.Max(0, ValleSpeed - z.Config.Deceleration * dt);
+            return;
+        }
+        // Nessun pacco fermo a valle: i due inverter hanno lo stesso comando (un pacco può stare a cavallo della divisione)
+        double step = (z.ActualSpeed > ValleSpeed ? z.Config.Acceleration : z.Config.Deceleration) * dt;
+        if (_valleSynced || Math.Abs(z.ActualSpeed - ValleSpeed) <= step + 1e-9) { ValleSpeed = z.ActualSpeed; _valleSynced = true; }
+        else if (ramp) ValleSpeed += Math.Sign(z.ActualSpeed - ValleSpeed) * step;
+    }
+
+    /// <summary>Velocità dei rulli di un tratto di via (la parte di valle della via del trasferitore ha il suo inverter).</summary>
+    private double PartSpeed((double Start, double End, ZoneRuntime Zone, bool Enabled, bool Valle) s)
+        => !s.Enabled ? 0 : s.Valle ? ValleSpeed : s.Zone.ActualSpeed;
+
+    private string PartId((double Start, double End, ZoneRuntime Zone, bool Enabled, bool Valle) s)
+        => TransferSplitM != null && !s.Valle && s.Zone.Info == Topology.StopperZone ? MonteInverterId! : s.Zone.Id;
+
+    /// <summary>
+    /// Controllo unico degli strisciamenti (a ogni scansione, per ogni pacco): la velocità del pacco deve essere quella dei
+    /// rulli di ogni inverter sotto di lui. Sono ammessi solo: la spinta dell'intestatura contro il proprio fermo (rulli alla
+    /// velocità di allineamento), i rulli comandati fermi che stanno frenando sotto un pacco in battuta, il ritorno indietro
+    /// dell'intestatura di coda e il pacco ancora in parte sul trasporto a monte della linea (non simulato).
+    /// L'evento si scrive quando lo strisciamento inizia.
+    /// </summary>
+    private void CheckSliding(PackageRuntime p, bool impactNow)
+    {
+        const double tol = 0.01 + 1e-6;
+        string? where = null;
+        double worst = 0, rollers = 0;
+        if (p.TailM >= Topology.LineStartM - 1e-6 && !impactNow)
+        {
+            double align = Stopper.Config.AlignmentRollerSpeed;
+            bool held = p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop;
+            bool ownAlignment = (p.InStopperContact && Stopper.State != StopperState.Aligned)
+                                || _stops.Any(s => s.Package == p && s.State is StopState.Positioning or StopState.Aligning or StopState.Returning);
+            foreach (var s in _sections)
+            {
+                if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
+                if (s.Zone.Mode == InverterMode.Reverse) continue;
+                double sv = PartSpeed(s);
+                double reference = s.Valle && ValleHeld ? 0 : s.Zone.ReferenceSpeed;
+                if (held && ((ownAlignment && reference <= align + tol) || reference <= 1e-9)) continue;
+                double diff = Math.Abs(sv - p.Velocity);
+                if (diff > tol && diff > worst) { worst = diff; where = PartId(s); rollers = sv; }
+            }
+        }
+        if (where != null && p.SlidingOn == null)
+        {
+            SlipEvents++;
+            var it = CultureInfo.GetCultureInfo("it-IT");
+            Emit(SimEventType.Slip, EventSeverity.Warning,
+                $"Strisciamento: {p.Id} a {p.Velocity.ToString("0.00", it)} m/s su rulli {where} a {rollers.ToString("0.00", it)} m/s (differenza {worst.ToString("0.00", it)} m/s, testa a {p.HeadM * 1000:0} mm).", where, p.Id);
+        }
+        p.SlidingOn = where;
+        p.IsSlipping = where != null;
     }
 
     /// <summary>Velocità di trascinamento: minimo tra le velocità delle sezioni sotto il pacco.</summary>
@@ -1046,7 +1143,7 @@ public sealed partial class SimulationEngine : ILogicContext
         {
             if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
             any = true;
-            double sv = s.Enabled ? s.Zone.ActualSpeed : 0;
+            double sv = PartSpeed(s);
             if (sv < v) v = sv;
         }
         if (any) return v;
@@ -1072,16 +1169,7 @@ public sealed partial class SimulationEngine : ILogicContext
             if (p.TailM < Topology.LineStartM - 1e-6 && _sections.Count > 0)
                 vTarget = Math.Min(vTarget, vOld + Math.Max(0.01, _sections[0].Zone.Config.Acceleration) * dt);
             double vNew = Math.Clamp(vTarget, vOld - dvMax, vOld + dvMax);
-            // In battuta (stopper o fermo) i rulli slittano volutamente sotto il pacco: non è un'anomalia.
-            bool restrained = p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop;
-            bool slipping = !restrained && Math.Abs(vTarget - vNew) > 1e-9;
-            if (slipping && !p.IsSlipping && Math.Abs(vTarget - vOld) > 0.05)   // sotto 0,05 m/s è l'arresto a fine posizionamento
-            {
-                SlipEvents++;
-                Emit(SimEventType.Slip, EventSeverity.Warning,
-                    $"{p.Id} slitta sui rulli: variazione richiesta {Math.Abs(vTarget - vOld):0.###} m/s oltre il limite d'attrito.", null, p.Id);
-            }
-            p.IsSlipping = slipping;
+            bool impactNow = false;   // la scansione dell'urto sul fermo non è uno strisciamento
 
             double newHead = p.HeadM + 0.5 * (vOld + vNew) * dt;
 
@@ -1092,6 +1180,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 {
                     double impact = vNew;
                     p.InStopperContact = true;
+                    impactNow = true;
                     Emit(SimEventType.StopperContact, EventSeverity.Info, $"{p.Id} in battuta allo stopper a {impact:0.###} m/s", Project.Stopper.Id, p.Id);
                     Link("BATTUTA", "Pacco in battuta sul fermo finale",
                         "Intestatura: rulli lenti per " + Stopper.AlignmentTotalS.ToString("0.#", CultureInfo.GetCultureInfo("it-IT")) + " s", StopperZoneKey, "STOPPER", p.Id);
@@ -1115,6 +1204,7 @@ public sealed partial class SimulationEngine : ILogicContext
                     if (!p.InIntermediateStopContact)
                     {
                         p.InIntermediateStopContact = true;
+                        impactNow = true;
                         if (vNew > Stopper.Config.MaxImpactSpeed + 1e-9)
                         {
                             ExcessiveImpacts++;
@@ -1183,6 +1273,7 @@ public sealed partial class SimulationEngine : ILogicContext
             p.HeadM = newHead;
             p.Velocity = vNew;
             if (Math.Abs(vNew) > SpeedEps) _lastProgressTime = t + dt;
+            CheckSliding(p, impactNow);
 
             if (p.State == PackageState.Transport || p.State == PackageState.Accumulated)
             {
@@ -1492,6 +1583,7 @@ public sealed partial class SimulationEngine : ILogicContext
 
     private void InitRecorder()
     {
+        if (MonteInverterId != null) Recorder.Track("INV:" + MonteInverterId, $"Inverter {MonteInverterId} (via del trasferitore, monte)", TrackGroup.Inverter);
         foreach (var z in Topology.Zones) Recorder.Track("INV:" + z.Id, z.Inverter.Name.Length > 0 ? z.Inverter.Name : z.Id, TrackGroup.Inverter);
         foreach (var pc in Project.Photocells) Recorder.Track("PC:" + pc.Id, pc.Name.Length > 0 ? pc.Name : pc.Id, TrackGroup.Photocell);
         foreach (var s in Project.Strappers) Recorder.Track("STR:" + s.Id, s.Name.Length > 0 ? s.Name : s.Id, TrackGroup.Strapper);
@@ -1511,7 +1603,18 @@ public sealed partial class SimulationEngine : ILogicContext
     private void RecordStates()
     {
         double t = Time;
-        foreach (var z in _zones) Recorder.Set("INV:" + z.Id, t, z.CycleStateCode, z.Reason);
+        foreach (var z in _zones)
+        {
+            if (TransferSplitM != null && z.Info == Topology.StopperZone)
+            {
+                // via del trasferitore su due inverter: la riga della via è la parte di valle, quella "a" la parte di monte
+                Recorder.Set("INV:" + MonteInverterId, t, z.CycleStateCode, z.Reason);
+                Recorder.Set("INV:" + z.Id, t, ValleSpeed < 1e-4 && (ValleHeld || z.ReferenceSpeed < 1e-4) ? CycleState.Stopped : z.CycleStateCode,
+                    ValleHeld ? "Primo pacco in battuta: valle ferma fino al prelievo" : z.Reason);
+                continue;
+            }
+            Recorder.Set("INV:" + z.Id, t, z.CycleStateCode, z.Reason);
+        }
         foreach (var pc in _photocells) Recorder.Set("PC:" + pc.Id, t, pc.Output ? CycleState.On : CycleState.Off);
         foreach (var s in _strappers)
             Recorder.Set("STR:" + s.Id, t, s.ProcessState switch

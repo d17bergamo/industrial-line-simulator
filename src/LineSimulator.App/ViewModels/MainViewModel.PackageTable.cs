@@ -73,12 +73,13 @@ public sealed class PackageRowViewModel : ObservableObject
         get
         {
             var p = _project();
-            bool dbl = BankingOptions.DoubleBankingAvailable(p, Type);
+            string? why = BankingOptions.DoubleBankingBlockReason(p, Type);
+            bool dbl = why == null;
             return new[]
             {
                 new ChoiceOption(AccumulationMode.SingleBanking, "Single banking", true, "Un pacco per ciclo del trasferitore"),
                 new ChoiceOption(AccumulationMode.DoubleBanking, "Double banking", dbl,
-                    dbl ? "Due pacchi per ciclo del trasferitore" : "Non possibile: due pacchi di questa lunghezza non stanno sul trasferitore")
+                    dbl ? "Due pacchi per ciclo del trasferitore (via del trasferitore su due inverter)" : "Non possibile: " + why)
             };
         }
     }

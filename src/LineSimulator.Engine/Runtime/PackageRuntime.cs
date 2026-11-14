@@ -107,6 +107,8 @@ public sealed class PackageRuntime
 
     public bool InStopperContact { get; internal set; }
     public bool IsSlipping { get; internal set; }
+    /// <summary>Inverter sui cui rulli il pacco sta strisciando (null = nessuno): l'evento si scrive solo quando inizia.</summary>
+    internal string? SlidingOn;
 
     // Statistiche
     public double WaitingTimeS { get; internal set; }

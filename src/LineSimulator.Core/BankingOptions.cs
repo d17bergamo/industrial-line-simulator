@@ -24,9 +24,27 @@ public static class BankingOptions
     public static StopReference DefaultHeading(LineProject p) =>
         Stops(p).Any(s => s.Placement == DevicePlacement.End) ? StopReference.Tail : StopReference.Head;
 
+    /// <summary>
+    /// Margine minimo dal primo pacco durante l'extra corsa dell'intestatura di coda (mm): lo stesso nelle regole e nel motore
+    /// (prima 20 mm qui e 50 mm nel motore).
+    /// </summary>
+    public const double TailOvershootClearanceMm = 50;
+
     /// <summary>Double banking possibile per il pacco (con almeno un'intestatura).</summary>
     public static bool DoubleBankingAvailable(LineProject p, PackageType t) =>
         HeadingAvailable(p, t, AccumulationMode.DoubleBanking, StopReference.Head) || HeadingAvailable(p, t, AccumulationMode.DoubleBanking, StopReference.Tail);
+
+    /// <summary>Perché il double banking non è possibile per il pacco (per la tabella Pacchi e i messaggi); null se è possibile.</summary>
+    public static string? DoubleBankingBlockReason(LineProject p, PackageType t)
+    {
+        if (DoubleBankingAvailable(p, t)) return null;
+        double split = TransferSplitRule.SplitFor(p, t);
+        if (split <= 0)
+            return "la via del trasferitore non si può dividere in due inverter con il primo pacco tutto a valle e il secondo tutto a monte: serve un fermo scomparente o un trasferitore più lungo";
+        if (p.Stopper.PositionMm - t.LengthMm < split - 1e-6)
+            return $"il pacco da {t.LengthMm:0} mm è più lungo della parte di valle della via del trasferitore ({p.Stopper.PositionMm - split:0} mm dal punto di divisione al fermo finale)";
+        return $"due pacchi da {t.LengthMm:0} mm non stanno sul trasferitore, il primo a valle e il secondo a monte del punto di divisione ({split:0} mm)";
+    }
 
     /// <summary>L'intestatura <paramref name="h"/> è possibile per il pacco con il banking <paramref name="b"/>.</summary>
     public static bool HeadingAvailable(LineProject p, PackageType t, AccumulationMode b, StopReference h)
@@ -39,13 +57,16 @@ public static class BankingOptions
             if (stops.Count == 0) return start + len <= stopper + 1e-6;               // coda a inizio trasferitore, per posizionamento
             return stops.Any(s => s.PositionMm >= start - 1e-6 && s.PositionMm + len + s.TailOvershootMm <= stopper + 1e-6);
         }
-        // Double banking: il primo di testa sul fermo finale, il secondo dietro
+        // Double banking: il primo di testa sul fermo finale, il secondo dietro. La via del trasferitore è su due inverter:
+        // il primo pacco deve stare tutto a valle del punto di divisione e il secondo tutto a monte (nessuno strisciamento)
         double firstTail = stopper - len;
+        double split = TransferSplitRule.SplitFor(p, t);
+        if (split <= 0 || firstTail < split - 1e-6) return false;
         if (stops.Count == 0)
         {
             if (h == StopReference.Tail) return false;                                  // il secondo si ferma a distanza dal primo
-            double tail2 = firstTail - p.Transfer.DoubleBankingGapMm - len;
-            return tail2 >= start - p.Transfer.EffectiveMaxOverhangMm - 1e-6;
+            double head2 = Math.Min(firstTail - p.Transfer.DoubleBankingGapMm, split);  // al più tardi sul punto di divisione
+            return head2 - len >= start - p.Transfer.EffectiveMaxOverhangMm - 1e-6;
         }
         double safety = p.Simulation.MinSafetyDistanceMm;
         foreach (var s in stops)
@@ -53,8 +74,9 @@ public static class BankingOptions
             double head2 = h == StopReference.Head ? s.PositionMm : s.PositionMm + len;
             double reach = h == StopReference.Head ? head2 : head2 + s.TailOvershootMm;
             if (head2 - len < start - 1e-6) continue;
+            if (reach > split + 1e-6) continue;
             if (head2 > firstTail - safety + 1e-6) continue;
-            if (reach > firstTail - Math.Min(safety, 20) + 1e-6) continue;
+            if (reach > firstTail - Math.Min(safety, TailOvershootClearanceMm) + 1e-6) continue;
             return true;
         }
         return false;
@@ -134,10 +156,10 @@ public static class BankingOptions
         }
         foreach (var t in p.PackageTypes)
         {
-            if (t.Banking == AccumulationMode.DoubleBanking && !DoubleBankingAvailable(p, t))
+            if (t.Banking == AccumulationMode.DoubleBanking && DoubleBankingBlockReason(p, t) is { } reason)
             {
                 t.Banking = AccumulationMode.SingleBanking;
-                done.Add($"Pacco {t.Id}: double banking non possibile (due pacchi da {t.LengthMm:0} mm non stanno sul trasferitore). Impostato il single banking.");
+                done.Add($"Pacco {t.Id}: double banking non possibile ({reason}). Impostato il single banking.");
             }
             if (t.Heading is { } h && !HeadingAvailable(p, t, Banking(p, t), h))
             {

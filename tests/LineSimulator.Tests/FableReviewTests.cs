@@ -227,4 +227,194 @@ public class FableReviewTests
             Assert.Contains("VIE A RULLI", pdf);
         }
     }
+
+    // ------------------------------------------------------------------ nessuno strisciamento, via del trasferitore su due inverter
+
+    /// <summary>Varianti di ogni esempio per il controllo degli strisciamenti (nome, modifica).</summary>
+    private static readonly (string Name, Action<LineProject> Apply)[] SlidingVariants =
+    {
+        ("single banking", p => { }),
+        ("double banking con fermo scomparente", p => { AddStop(p); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
+        ("double banking senza fermo", p => { p.IntermediateStops.Clear(); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
+        ("double banking con fermo, pesatura lunga", p => { AddStop(p); LongWeighing(p); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
+        ("double banking senza fermo, pesatura lunga", p => { p.IntermediateStops.Clear(); LongWeighing(p); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
+        ("single banking, pesatura lunga", LongWeighing),
+        ("svincolo unito all'inverter di legatura", p => { foreach (var m in StrappingAreaRules.ReleaseModules(p)) m.JoinStrappingInverter = true; }),
+        ("svincolo con inverter dedicato senza motori commutabili", p => { p.Simulation.AutoReleaseInverters = false; foreach (var m in StrappingAreaRules.ReleaseModules(p)) { m.FollowsStrapping = false; m.JoinStrappingInverter = false; } })
+    };
+
+    private static void AddStop(LineProject p)
+    {
+        if (p.IntermediateStops.Any(s => s.IsEnabled)) return;
+        p.IntermediateStops.Add(new IntermediateStopConfig
+        {
+            Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
+            PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+        });
+    }
+
+    private static void LongWeighing(LineProject p)
+    {
+        foreach (var b in p.Scales) { b.StabilizationTimeS = 150; b.ConfirmTimeoutS = 400; }
+    }
+
+    public static IEnumerable<object[]> SlidingCases() =>
+        from m in SampleProjects.All
+        from i in Enumerable.Range(0, SlidingVariants.Length)
+        select new object[] { m.Name, i };
+
+    private static SimulationEngine RunVariant(string model, int variant)
+    {
+        var p = SampleProjects.All.Single(m => m.Name == model).Factory();
+        SlidingVariants[variant].Apply(p);
+        ProjectAutoFix.Run(p);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        return e;
+    }
+
+    /// <summary>
+    /// Regola dell'utente (2026-11-14): nessuno strisciamento, mai. Il motore controlla a ogni scansione la velocità di ogni
+    /// pacco contro quella dei rulli di ogni inverter sotto di lui: su tutti gli esempi e le loro varianti, zero eventi.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(SlidingCases))]
+    public void NoSliding_OnAnyExampleAndVariant(string model, int variant)
+    {
+        var e = RunVariant(model, variant);
+        if (e.Validation.HasErrors) return;      // variante non simulabile su questo esempio: l'errore viene mostrato all'utente
+        var slips = e.Events.Where(x => x.Type == SimEventType.Slip).Select(x => x.ToString()).Take(6).ToList();
+        Assert.True(e.CompletedNormally, $"{SlidingVariants[variant].Name}: {e.FinishReason}");
+        Assert.True(e.SlipEvents == 0, $"{SlidingVariants[variant].Name}: {e.SlipEvents} strisciamenti\n{string.Join("\n", slips)}");
+        Assert.Equal(0, e.Collisions);
+    }
+
+    /// <summary>Rapporto per le anteprime: strisciamenti per esempio e variante, con i primi eventi e i comandi vicini.</summary>
+    [Fact]
+    public void Report_Sliding_ForThePreviews()
+    {
+        string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
+        if (string.IsNullOrWhiteSpace(dir)) return;
+        var csv = new System.Text.StringBuilder("Modello;Variante;Esito;t/h;Strisciamenti;Collisioni;Divisione via trasferitore [mm]\n");
+        var txt = new System.Text.StringBuilder();
+        foreach (var (name, _) in SampleProjects.All)
+            for (int v = 0; v < SlidingVariants.Length; v++)
+            {
+                SimulationEngine e;
+                try { e = RunVariant(name, v); }
+                catch (Exception ex) { csv.AppendLine($"{name};{SlidingVariants[v].Name};ERRORE {ex.GetType().Name};;;;"); txt.AppendLine($"=== {name} — {SlidingVariants[v].Name}\n{ex}\n"); continue; }
+                var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
+                double span = exits.Count > 0 ? exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS) : 0;
+                double tph = span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
+                string outcome = e.Validation.HasErrors ? "non simulabile" : !e.CompletedNormally ? "NON COMPLETATA: " + e.FinishReason : e.SlipEvents > 0 ? "strisciamenti" : "pulita";
+                csv.AppendLine($"{name};{SlidingVariants[v].Name};{outcome};{tph:0.0};{e.SlipEvents};{e.Collisions};{(e.TransferSplitM is double sp ? (sp * 1000).ToString("0") : "-")}");
+                var slips = e.Events.Where(x => x.Type == SimEventType.Slip).ToList();
+                if (slips.Count == 0 && e.CompletedNormally) continue;
+                txt.AppendLine($"=== {name} — {SlidingVariants[v].Name} — {outcome} — per inverter: {string.Join(", ", slips.GroupBy(x => x.ComponentId).Select(g => $"{g.Key} {g.Count()}"))}");
+                foreach (var w in slips.Take(10))
+                {
+                    txt.AppendLine("  ! " + w);
+                    foreach (var x in e.Events.Where(x => x != w && x.TimeS >= w.TimeS - 1.5 && x.TimeS <= w.TimeS + 0.05 && x.Type != SimEventType.Slip).TakeLast(6)) txt.AppendLine("        " + x);
+                }
+                if (!e.CompletedNormally) foreach (var x in e.Events.TakeLast(15)) txt.AppendLine("    fine: " + x);
+                txt.AppendLine();
+            }
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "strisciamenti.csv"), csv.ToString());
+        File.WriteAllText(Path.Combine(dir, "strisciamenti-dettagli.txt"), txt.Length > 0 ? txt.ToString() : "Nessuno strisciamento.");
+    }
+
+    /// <summary>
+    /// Double banking scelto per una tipologia: la via del trasferitore si divide da sola su due inverter, tra due rulli e
+    /// sul fermo scomparente; tornando in single banking si riunisce; la divisione fatta a mano non si tocca.
+    /// </summary>
+    [Fact]
+    public void TransferTrack_SplitsOnTwoInverters_WithDoubleBanking_AndRejoinsWithSingle()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        AddStop(p);
+        ProjectAutoFix.Run(p);
+        Assert.Equal(0, TransferSplitRule.SplitMm(p));           // single banking: un solo inverter, l'esempio non cambia
+        var stop = p.IntermediateStops.First(s => s.IsEnabled);
+        var six = p.PackageTypes.OrderBy(t => t.LengthMm).First();
+        six.Banking = AccumulationMode.DoubleBanking;
+
+        var preview = ProjectAutoFix.Preview(p);                   // prima l'elenco con la conferma, il progetto non cambia
+        Assert.Contains(preview.Messages, m => m.Contains("divisa in due inverter", StringComparison.Ordinal));
+        Assert.Equal(0, TransferSplitRule.SplitMm(p));
+        ProjectAutoFix.Run(p);
+        var trf = LayoutRules.TransferModule(p)!;
+        double split = TransferSplitRule.SplitMm(p);
+        Assert.True(split >= stop.PositionMm - 1e-6 && split < stop.PositionMm + trf.RollerPitchMm, $"divisione a {split}, fermo a {stop.PositionMm}");
+        Assert.Equal(0, (split - trf.StartMm) % trf.RollerPitchMm, 3);     // tra due rulli
+        Assert.False(ProjectAutoFix.Preview(p).Changed);
+        Assert.Equal(AccumulationMode.DoubleBanking, six.Banking);
+        double length = trf.LengthMm; int rollers = trf.RollerCount;
+
+        var e = new SimulationEngine(ProjectSerializer.Clone(p));
+        Assert.Equal(split / 1000.0, e.TransferSplitM);
+        Assert.Equal(trf.Id + "a", e.MonteInverterId);
+
+        six.Banking = AccumulationMode.SingleBanking;
+        var back = ProjectAutoFix.Run(p);
+        Assert.Contains(back.Messages, m => m.Contains("riunita su un solo inverter", StringComparison.Ordinal));
+        Assert.Equal(0, TransferSplitRule.SplitMm(p));
+        Assert.Equal(length, trf.LengthMm);
+        Assert.Equal(rollers, trf.RollerCount);
+
+        // divisione fatta a mano: resta dov'è, in single e in double banking
+        trf.SplitAtMm = trf.StartMm + 4 * trf.RollerPitchMm;
+        trf.SplitManual = true;
+        ProjectAutoFix.Run(p);
+        Assert.Equal(trf.StartMm + 4 * trf.RollerPitchMm, TransferSplitRule.SplitMm(p));
+        six.Banking = AccumulationMode.DoubleBanking;
+        ProjectAutoFix.Run(p);
+        Assert.Equal(trf.StartMm + 4 * trf.RollerPitchMm, TransferSplitRule.SplitMm(p));
+    }
+
+    /// <summary>Senza fermo scomparente la divisione va dietro al primo pacco più lungo in double banking, tra due rulli.</summary>
+    [Fact]
+    public void TransferTrack_WithoutStop_SplitsBehindTheLongestFirstPackage()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        p.IntermediateStops.Clear();
+        foreach (var t in p.PackageTypes.Where(t => t.LengthMm <= 9000)) t.Banking = AccumulationMode.DoubleBanking;
+        ProjectAutoFix.Run(p);
+        var trf = LayoutRules.TransferModule(p)!;
+        double split = TransferSplitRule.SplitMm(p);
+        double longest = p.PackageTypes.Where(t => t.Banking == AccumulationMode.DoubleBanking).Max(t => t.LengthMm);
+        Assert.True(split > 0, "nessuna divisione");
+        Assert.Equal(0, (split - trf.StartMm) % trf.RollerPitchMm, 3);
+        Assert.InRange(split, p.Stopper.PositionMm - longest - p.Transfer.DoubleBankingGapMm - trf.RollerPitchMm, p.Stopper.PositionMm - longest - p.Transfer.DoubleBankingGapMm);
+    }
+
+    /// <summary>
+    /// Con le due sezioni il primo pacco resta fermo, con i rulli fermi sotto di lui, per tutto il posizionamento e
+    /// l'intestatura del secondo: si muove solo l'inverter di monte.
+    /// </summary>
+    [Fact]
+    public void TwoInverters_FirstPackageAndItsRollersStayStill_WhileTheSecondPositions()
+    {
+        var p = DoubleBankingBottleneck("3 legatrici");
+        ProjectAutoFix.Run(p);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.NotNull(e.TransferSplitM);
+        Assert.True(e.Transfer.Cycles < e.Packages.Count, "nessun ciclo con due pacchi");
+        Assert.Equal(0, e.SlipEvents);
+        double split = e.TransferSplitM!.Value, stopper = p.Stopper.PositionMm / 1000.0;
+        int zi = e.Zones.Select(z => z.Id).ToList().IndexOf(e.Topology.StopperZone!.Id);
+        int frames = 0;
+        foreach (var f in e.Recorder.Frames)
+        {
+            if (f.StopperState != StopperState.Aligned || !f.StopStates.Any(x => x is StopState.Positioning or StopState.Aligning)) continue;
+            frames++;
+            var first = f.Packages.Single(k => k.LiftM < 1e-6 && k.LateralM < 1e-6 && Math.Abs(k.HeadM - stopper) < 1e-3);
+            Assert.True(Math.Abs(first.Velocity) < 1e-9 && Math.Abs(f.ValleSpeed) < 1e-9, $"t={f.TimeS:0.00}: primo pacco a {first.Velocity} m/s, rulli di valle a {f.ValleSpeed} m/s");
+            Assert.True(first.HeadM - first.LengthM >= split - 1e-6);
+        }
+        Assert.True(frames > 20, $"il secondo pacco non si è mai posizionato dietro al primo ({frames} fotogrammi)");
+        Assert.Contains(e.Recorder.Frames, f => f.StopperState == StopperState.Aligned && f.ZoneSpeeds[zi] > 0.3 && Math.Abs(f.ValleSpeed) < 1e-9);
+    }
 }

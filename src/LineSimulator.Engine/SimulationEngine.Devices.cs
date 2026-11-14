@@ -40,7 +40,7 @@ public sealed partial class SimulationEngine
     private readonly List<(EventSeverity, string)> _bankingNotes = new();
     private bool DoubleBanking => EffectiveBanking == AccumulationMode.DoubleBanking;
     /// <summary>Margine minimo dal pacco a valle durante l'extra corsa oltre il fermo (intestatura di coda).</summary>
-    private const double TailOvershootClearanceM = 0.05;
+    private const double TailOvershootClearanceM = BankingOptions.TailOvershootClearanceMm / 1000.0;
     public IReadOnlyList<ScaleRuntime> Scales => _scales;
     public int RejectedPackages { get; private set; }
     public int WeighedPackages { get; private set; }
@@ -825,7 +825,10 @@ public sealed partial class SimulationEngine
         {
             // Nessun fermo: la testa si ferma alla distanza impostata dalla coda del primo pacco
             var a = Stopper.Package ?? _finalAssigned;
-            return a == null ? s.PositionM : Stopper.PositionM - a.LengthM - Project.Transfer.DoubleBankingGapMm / 1000.0;
+            if (a == null) return s.PositionM;
+            double behind = Stopper.PositionM - a.LengthM - Project.Transfer.DoubleBankingGapMm / 1000.0;
+            // via su due inverter: il secondo pacco si ferma al più tardi sul punto di divisione (resta tutto a monte)
+            return TransferSplitM is double split ? Math.Min(behind, split) : behind;
         }
         return s.Reference == StopReference.Head ? s.PositionM : s.PositionM + p.LengthM;
     }
@@ -843,6 +846,14 @@ public sealed partial class SimulationEngine
         double reach = head + s.OvershootM;   // con intestatura di coda il pacco supera il fermo prima di tornare indietro
         if (s.IsVirtual && s.TailPositioning)
             return head <= Stopper.PositionM + 1e-6;
+        // Via del trasferitore su due inverter: si abbinano solo due pacchi che stanno il primo tutto a valle e il secondo
+        // tutto a monte del punto di divisione (così il primo resta fermo mentre il secondo si posiziona)
+        if (DoubleBanking && TransferSplitM is double split)
+        {
+            var f = Stopper.Package ?? _finalAssigned;
+            if (f != null && Stopper.PositionM - f.LengthM < split - 1e-6) return false;
+            if (reach > split + 1e-6) return false;
+        }
         if (s.IsVirtual)
         {
             // Senza fermo: serve il primo pacco già destinato allo stopper; il secondo può sbalzare un poco oltre il trasferitore

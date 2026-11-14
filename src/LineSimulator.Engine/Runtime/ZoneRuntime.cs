@@ -91,18 +91,21 @@ public sealed class ZoneRuntime
         return !IsSinglePackage || ReservedBy == null || (p != null && ReservedBy == p);
     }
 
+    /// <summary>Velocità richiesta dal comando della zona, prima del sincronismo con le zone vicine.</summary>
+    internal double TargetSpeed(double alignSpeed) => Mode switch
+    {
+        InverterMode.Stop => 0,
+        InverterMode.Run => Level == SpeedLevel.High ? Config.HighSpeed : Config.LowSpeed,
+        InverterMode.Position => Math.Max(0, PositionCommand),
+        InverterMode.Align => Math.Max(0, alignSpeed),
+        _ => 0
+    };
+
     internal void UpdateDrive(double dt, double alignSpeed, double handoverCap = double.PositiveInfinity)
     {
-        ReferenceSpeed = Mode switch
-        {
-            InverterMode.Stop => 0,
-            InverterMode.Run => Level == SpeedLevel.High ? Config.HighSpeed : Config.LowSpeed,
-            InverterMode.Position => Math.Max(0, PositionCommand),
-            InverterMode.Align => Math.Max(0, alignSpeed),
-            _ => 0
-        };
-        // Sincronismo con il modulo a monte durante il passaggio di un pacco (solo in marcia)
-        if (Mode == InverterMode.Run && ReferenceSpeed > handoverCap) ReferenceSpeed = Math.Max(0, handoverCap);
+        ReferenceSpeed = TargetSpeed(alignSpeed);
+        // Sincronismo: finché un pacco è a cavallo di più zone, tutte seguono la più lenta (nessuno strisciamento)
+        if (ReferenceSpeed > handoverCap) ReferenceSpeed = Math.Max(0, handoverCap);
         if (ActualSpeed < ReferenceSpeed)
             ActualSpeed = Math.Min(ReferenceSpeed, ActualSpeed + Config.Acceleration * dt);
         else if (ActualSpeed > ReferenceSpeed)

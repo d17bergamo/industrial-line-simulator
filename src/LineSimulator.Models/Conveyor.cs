@@ -101,6 +101,20 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     [UiProperty("Unito all'inverter di legatura (un inverter in meno)", "", "Inverter", Order = 28)]
     public bool JoinStrappingInverter { get; set; }
 
+    /// <summary>
+    /// Secondo inverter nello stesso modulo: posizione in linea del punto di divisione (0 = un solo inverter). I rulli a
+    /// valle del punto restano sull'inverter del modulo, quelli a monte passano a un secondo inverter (nome del modulo + "a").
+    /// Serve alla via del trasferitore in double banking: il primo pacco resta fermo in battuta sulla parte di valle mentre
+    /// il secondo si posiziona su quella di monte, senza strisciamenti. La mette il programma quando una tipologia di pacco
+    /// è in double banking (decisione dell'utente del 2026-11-14).
+    /// </summary>
+    [UiProperty("Secondo inverter: divisione a (0 = un solo inverter)", "mm", "Inverter", Order = 29)]
+    public double SplitAtMm { get; set; }
+
+    /// <summary>Divisione fatta a mano dall'utente: il programma non la sposta e non la toglie.</summary>
+    [UiProperty("Divisione fatta a mano (il programma non la sposta)", "", "Inverter", Order = 30)]
+    public bool SplitManual { get; set; }
+
     /// <summary>Identificativo della zona di comando effettiva (il modulo stesso se non indicata).</summary>
     [JsonIgnore]
     public string EffectiveZoneId => string.IsNullOrWhiteSpace(CommandZoneId) ? Id : CommandZoneId.Trim();

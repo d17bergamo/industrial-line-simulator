@@ -119,6 +119,11 @@ public sealed class SimFrame
     public double TimeS { get; init; }
     public PackageSnapshot[] Packages { get; init; } = Array.Empty<PackageSnapshot>();
     public double[] ZoneSpeeds { get; init; } = Array.Empty<double>();
+    /// <summary>
+    /// Via del trasferitore su due inverter: velocità della parte di valle (dal punto di divisione al fermo finale).
+    /// In <see cref="ZoneSpeeds"/> la via del trasferitore è la parte di monte.
+    /// </summary>
+    public double ValleSpeed { get; init; }
     public CycleState[] ZoneStates { get; init; } = Array.Empty<CycleState>();
     public bool[] PhotocellOutputs { get; init; } = Array.Empty<bool>();
     public StrapperState[] StrapperStates { get; init; } = Array.Empty<StrapperState>();

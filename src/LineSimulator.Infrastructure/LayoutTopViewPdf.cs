@@ -56,12 +56,24 @@ public static class LayoutTopViewPdf
             }
             z.Sections.Add(s);
         }
-        return zones.Select(z => z with
+        var list = zones.Select(z => z with
         {
             StartMm = z.Sections.Min(s => s.StartMm),
             EndMm = z.Sections.Max(s => s.EndMm),
             Label = "Inverter " + Short(z.Sections[0]) + ": " + string.Join(" + ", z.Sections.Select(Nm))
         }).ToList();
+        // Via del trasferitore su due inverter (double banking): due zone di comando nello stesso modulo
+        double split = TransferSplitRule.SplitMm(p);
+        var trf = LayoutRules.TransferModule(p);
+        int i = split > 0 && trf != null ? list.FindIndex(z => z.Sections.Count == 1 && z.Sections[0] == trf) : -1;
+        if (i >= 0)
+        {
+            var z = list[i];
+            string up = z.Id + TransferSplitRule.UpstreamSuffix;
+            list[i] = z with { Id = up, EndMm = split, Label = $"Inverter {up}: {Nm(trf!)} monte (secondo pacco)", Color = Palette[list.Count % Palette.Length] };
+            list.Insert(i + 1, z with { StartMm = split, Label = $"Inverter {z.Id}: {Nm(trf!)} valle (primo pacco)" });
+        }
+        return list;
     }
 
     /// <summary>Elementi di arresto lungo la linea: fermo finale, fermi scomparenti, inizio del trasferitore.</summary>
@@ -144,7 +156,7 @@ public static class LayoutTopViewPdf
         foreach (var z in zones)
             foreach (var s in z.Sections)
             {
-                double xa = X(s.StartMm), xb = X(s.EndMm);
+                double xa = X(Math.Max(s.StartMm, z.StartMm)), xb = X(Math.Min(s.EndMm, z.EndMm));   // modulo su due inverter: solo la sua parte
                 Fill(c, Light(z.Color)); Rect(c, xa, BandY, xb - xa, BandH, true);
                 if (s.FollowsStrapping)
                 {

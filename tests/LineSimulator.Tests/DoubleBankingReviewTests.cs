@@ -18,7 +18,7 @@ public class DoubleBankingReviewTests
         string? dir = Environment.GetEnvironmentVariable("PDF_PREVIEW_DIR");
         if (string.IsNullOrWhiteSpace(dir)) return;
         var sb = new StringBuilder();
-        sb.AppendLine("Modello;Configurazione;Esito;t/h;Collisioni;Avvisi;Cicli trasferitore;Cicli con 2 pacchi;Pacchi");
+        sb.AppendLine("Modello;Configurazione;Esito;t/h;Collisioni;Avvisi;Cicli trasferitore;Cicli con 2 pacchi;Pacchi;Strisciamenti;Divisione via trasferitore [mm]");
         var details = new StringBuilder();
         foreach (var (name, create) in SampleProjects.All)
         {
@@ -51,7 +51,7 @@ public class DoubleBankingReviewTests
                 double span = exits.Count > 0 ? exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS) : 0;
                 double tph = span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
                 string outcome = !e.CompletedNormally ? "NON COMPLETATA: " + e.FinishReason : e.Collisions > 0 ? "collisioni" : warn.Count > 0 ? "avvisi" : "pulita";
-                sb.AppendLine($"{name};{cfg};{outcome};{tph:0.0};{e.Collisions};{warn.Count};{e.Transfer.Cycles};{pairs};{exits.Count}/{e.Packages.Count}");
+                sb.AppendLine($"{name};{cfg};{outcome};{tph:0.0};{e.Collisions};{warn.Count};{e.Transfer.Cycles};{pairs};{exits.Count}/{e.Packages.Count};{e.SlipEvents};{(e.TransferSplitM is double sp ? (sp * 1000).ToString("0") : "-")}");
                 if (warn.Count > 0 || !e.CompletedNormally)
                 {
                     var first = warn.FirstOrDefault();

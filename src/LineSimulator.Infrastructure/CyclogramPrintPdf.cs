@@ -27,7 +27,7 @@ public static class CyclogramPrintPdf
     private static readonly string[] CycleOrder =
     {
         "INGRESSO", "AUTOSTART", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "PROSSIMA", "COMMUTA", "LEGATO",
-        "ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO", "VIA_LIBERA", "RALLENTA", "BATTUTA", "SECONDO", "FERMO_CODA",
+        "ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO", "VIA_LIBERA", "RALLENTA", "BATTUTA", "VALLE_FERMA", "SECONDO", "FERMO_CODA",
         "SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO", "PESA", "RIPOSO", "AUTOSTOP"
     };
 
@@ -120,21 +120,16 @@ public static class CyclogramPrintPdf
         double X(double t) => px0 + (px1 - px0) * (t - t0) / span;
 
         var zones = e.Zones.ToList();
-        for (int zi = 0; zi < zones.Count; zi++)
+        void SpeedRow(string key, string label, string sub, double vmax, Func<SimFrame, double> speed)
         {
-            var z = zones[zi];
-            int idx = zi;
-            double vmax = Math.Max(0.1, z.Config.HighSpeed);
-            string secs = string.Join(" + ", p.Sections.Where(s => s.EffectiveZoneId == z.Id).OrderBy(s => s.StartMm).Select(s => s.Id));
-            double len = p.Sections.Where(s => s.EffectiveZoneId == z.Id).Sum(s => s.LengthMm);
-            rows.Add(("INV:" + z.Id, $"Via a rulli {secs}", $"{N(len, "0")} mm · inverter {z.Id}", (y, h) =>
+            rows.Add((key, label, sub, (y, h) =>
             {
                 var pts = new StringBuilder();
                 bool first = true;
                 for (double t = t0; t <= t1 + 1e-9; t += 0.25)
                 {
                     var f = e.Recorder.FrameAt(t);
-                    double sp = f != null && idx < f.ZoneSpeeds.Length ? Math.Abs(f.ZoneSpeeds[idx]) : 0;
+                    double sp = f != null ? Math.Abs(speed(f)) : 0;
                     double yy = y + 3 + (h - 8) * Math.Min(1.2, sp / vmax) / 1.2;
                     pts.Append(F(X(t))).Append(' ').Append(F(yy)).Append(first ? " m " : " l ");
                     first = false;
@@ -142,6 +137,23 @@ public static class CyclogramPrintPdf
                 c.Append("1.6 w\n").Append(pts).Append("S\n0.5 w\n");
                 Text(c, px0 - 22, y + 3 + (h - 8) / 1.2 - 3, 6.5, N(vmax));
             }));
+        }
+        for (int zi = 0; zi < zones.Count; zi++)
+        {
+            var z = zones[zi];
+            int idx = zi;
+            double vmax = Math.Max(0.1, z.Config.HighSpeed);
+            string secs = string.Join(" + ", p.Sections.Where(s => s.EffectiveZoneId == z.Id).OrderBy(s => s.StartMm).Select(s => s.Id));
+            double len = p.Sections.Where(s => s.EffectiveZoneId == z.Id).Sum(s => s.LengthMm);
+            if (e.TransferSplitM is double split && z.Info == e.Topology.StopperZone)
+            {
+                // via del trasferitore su due inverter: prima la parte di monte (secondo pacco), poi quella di valle (primo pacco)
+                SpeedRow("INV:" + e.MonteInverterId, $"Via a rulli {secs}, monte", $"{N(split * 1000 - z.Info.StartM * 1000, "0")} mm · inverter {e.MonteInverterId} · secondo pacco", vmax,
+                    f => idx < f.ZoneSpeeds.Length ? f.ZoneSpeeds[idx] : 0);
+                SpeedRow("INV:" + z.Id, $"Via a rulli {secs}, valle", $"{N(z.Info.EndM * 1000 - split * 1000, "0")} mm · inverter {z.Id} · primo pacco", vmax, f => f.ValleSpeed);
+                continue;
+            }
+            SpeedRow("INV:" + z.Id, $"Via a rulli {secs}", $"{N(len, "0")} mm · inverter {z.Id}", vmax, f => idx < f.ZoneSpeeds.Length ? f.ZoneSpeeds[idx] : 0);
         }
         var groups = new[] { TrackGroup.Photocell, TrackGroup.Strapper, TrackGroup.Clamp, TrackGroup.Stop, TrackGroup.Stopper, TrackGroup.Transfer, TrackGroup.Scale, TrackGroup.Rejector };
         foreach (var g in groups)
