@@ -1,5 +1,6 @@
 using LineSimulator.Core;
 using LineSimulator.Engine;
+using LineSimulator.Engine.Runtime;
 using LineSimulator.Infrastructure;
 using LineSimulator.Models;
 using Xunit;
