@@ -31,6 +31,10 @@ public sealed class AdvisorReport
     /// <summary>Proposta di risparmio: svincolo unito all'inverter di legatura (solo se la linea supera l'obiettivo di oltre il 25%).</summary>
     public AdvisorOption? Saving { get; set; }
     public LineProject? SavingProject { get; set; }
+    /// <summary>Testa del pacco in accumulo durante l'ultima legatura di coda e obiettivo non garantito: svincolo da allungare.</summary>
+    public string? ReleaseWarning { get; set; }
+    public AdvisorOption? ReleaseLengthening { get; set; }
+    public LineProject? ReleaseProject { get; set; }
     public string Summary { get; set; } = string.Empty;
 }
 
@@ -106,6 +110,29 @@ public static class ProductivityAdvisor
                         $"La linea supera l'obiettivo di oltre il {SavingMargin * 100:0}%: con un inverter in meno fa {tph.ToString("0.0", It)} t/h, obiettivo {targetTph.ToString("0.0", It)} t/h ancora raggiunto.",
                         tph, pph, true, null) { GainTph = tph - report.BestTonnesPerHour };
                     report.SavingProject = trial;
+                }
+            }
+        }
+        // Regola dell'utente (2026-11-14): se nell'ultima legatura di coda la testa del pacco entra in accumulo (oltre la
+        // fotocellula di arresto davanti al trasferitore) e l'obiettivo non è garantito, lo si segnala e si propone di allungare lo svincolo.
+        if (targetTph > 0 && !report.TargetReached)
+        {
+            var basis = report.BestProject ?? current;
+            double over = StrappingAreaRules.HeadIntoAccumulationMm(basis);
+            if (over > 1e-6)
+            {
+                int n = StrappingAreaRules.ReleaseRollersForTailStrap(basis);
+                report.ReleaseWarning = $"Durante l'ultima legatura di coda la testa del pacco più lungo entra in accumulo: supera di {over.ToString("0", It)} mm la fotocellula di arresto davanti al trasferitore e la produttività non è garantita.";
+                var trial = ProjectSerializer.Clone(basis);
+                if (StrappingAreaRules.LengthenReleaseForTailStrap(trial))
+                {
+                    trial = Prepared(trial);
+                    progress?.Report("svincolo allungato per l'ultima legatura di coda");
+                    var (tph, pph, ok, problem, _) = Evaluate(trial);
+                    report.ReleaseLengthening = new AdvisorOption("LENGTHEN_RELEASE", $"Allungare lo svincolo di {n} {(n == 1 ? "rullo" : "rulli")}",
+                        $"La testa del pacco resta prima dell'accumulo con 500 mm di margine; la linea a valle si allunga di {(n * (StrappingAreaRules.ReleaseModules(basis).LastOrDefault()?.RollerPitchMm ?? 0)).ToString("0", It)} mm.",
+                        tph, pph, ok, problem) { GainTph = ok ? tph - report.BestTonnesPerHour : 0 };
+                    if (ok) report.ReleaseProject = trial;
                 }
             }
         }
@@ -257,6 +284,15 @@ public static class ProductivityAdvisor
         {
             sb.AppendLine();
             sb.AppendLine($"Proposta di risparmio: {r.Saving.Title} → {T(r.Saving.TonnesPerHour)} t/h. {r.Saving.Description}");
+        }
+        if (r.ReleaseWarning != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Attenzione: " + r.ReleaseWarning);
+            if (r.ReleaseLengthening != null)
+                sb.AppendLine(r.ReleaseLengthening.Feasible
+                    ? $"Proposta: {r.ReleaseLengthening.Title} → {T(r.ReleaseLengthening.TonnesPerHour)} t/h ({(r.ReleaseLengthening.GainTph >= 0 ? "+" : "")}{T(r.ReleaseLengthening.GainTph)}). {r.ReleaseLengthening.Description}"
+                    : $"{r.ReleaseLengthening.Title}: non applicabile ({r.ReleaseLengthening.Problem}).");
         }
         if (r.TargetTonnesPerHour > 0)
             sb.AppendLine(r.TargetReached

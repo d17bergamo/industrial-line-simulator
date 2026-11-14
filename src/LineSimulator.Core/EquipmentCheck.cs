@@ -142,6 +142,14 @@ public static class EquipmentCheck
         }
         foreach (var (a, b) in StrappingAreaRules.FacingBothEnabled(p))
             r.Add(new("STR_FACING", $"{a.Id} e {b.Id} sono frontali (una di fronte all'altra) ed entrambe abilitate: disabilita una delle due, che resta arretrata.", false, true));
+        // Regola dell'utente (2026-11-14): nell'ultima legatura di coda la testa del pacco non deve entrare in accumulo
+        double over = StrappingAreaRules.HeadIntoAccumulationMm(p);
+        if (over > 1e-6)
+        {
+            int n = StrappingAreaRules.ReleaseRollersForTailStrap(p);
+            r.Add(new("STR_HEAD_ACCUM", $"Durante l'ultima legatura di coda la testa del pacco più lungo entra in accumulo: supera di {over:0} mm la fotocellula di arresto davanti al trasferitore" +
+                (n > 0 ? $"; si può allungare lo svincolo di {n} {(n == 1 ? "rullo" : "rulli")} (proposta nell'obiettivo di produttività)." : "; manca uno svincolo da allungare."), false, false));
+        }
         // Controllo delle fotocellule: superflue (da togliere a mano) e quelle che si potrebbero avvicinare al punto di arresto
         var audit = PhotocellAudit.Run(p);
         foreach (var a in audit.Where(a => a.Verdict == PhotocellVerdict.Superfluous))

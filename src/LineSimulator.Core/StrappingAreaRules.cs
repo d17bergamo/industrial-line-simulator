@@ -224,6 +224,58 @@ public static class StrappingAreaRules
         return done;
     }
 
+    // ------------------------------------------------------------------ Ultima legatura di coda e accumulo
+
+    /// <summary>
+    /// Inizio dell'accumulo (mm): la fotocellula di arresto davanti al trasferitore, oppure l'inizio della via del
+    /// trasferitore se viene prima o se la fotocellula manca. <see cref="double.MaxValue"/> se non c'è nessuno dei due.
+    /// </summary>
+    public static double AccumulationEntryMm(LineProject p)
+    {
+        var trf = LayoutRules.TransferModule(p);
+        double a = trf?.StartMm ?? double.MaxValue;
+        double pc = p.Photocells.Where(x => x.IsEnabled && x.ActsAsTransferStop).Select(x => x.PositionMm).DefaultIfEmpty(double.MaxValue).Min();
+        return Math.Min(a, pc);
+    }
+
+    /// <summary>
+    /// Regola dell'utente (2026-11-14): di quanto (mm) la testa del pacco più lungo, durante l'ultima legatura di coda,
+    /// supera l'inizio dell'accumulo (fotocellula di arresto davanti al trasferitore). 0 se resta prima.
+    /// </summary>
+    public static double HeadIntoAccumulationMm(LineProject p)
+    {
+        double need = RequiredStrappingHeadMaxMm(p);
+        double lim = AccumulationEntryMm(p);
+        if (double.IsNegativeInfinity(need) || lim == double.MaxValue) return 0;
+        return Math.Max(0, need - lim);
+    }
+
+    /// <summary>Rulli da aggiungere allo svincolo perché la testa resti prima dell'accumulo con 500 mm di margine.</summary>
+    public static int ReleaseRollersForTailStrap(LineProject p)
+    {
+        double over = HeadIntoAccumulationMm(p);
+        var m = ReleaseModules(p).LastOrDefault();
+        if (over <= 1e-6 || m == null) return 0;
+        return (int)Math.Ceiling((over + ParkingSafetyMm) / Math.Max(1, m.RollerPitchMm) - 1e-9);
+    }
+
+    /// <summary>
+    /// Allunga lo svincolo (a rulli interi, la linea a valle avanza) finché la testa del pacco più lungo, nell'ultima
+    /// legatura di coda, resta prima dell'accumulo. Inverter dedicato con motori commutabili. Falso se non serve o manca lo svincolo.
+    /// </summary>
+    public static bool LengthenReleaseForTailStrap(LineProject p)
+    {
+        int rollers = ReleaseRollersForTailStrap(p);
+        var m = ReleaseModules(p).LastOrDefault();
+        if (rollers <= 0 || m == null) return false;
+        double oldEnd = m.EndMm;
+        LineReflow.Fit(m, m.StartMm, oldEnd + rollers * m.RollerPitchMm);
+        LineReflow.AfterResize(p, m, oldEnd);
+        ProjectNormalizer.AlignStopperToLastRoller(p);
+        if (!m.JoinStrappingInverter) { m.CommandZoneId = string.Empty; m.FollowsStrapping = true; }
+        return true;
+    }
+
     /// <summary>Margini del parcheggio sullo svincolo: frenata prima del punto di arresto (2 m) + sicurezza di manovra (500 mm).</summary>
     public const double ParkingSafetyMm = 500;
     public static double ParkingMarginMm => PhotocellRules.MinDistanceToTargetMm + ParkingSafetyMm;

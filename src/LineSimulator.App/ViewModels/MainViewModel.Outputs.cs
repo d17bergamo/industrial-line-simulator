@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using LineSimulator.App.Mvvm;
 using LineSimulator.Infrastructure;
+using LineSimulator.Models;
 using Microsoft.Win32;
 
 namespace LineSimulator.App.ViewModels;
@@ -49,42 +50,50 @@ public sealed partial class MainViewModel
             double target = _project.Simulation.TargetTonnesPerHour;
             var progress = new Progress<string>(s => Status = "Obiettivo di produttività: " + s);
             var report = await Task.Run(() => ProductivityAdvisor.Analyze(snapshot, target, progress: progress));
-            if (report.BestProject == null || report.Path.Count == 0)
+            var path = _filePath;
+            LineProject? chosen = null;            // progetto da caricare alla fine (null = invariato)
+            double chosenTph = report.BestTonnesPerHour;
+            int changes = 0;
+            bool hasPath = report.BestProject != null && report.Path.Count > 0;
+            if (hasPath)
             {
-                if (report.SavingProject != null)
+                if (MessageBox.Show(report.Summary + "\nApplicare al progetto le modifiche del percorso proposto?", "Obiettivo di produttività",
+                                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
-                    // linea oltre l'obiettivo di più del 25%: proposta di unire lo svincolo all'inverter di legatura
-                    if (MessageBox.Show(report.Summary + "\nApplicare la proposta di risparmio (un inverter in meno)?", "Obiettivo di produttività",
-                                        MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                    {
-                        LoadProject(report.SavingProject, _filePath);
-                        _modified = true;
-                        Raise(nameof(SimTargetTph));
-                        Status = $"Svincolo unito all'inverter di legatura: {report.Saving!.TonnesPerHour:0.0} t/h (obiettivo {target:0.0} t/h).";
-                    }
-                    else Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
+                    Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
                     return;
                 }
+                chosen = report.BestProject; changes = report.Path.Count;
+            }
+            else if (report.ReleaseProject == null && report.SavingProject == null)
+            {
                 MessageBox.Show(report.Summary, "Obiettivo di produttività", MessageBoxButton.OK,
                     report.TargetReached ? MessageBoxImage.Information : MessageBoxImage.Warning);
                 Status = "Obiettivo di produttività: nessuna modifica applicata.";
                 return;
             }
-            var answer = MessageBox.Show(report.Summary + "\nApplicare al progetto le modifiche del percorso proposto?",
-                "Obiettivo di produttività", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (answer == MessageBoxResult.Yes)
+            string intro = hasPath ? "" : report.Summary + "\n";
+            // testa del pacco in accumulo nell'ultima legatura di coda e obiettivo non garantito: allungare lo svincolo?
+            if (report.ReleaseProject != null
+                && MessageBox.Show(intro + report.ReleaseWarning + "\n" + report.ReleaseLengthening!.Description +
+                                   $"\n{report.ReleaseLengthening.Title}? ({report.ReleaseLengthening.TonnesPerHour:0.0} t/h)", "Obiettivo di produttività",
+                                   MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            { chosen = report.ReleaseProject; chosenTph = report.ReleaseLengthening.TonnesPerHour; changes++; }
+            // linea oltre l'obiettivo di più del 25%: unire lo svincolo all'inverter di legatura?
+            if (report.SavingProject != null
+                && MessageBox.Show(intro + "La linea supera l'obiettivo di oltre il 25%.\n" + report.Saving!.Description +
+                                   "\nUnire lo svincolo all'inverter di legatura (un inverter in meno)?", "Obiettivo di produttività",
+                                   MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            { chosen = report.SavingProject; chosenTph = report.Saving.TonnesPerHour; changes++; }
+            if (chosen == null)
             {
-                var path = _filePath;
-                bool saving = report.SavingProject != null
-                              && MessageBox.Show("Con il percorso applicato la linea supera l'obiettivo di oltre il 25%.\n" + report.Saving!.Description +
-                                                 "\nUnire anche lo svincolo all'inverter di legatura (un inverter in meno)?", "Obiettivo di produttività",
-                                                 MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
-                LoadProject(saving ? report.SavingProject! : report.BestProject, path);
-                _modified = true;
-                Raise(nameof(SimTargetTph));
-                Status = $"Applicate {report.Path.Count + (saving ? 1 : 0)} modifiche: {(saving ? report.Saving!.TonnesPerHour : report.BestTonnesPerHour):0.0} t/h (obiettivo {target:0.0} t/h).";
+                Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
+                return;
             }
-            else Status = "Obiettivo di produttività: analisi completata, progetto invariato.";
+            LoadProject(chosen, path);
+            _modified = true;
+            Raise(nameof(SimTargetTph));
+            Status = $"Applicate {changes} modifiche: {chosenTph:0.0} t/h (obiettivo {target:0.0} t/h).";
         }
         catch (Exception ex) { MessageBox.Show("Analisi non riuscita:\n" + ex.Message, "Errore", MessageBoxButton.OK, MessageBoxImage.Error); }
         finally
