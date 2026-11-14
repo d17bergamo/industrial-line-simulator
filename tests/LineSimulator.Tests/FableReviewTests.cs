@@ -166,10 +166,12 @@ public class FableReviewTests
             if (onZone.Count >= 2 && f.StopperState is StopperState.Free or StopperState.Aligning) earlySecond += dt;
             // 2) primo pacco intestato, nessun pacco in movimento vicino alla via: i rulli devono essere fermi
             bool someoneMoving = f.Packages.Any(k => k.LiftM < 1e-6 && Math.Abs(k.Velocity) > 0.01 && k.HeadM > start - 4.0 && k.HeadM - k.LengthM < zone.EndM);
-            if (f.StopperState == StopperState.Aligned && !someoneMoving && Math.Abs(f.ZoneSpeeds[zi]) > 0.05) spinning += dt;
+            // (durante l'intestatura del secondo pacco sul fermo scomparente i rulli lo spingono in battuta: è voluto)
+            bool secondAligning = f.StopStates.Any(x => x == StopState.Aligning);
+            if (f.StopperState == StopperState.Aligned && !someoneMoving && !secondAligning && Math.Abs(f.ZoneSpeeds[zi]) > 0.05) spinning += dt;
         }
         Assert.True(earlySecond < 0.5, $"secondo pacco sulla via del trasferitore per {earlySecond:0.0} s con il primo non ancora intestato");
-        Assert.True(spinning < 3.0, $"via del trasferitore in marcia per {spinning:0.0} s sotto il pacco fermo");
+        Assert.True(spinning < 1.5, $"via del trasferitore in marcia per {spinning:0.0} s sotto il pacco fermo");
     }
 
     /// <summary>Decisione 3: con la finestra di registrazione il ciclogramma tiene solo gli ultimi minuti; senza, tutto.</summary>
