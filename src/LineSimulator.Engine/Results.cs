@@ -195,8 +195,10 @@ public static class ResultsCalculator
         {
             var ordered = candidates.OrderByDescending(r => r.BusyPerPackageS).ToList();
             var top = ordered[0];
+            // L'intervallo di ingresso vale solo con la regola "a intervallo fisso": con "un pacco alla volta in legatura"
+            // (predefinita) non è usato e non può essere il collo di bottiglia
             double feed = e.Project.Infeed.IntervalS;
-            if (feed >= top.BusyPerPackageS)
+            if (e.Project.Infeed.Mode == InfeedMode.FixedInterval && feed >= top.BusyPerPackageS)
             {
                 bnId = "INFEED"; bnName = "Alimentazione pacchi";
                 bnText = $"La linea è limitata dall'arrivo dei pacchi (intervallo {feed.ToString("0.0", ci)} s) più che da una macchina: " +

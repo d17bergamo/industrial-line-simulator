@@ -44,8 +44,7 @@ public static class SimulationPreparation
         r.Changes.AddRange(StrappingAreaRules.DecideReleaseInverters(p));
         FixReferences(p, r);
         FixClampPositions(p, r, force: false);
-        if (BankingOptions.Normalize(p))
-            r.Changes.Add("Intestatura di coda non disponibile: la linea non ha un fermo scomparente abilitato. Impostata l'intestatura di testa.");
+        r.Changes.AddRange(BankingOptions.NormalizeChanges(p));   // ogni scelta riportata a una possibile, con il suo motivo
         SyncAutoSensors(p, r);
         CheckMandatoryStrapping(p, r);
         return r;

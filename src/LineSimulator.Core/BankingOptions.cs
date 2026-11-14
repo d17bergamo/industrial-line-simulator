@@ -121,19 +121,30 @@ public static class BankingOptions
     /// Riporta l'intestatura generale a "testa" se la coda non è disponibile e le scelte dei pacchi a quelle possibili
     /// (cambiato il layout); restituisce true se ha cambiato il progetto.
     /// </summary>
-    public static bool Normalize(LineProject p)
+    public static bool Normalize(LineProject p) => NormalizeChanges(p).Count > 0;
+
+    /// <summary>Come <see cref="Normalize"/>, con la descrizione di ogni scelta riportata a una possibile.</summary>
+    public static List<string> NormalizeChanges(LineProject p)
     {
-        bool changed = false;
+        var done = new List<string>();
         if (p.Simulation.Heading == StopReference.Tail && !TailHeadingAvailable(p))
         {
             p.Simulation.Heading = StopReference.Head;
-            changed = true;
+            done.Add("Intestatura di coda non disponibile: la linea non ha un fermo scomparente abilitato. Impostata l'intestatura di testa.");
         }
         foreach (var t in p.PackageTypes)
         {
-            if (t.Banking == AccumulationMode.DoubleBanking && !DoubleBankingAvailable(p, t)) { t.Banking = AccumulationMode.SingleBanking; changed = true; }
-            if (t.Heading is { } h && !HeadingAvailable(p, t, Banking(p, t), h)) { t.Heading = Heading(p, t); changed = true; }
+            if (t.Banking == AccumulationMode.DoubleBanking && !DoubleBankingAvailable(p, t))
+            {
+                t.Banking = AccumulationMode.SingleBanking;
+                done.Add($"Pacco {t.Id}: double banking non possibile (due pacchi da {t.LengthMm:0} mm non stanno sul trasferitore). Impostato il single banking.");
+            }
+            if (t.Heading is { } h && !HeadingAvailable(p, t, Banking(p, t), h))
+            {
+                t.Heading = Heading(p, t);
+                done.Add($"Pacco {t.Id}: intestatura di {(h == StopReference.Tail ? "coda" : "testa")} non possibile su questa linea. Impostata l'intestatura di {(t.Heading == StopReference.Tail ? "coda" : "testa")}.");
+            }
         }
-        return changed;
+        return done;
     }
 }

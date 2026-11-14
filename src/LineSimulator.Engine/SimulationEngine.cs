@@ -834,7 +834,10 @@ public sealed partial class SimulationEngine : ILogicContext
                     $"{z.Id}: ripartenza comandata da {pcStart?.Id ?? "fotocellula"}{(demandCause != null ? $" (arrivo {demandCause.Id})" : "")}", z.Id, demandCause?.Id);
             }
 
-            if (mode != prevMode || (mode == InverterMode.Run && z.Level != prevLevel) || (mode == InverterMode.Stop && reason != prevReason))
+            // Svincolo con i motori commutati: il comando effettivo è quello della via di legatura (ApplyFollowers), quindi il
+            // comando proprio non va nel registro (prima veniva scritto a ogni scansione: centinaia di eventi uguali al secondo)
+            bool following = _following.Contains(z);
+            if (!following && (mode != prevMode || (mode == InverterMode.Run && z.Level != prevLevel) || (mode == InverterMode.Stop && reason != prevReason)))
             {
                 string what = mode switch
                 {
@@ -888,7 +891,12 @@ public sealed partial class SimulationEngine : ILogicContext
         foreach (var f in Followers)
         {
             bool engage = st != null && StrappingInProgress(st) && NeedsFollower(st, f) && !OthersOn(f, st.Package);
-            if (!engage) { _following.Remove(f); continue; }
+            if (!engage)
+            {
+                if (_following.Remove(f))
+                    Emit(SimEventType.InverterCommand, EventSeverity.Trace, $"{f.Id}: motori di nuovo sul proprio inverter - {f.Reason}", f.Id);
+                continue;
+            }
             var s = st!.Zone;
             bool was = !_following.Add(f);
             f.Mode = s.Mode;

@@ -126,4 +126,26 @@ public class DoubleBankingReviewTests
         Assert.True(e.SlipEvents == 0, string.Join("\n", slips));
         Assert.Equal(0, e.Collisions);
     }
+
+    /// <summary>
+    /// Revisione 2026-11-14: con i motori dello svincolo commutati sull'inverter di legatura il registro eventi riceveva
+    /// lo stesso comando dello svincolo a ogni scansione (10 ms). Un comando va nel registro solo quando cambia.
+    /// </summary>
+    [Fact]
+    public void SwitchedReleaseMotors_DoNotFloodTheEventLog()
+    {
+        var p = SampleProjects.All.Single(m => m.Name.StartsWith("3 legatrici")).Factory();
+        Assert.Contains(p.Sections, s => s.FollowsStrapping);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.Contains(e.Events, x => x.Message.Contains("motori commutati sull'inverter di legatura", StringComparison.Ordinal));
+        foreach (var g in e.Events.Where(x => x.Type == SimEventType.InverterCommand && x.ComponentId != null).GroupBy(x => x.ComponentId))
+        {
+            var list = g.ToList();
+            for (int i = 1; i < list.Count; i++)
+                Assert.False(list[i].Message == list[i - 1].Message && list[i].TimeS - list[i - 1].TimeS < 2.5 * e.Dt,
+                    $"comando ripetuto a ogni scansione: {list[i]}");
+        }
+    }
 }
