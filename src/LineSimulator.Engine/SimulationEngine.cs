@@ -1031,52 +1031,56 @@ public sealed partial class SimulationEngine : ILogicContext
     // ------------------------------------------------------------------ 7. Moto pacchi
 
     /// <summary>
-    /// Sincronismo tra zone (regola dell'utente del 2026-11-14: nessuno strisciamento). Le zone impegnate dallo stesso pacco,
-    /// e quella a valle che sta per impegnare, vanno alla stessa velocità:
-    /// - comanda la più lenta (in ogni modalità: marcia, posizionamento, allineamento, arresto);
-    /// - nessuna corre più delle altre: chi è più veloce rallenta fino alla più lenta, poi accelerano insieme;
-    /// - il pacco non entra in una zona a valle più veloce di lui: la sua zona non accelera finché quella non l'ha raggiunta,
-    ///   e si ferma prima del confine se la zona a valle è ferma per un interblocco.
-    /// La zona a valle ferma per arresto automatico resta fuori dal sincronismo: riparte con la sua fotocellula a monte.
-    /// Prima solo la zona a valle vuota seguiva quella a monte, e solo in marcia.
+    /// Sincronismo tra zone (regola dell'utente del 2026-11-14: nessuno strisciamento): finché un pacco è a cavallo di più
+    /// zone, tutte hanno la stessa velocità richiesta, quella della più lenta. Vale in ogni modalità (marcia, posizionamento,
+    /// allineamento, arresto) e in entrambi i versi; prima solo la zona a valle seguiva quella a monte, e solo in marcia.
+    /// Se la zona a valle è ferma per comando, le vie sotto il pacco si fermano con la testa al confine.
     /// </summary>
     private Dictionary<ZoneRuntime, double> HandoverSpeedCaps()
     {
         var caps = new Dictionary<ZoneRuntime, double>();
         _syncGroups.Clear();
-        double align = Stopper.Config.AlignmentRollerSpeed, dt = Dt;
-        void Cap(ZoneRuntime z, double v) => caps[z] = Math.Min(caps.TryGetValue(z, out var c) ? c : double.PositiveInfinity, Math.Max(0, v));
+        double align = Stopper.Config.AlignmentRollerSpeed;
         foreach (var p in _active)
         {
             if (!p.OnRollers) continue;
             var under = new List<ZoneRuntime>();
-            foreach (var s in _sections)
-                if (s.End > p.TailM + OnRollersM && s.Start < p.HeadM - OnRollersM && !under.Contains(s.Zone)) under.Add(s.Zone);
-            if (under.Count == 0) continue;
-            double slowest = under.Min(z => z.TargetSpeed(align));
-            // zona a valle che il pacco sta per impegnare: entro lo spazio di frenata più 0,3 m, se il pacco ha il comando di avanzare
             ZoneRuntime? ahead = null;
-            double reach = p.HeadM + p.Velocity * p.Velocity / (2 * Math.Max(0.1, under.Min(z => z.Config.Deceleration))) + ApproachM;
-            bool stopsBefore = Station != null && Station.Package == p && StrappingInProgress(Station);   // in legatura: si ferma sulle sue quote
-            if (slowest > 1e-6 && !stopsBefore)
-                foreach (var s in _sections)
-                    if (s.Start >= p.HeadM - OnRollersM && s.Start <= reach && !under.Contains(s.Zone) && !s.Zone.AutoStopped && s.Zone.Config.IsEnabled) { ahead = s.Zone; break; }
-            if (under.Count < 2 && ahead == null) continue;
-            var group = new List<ZoneRuntime>(under);
-            if (ahead != null) group.Add(ahead);
-            slowest = group.Min(z => z.TargetSpeed(align));
-            foreach (var z in group)
+            foreach (var s in _sections)
             {
-                Cap(z, slowest);
-                foreach (var o in group) if (o != z) Cap(z, o.ActualSpeed + o.Config.Acceleration * dt);
+                if (s.End <= p.TailM + OnRollersM || s.Start >= p.HeadM - OnRollersM)
+                {
+                    // zona subito a valle, vuota, che il pacco sta per impegnare: lo aspetta alla sua velocità
+                    if (ahead == null && under.Count > 0 && s.Start >= p.HeadM - OnRollersM && s.Start <= p.HeadM + ApproachM && !under.Contains(s.Zone)
+                        && !_active.Any(q => q != p && q.OnRollers && q.HeadM > s.Zone.Info.StartM + 1e-9 && q.TailM < s.Zone.Info.EndM - 1e-9))
+                        ahead = s.Zone;
+                    continue;
+                }
+                if (!under.Contains(s.Zone)) under.Add(s.Zone);
             }
-            // il pacco non entra in una zona più veloce di lui: la sua zona tiene la velocità finché quella a valle non l'ha raggiunta
-            if (ahead != null && ahead.ActualSpeed > under.Min(z => z.ActualSpeed) + 0.01)
-                foreach (var z in under) Cap(z, z.ActualSpeed);
-            foreach (var z in group)
+            if (under.Count == 0) continue;
+            // Zona a valle ferma per comando (non per arresto automatico: quella riparte da sola all'arrivo del pacco): le vie sotto
+            // il pacco rallentano e si fermano con la testa al confine, invece di spingerlo contro rulli fermi.
+            foreach (var s in _sections)
+            {
+                if (under.Contains(s.Zone) || s.Start < p.HeadM - OnRollersM) continue;
+                if (!s.Zone.AutoStopped && s.Zone.TargetSpeed(align) <= 1e-9 && s.Zone.ActualSpeed <= 1e-6)
+                {
+                    double dec = Math.Max(0.1, under.Min(z => z.Config.Deceleration));
+                    double v = Math.Sqrt(2 * dec * Math.Max(0, s.Start + 0.8 * OnRollersM - p.HeadM));
+                    foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var cb) ? cb : double.PositiveInfinity, v);
+                }
+                break;
+            }
+            if (under.Count < 2 && ahead == null) continue;
+            double slowest = under.Min(z => Math.Min(z.TargetSpeed(align), caps.TryGetValue(z, out var c0) ? c0 : double.PositiveInfinity));
+            if (under.Count > 1)
+                foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var c) ? c : double.PositiveInfinity, slowest);
+            if (ahead != null) { caps[ahead] = Math.Min(caps.TryGetValue(ahead, out var ca) ? ca : double.PositiveInfinity, slowest); under.Add(ahead); }
+            foreach (var z in under)
             {
                 if (!_syncGroups.TryGetValue(z, out var g)) _syncGroups[z] = g = new List<ZoneRuntime>();
-                foreach (var o in group) if (o != z && !g.Contains(o)) g.Add(o);
+                foreach (var o in under) if (o != z && !g.Contains(o)) g.Add(o);
             }
         }
         return caps;
@@ -1084,8 +1088,8 @@ public sealed partial class SimulationEngine : ILogicContext
 
     /// <summary>Un pacco "è sui rulli" di un tratto quando lo impegna per almeno 5 mm (il contatto sul filo del confine non conta).</summary>
     private const double OnRollersM = 0.005;
-    /// <summary>Margine oltre lo spazio di frenata entro cui la zona a valle entra nel sincronismo con il pacco in arrivo.</summary>
-    private const double ApproachM = 0.3;
+    /// <summary>Distanza dalla zona a valle entro cui la zona, se vuota, si mette alla velocità del pacco in arrivo.</summary>
+    private const double ApproachM = 1.0;
     /// <summary>Zone che in questa scansione hanno lo stesso comando di velocità perché un pacco le impegna insieme.</summary>
     private readonly Dictionary<ZoneRuntime, List<ZoneRuntime>> _syncGroups = new();
 
