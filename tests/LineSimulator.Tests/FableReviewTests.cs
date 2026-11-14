@@ -164,7 +164,7 @@ public class FableReviewTests
         {
             var onZone = f.Packages.Where(k => k.LiftM < 1e-6 && k.LateralM < 1e-6 && k.HeadM > start + 1.0 && k.HeadM - k.LengthM < zone.EndM).ToList();
             // 1) due pacchi sulla via del trasferitore mentre il primo non è ancora intestato
-            if (onZone.Count >= 2 && f.StopperState is StopperState.Idle or StopperState.Aligning) earlySecond += dt;
+            if (onZone.Count >= 2 && f.StopperState is StopperState.Free or StopperState.Aligning) earlySecond += dt;
             // 2) primo pacco intestato, nessun pacco in movimento vicino alla via: i rulli devono essere fermi
             bool someoneMoving = f.Packages.Any(k => k.LiftM < 1e-6 && Math.Abs(k.Velocity) > 0.01 && k.HeadM > start - 4.0 && k.HeadM - k.LengthM < zone.EndM);
             if (f.StopperState == StopperState.Aligned && !someoneMoving && Math.Abs(f.ZoneSpeeds[zi]) > 0.05) spinning += dt;
