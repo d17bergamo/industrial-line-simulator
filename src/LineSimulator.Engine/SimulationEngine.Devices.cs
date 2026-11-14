@@ -945,10 +945,17 @@ public sealed partial class SimulationEngine
         return InverterMode.Stop;
     }
 
-    /// <summary>Un pacco impegna la fotocellula a monte della via (quella di ripartenza o di arresto davanti al trasferitore).</summary>
+    /// <summary>
+    /// Un pacco in arrivo impegna la fotocellula a monte della via (quella di ripartenza o di arresto davanti al trasferitore).
+    /// Non conta il pacco ancora in legatura: nell'ultima legatura di coda la sua testa può già coprire la fotocellula,
+    /// ma finché non è legato non arriva.
+    /// </summary>
     private bool PackageAtUpstreamPhotocell(ZoneRuntime z)
-        => (z.RestartPhotocell?.Output ?? false)
-           || _photocells.Any(pc => pc.Config.IsEnabled && pc.Config.ActsAsTransferStop && pc.Output && pc.PositionM < z.Info.StartM + 1e-9);
+    {
+        bool Arriving(PhotocellRuntime pc) => pc.Output && (pc.RawPackage ?? pc.OutputPackage) is var k && (k == null || k != Station?.Package);
+        return (z.RestartPhotocell != null && Arriving(z.RestartPhotocell))
+               || _photocells.Any(pc => pc.Config.IsEnabled && pc.Config.ActsAsTransferStop && pc.PositionM < z.Info.StartM + 1e-9 && Arriving(pc));
+    }
 
     private void UpdateIntermediateStops(double dt)
     {

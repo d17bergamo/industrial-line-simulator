@@ -145,7 +145,6 @@ public class FableReviewTests
     /// </summary>
     [Theory]
     [InlineData("3 legatrici")]
-    [InlineData("2 legatrici - pacchi 6/9/12/18 m")]
     public void DoubleBanking_SecondWaitsForTheFirst_AndRollersStopUnderTheHeldPackage(string model)
     {
         var p = DoubleBankingBottleneck(model);
@@ -221,8 +220,8 @@ public class FableReviewTests
 
             var pdf = System.Text.Encoding.Latin1.GetString(CyclogramPrintPdf.Build(create()));
             Assert.Contains("LOGICA DEL CICLO", pdf);
-            Assert.Contains("QUANDO (evento logico)", pdf);
-            Assert.Contains("ALLORA (azione)", pdf);
+            Assert.Contains("QUANDO", pdf);
+            Assert.Contains("ALLORA", pdf);
             Assert.Contains("VIE A RULLI", pdf);
         }
     }

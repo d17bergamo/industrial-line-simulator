@@ -23,6 +23,14 @@ public static class CyclogramPrintPdf
     /// <summary>Regole al massimo nella tabella "quando → allora" (due colonne da 18 righe).</summary>
     private const int MaxRules = 36;
 
+    /// <summary>Ordine del ciclo di un pacco: così la tabella "quando → allora" si legge dall'ingresso al deposito.</summary>
+    private static readonly string[] CycleOrder =
+    {
+        "INGRESSO", "AUTOSTART", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "PROSSIMA", "COMMUTA", "LEGATO",
+        "ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO", "VIA_LIBERA", "RALLENTA", "BATTUTA", "SECONDO", "FERMO_CODA",
+        "SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO", "PESA", "RIPOSO", "AUTOSTOP"
+    };
+
     public static void Save(string path, LineProject project, double? lineSpeedMps = null, string? typeId = null) => File.WriteAllBytes(path, Build(project, lineSpeedMps, typeId));
 
     /// <summary>Ciclogramma del progetto; con <paramref name="typeId"/> solo di quella tipologia di pacco.</summary>
@@ -163,7 +171,19 @@ public static class CyclogramPrintPdf
                 }));
             }
 
-        double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 46;
+        // regole logiche della finestra, numerate nell'ordine del ciclo (non in ordine di comparsa: la finestra può
+        // cominciare a metà del ciclo del pacco precedente)
+        var rowIndex = new Dictionary<string, int>();
+        for (int i = 0; i < rows.Count; i++) rowIndex[rows[i].Key] = i;
+        var links = e.Recorder.Links.Where(l => l.TimeS >= t0 && l.TimeS <= t1 && rowIndex.ContainsKey(l.ActionKey)).OrderBy(l => l.TimeS).ToList();
+        var rules = links.GroupBy(l => l.RuleId).Select(g => g.First())
+            .OrderBy(l => Array.IndexOf(CycleOrder, l.RuleId) is var k && k >= 0 ? k : CycleOrder.Length).ThenBy(l => l.TimeS).Take(MaxRules).ToList();
+        var numbers = new Dictionary<string, int>();
+        for (int i = 0; i < rules.Count; i++) numbers[rules[i].RuleId] = i + 1;
+
+        // la tabella della logica occupa solo le righe che servono: il resto va al grafico
+        double tablesH = Math.Clamp(34 + 10.5 * ((rules.Count + 1) / 2 + 1), 70, 215);
+        double legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 46;
         double rowH = Math.Min(34, (chartTop - chartBottom) / Math.Max(1, rows.Count));
         double gy1 = chartTop - rows.Count * rowH;
 
@@ -188,22 +208,12 @@ public static class CyclogramPrintPdf
         Line(c, M, gy1, px1, gy1);
 
         // collegamenti logici evento -> azione registrati dal motore nella finestra
-        var rowIndex = new Dictionary<string, int>();
-        for (int i = 0; i < rows.Count; i++) rowIndex[rows[i].Key] = i;
         double RowY(int i) => chartTop - (i + 1) * rowH + rowH / 2;
-        var numbers = new Dictionary<string, int>();
-        var rules = new List<LogicLink>();
         var lastMark = new Dictionary<int, (double X, int Slot)>();
-        foreach (var l in e.Recorder.Links.Where(l => l.TimeS >= t0 && l.TimeS <= t1).OrderBy(l => l.TimeS))
+        foreach (var l in links)
         {
-            if (!rowIndex.TryGetValue(l.ActionKey, out int ra)) continue;
-            if (!numbers.TryGetValue(l.RuleId, out int n))
-            {
-                if (numbers.Count >= MaxRules) continue;
-                n = numbers.Count + 1;
-                numbers[l.RuleId] = n;
-                rules.Add(l);
-            }
+            if (!numbers.TryGetValue(l.RuleId, out int n)) continue;
+            int ra = rowIndex[l.ActionKey];
             double x = X(l.TimeS), ya = RowY(ra);
             if (rowIndex.TryGetValue(l.CauseKey, out int rc) && rc != ra)
             {
@@ -218,6 +228,7 @@ public static class CyclogramPrintPdf
             int slot = lastMark.TryGetValue(ra, out var prev) && x - prev.X < 11 ? prev.Slot + 1 : 0;
             lastMark[ra] = (x, slot);
             double cx = x + 6.5, cy = ya + Math.Min(6, rowH * 0.25) - (slot % 3) * Math.Min(8, rowH * 0.3);
+            Gray(c, 0);
             Circle(c, cx, cy, 4.4);
             string num = n.ToString(ci);
             Text(c, cx - (num.Length > 1 ? 3.4 : 1.8), cy - 2.2, 6.2, num);
