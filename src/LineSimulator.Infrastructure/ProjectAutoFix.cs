@@ -26,6 +26,9 @@ public sealed class AutoFixReport
 /// </summary>
 public static class ProjectAutoFix
 {
+    /// <summary>Passate al massimo: la seconda di norma non trova più nulla.</summary>
+    public const int MaxPasses = 3;
+
     public const string SourceLayout = "Layout", SourceCheck = "Controllo", SourcePhotocells = "Fotocellule", SourcePreparation = "Preparazione";
 
     /// <summary>Applica tutte le correzioni al progetto e restituisce l'elenco.</summary>
@@ -37,16 +40,24 @@ public static class ProjectAutoFix
             foreach (var m in msgs)
                 if (!string.IsNullOrWhiteSpace(m) && !r.Changes.Any(c => c.Message == m)) r.Changes.Add(new AutoFixChange(src, m));
         }
-        Add(SourceLayout, LayoutRules.Enforce(p));
-        Add(SourceCheck, EquipmentCheck.Run(p, fix: true).Where(i => i.Fixed).Select(i => i.Message));
-        var outside = p.Sections.Count == 0 ? new List<string>()
-            : p.Photocells.Where(x => x.PositionMm < p.Sections.Min(s => s.StartMm) - 1e-6 || x.PositionMm > p.Sections.Max(s => s.EndMm) + 1e-6).Select(x => x.Id).ToList();
-        if (ProjectNormalizer.ClampPhotocellsToRollers(p))
-            Add(SourcePhotocells, new[] { $"Fotocellule riportate dentro le vie a rulli: {string.Join(", ", outside)}" });
-        Add(SourcePhotocells, PhotocellRules.BeforeSimulation(p));
-        var prep = SimulationPreparation.Prepare(p);
-        Add(SourcePreparation, prep.Changes);
-        r.Errors.AddRange(prep.Errors);
+        // Una correzione può renderne necessaria un'altra (es. la fotocellula di arresto spostata dalla preparazione finisce
+        // vicina a quella di uscita legatura e va unita): si ripete finché non resta nulla, così l'elenco è completo
+        for (int pass = 0; pass < MaxPasses; pass++)
+        {
+            int before = r.Changes.Count;
+            Add(SourceLayout, LayoutRules.Enforce(p));
+            Add(SourceCheck, EquipmentCheck.Run(p, fix: true).Where(i => i.Fixed).Select(i => i.Message));
+            var outside = p.Sections.Count == 0 ? new List<string>()
+                : p.Photocells.Where(x => x.PositionMm < p.Sections.Min(s => s.StartMm) - 1e-6 || x.PositionMm > p.Sections.Max(s => s.EndMm) + 1e-6).Select(x => x.Id).ToList();
+            if (ProjectNormalizer.ClampPhotocellsToRollers(p))
+                Add(SourcePhotocells, new[] { $"Fotocellule riportate dentro le vie a rulli: {string.Join(", ", outside)}" });
+            Add(SourcePhotocells, PhotocellRules.BeforeSimulation(p));
+            var prep = SimulationPreparation.Prepare(p);
+            Add(SourcePreparation, prep.Changes);
+            r.Errors.Clear();
+            r.Errors.AddRange(prep.Errors);
+            if (r.Changes.Count == before) break;
+        }
         return r;
     }
 

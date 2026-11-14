@@ -199,7 +199,11 @@ public static class ProjectSerializer
         return copy;
     }
 
-    public static LineProject Clone(LineProject source) => Deserialize(Serialize(source));
+    /// <summary>
+    /// Copia identica del progetto: nessun adeguamento (i sensori di processo mancanti li aggiunge la preparazione del ciclo,
+    /// che lo elenca). Prima la copia li aggiungeva in silenzio, così l'anteprima delle correzioni non li mostrava.
+    /// </summary>
+    public static LineProject Clone(LineProject source) => Deserialize(Serialize(source), normalize: false);
 }
 
 /// <summary>Accesso ai file di progetto e salvataggio automatico.</summary>
