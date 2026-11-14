@@ -1684,6 +1684,8 @@ public sealed partial class MainViewModel : ObservableObject
             // simulazione continua: i pacchi entrano senza fine finché l'utente non la ferma
             simProject.Infeed.PackageCount = ContinuousPackageCount;
             simProject.Simulation.MaxSimulationTimeS = 1e9;
+            // il ciclogramma tiene gli ultimi 5 minuti, quelli a regime (decisione dell'utente): la memoria non cresce
+            simProject.Simulation.RecordWindowS = ContinuousRecordWindowS;
         }
         _engine = new SimulationEngine(simProject);
         if (_lineSpeedOverride is double ov) _engine.SetLineSpeed(ov);
@@ -1780,6 +1782,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Numero di pacchi della simulazione continua (in pratica senza fine).</summary>
     private const int ContinuousPackageCount = 1_000_000;
+    /// <summary>Simulazione continua: secondi di ciclogramma tenuti in memoria (gli ultimi, a regime).</summary>
+    private const double ContinuousRecordWindowS = 300;
 
     private void RunToEnd()
     {

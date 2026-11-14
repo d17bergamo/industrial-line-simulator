@@ -10,12 +10,18 @@ namespace LineSimulator.Infrastructure;
 /// Ciclogramma da stampare in bianco e nero (A3 orizzontale, una pagina): il ciclo di un pacco a regime.
 /// Una riga per ogni via a rulli con il profilo di velocità e una riga per macchina / fotocellula con le fasi a retini
 /// (nero = lavora, righe oblique = preparazione, puntinato = movimento, tratteggio = attesa, barra sottile = fotocellula occupata),
-/// asse del tempo con righe ogni secondo, eventi numerati, tempo ciclo a regime e le tabelle dei valori usati
+/// asse del tempo con righe ogni secondo e tempo ciclo a regime.
+/// Ogni azione è collegata all'evento logico che la fa partire (richiesta dell'utente del 2026-11-14): sul ciclogramma un
+/// pallino segna l'evento sulla sua riga, una linea scende fino alla riga dell'azione (freccia) e un numero rimanda alla
+/// tabella "quando → allora" sotto il grafico. I collegamenti li registra il motore dove prende la decisione
+/// (<see cref="LogicLink"/>); la stessa regola ha sempre lo stesso numero. Seconda pagina: tabelle dei valori usati
 /// (velocità, accelerazioni, spazi, tempi). Si simula una copia del progetto: il progetto aperto non cambia.
 /// </summary>
 public static class CyclogramPrintPdf
 {
     private const double W = 1191, H = 842, M = 30, LabelW = 175;
+    /// <summary>Regole al massimo nella tabella "quando → allora" (due colonne da 18 righe).</summary>
+    private const int MaxRules = 36;
 
     public static void Save(string path, LineProject project, double? lineSpeedMps = null, string? typeId = null) => File.WriteAllBytes(path, Build(project, lineSpeedMps, typeId));
 
@@ -35,7 +41,7 @@ public static class CyclogramPrintPdf
         if (lineSpeedMps is double v) e.SetLineSpeed(v);
         e.RunToCompletion();
         var r = e.ComputeResults();
-        return StepCyclogramPdf.Assemble(new List<string> { Page(e, r) }, W, H);
+        return StepCyclogramPdf.Assemble(new List<string> { Page(e, r), DataPage(e) }, W, H);
     }
 
     private enum Style { None, Work, Prep, Move, Wait, Occupied }
@@ -101,7 +107,7 @@ public static class CyclogramPrintPdf
         c.Append("1.5 w\n"); Line(c, M, H - M - 40, W - M, H - M - 40); c.Append("0.5 w\n");
 
         // ---------------------------------------------------- righe
-        var rows = new List<(string Label, string Sub, Action<double, double> Draw)>();
+        var rows = new List<(string Key, string Label, string Sub, Action<double, double> Draw)>();
         double px0 = M + LabelW, px1 = W - M;
         double X(double t) => px0 + (px1 - px0) * (t - t0) / span;
 
@@ -113,7 +119,7 @@ public static class CyclogramPrintPdf
             double vmax = Math.Max(0.1, z.Config.HighSpeed);
             string secs = string.Join(" + ", p.Sections.Where(s => s.EffectiveZoneId == z.Id).OrderBy(s => s.StartMm).Select(s => s.Id));
             double len = p.Sections.Where(s => s.EffectiveZoneId == z.Id).Sum(s => s.LengthMm);
-            rows.Add(($"Via a rulli {secs}", $"{N(len, "0")} mm · inverter {z.Id}", (y, h) =>
+            rows.Add(("INV:" + z.Id, $"Via a rulli {secs}", $"{N(len, "0")} mm · inverter {z.Id}", (y, h) =>
             {
                 var pts = new StringBuilder();
                 bool first = true;
@@ -136,7 +142,7 @@ public static class CyclogramPrintPdf
                 var segs = tr.Segments.Where(s => s.EndS > t0 && s.StartS < t1 && StyleOf(g, s.State) != Style.None).ToList();
                 if (segs.Count == 0 && g != TrackGroup.Strapper) continue;
                 string sub = SubLabel(p, tr.Key);
-                rows.Add((tr.Label, sub, (y, h) =>
+                rows.Add((tr.Key, tr.Label, sub, (y, h) =>
                 {
                     foreach (var s in segs)
                     {
@@ -157,7 +163,7 @@ public static class CyclogramPrintPdf
                 }));
             }
 
-        double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 64;
+        double tablesH = 215, legendH = 22, chartTop = H - M - 62, chartBottom = M + tablesH + legendH + 46;
         double rowH = Math.Min(34, (chartTop - chartBottom) / Math.Max(1, rows.Count));
         double gy1 = chartTop - rows.Count * rowH;
 
@@ -181,44 +187,45 @@ public static class CyclogramPrintPdf
         }
         Line(c, M, gy1, px1, gy1);
 
-        // eventi del pacco di riferimento
-        var events = new List<(double T, string Text)>();
-        if (pk != null)
+        // collegamenti logici evento -> azione registrati dal motore nella finestra
+        var rowIndex = new Dictionary<string, int>();
+        for (int i = 0; i < rows.Count; i++) rowIndex[rows[i].Key] = i;
+        double RowY(int i) => chartTop - (i + 1) * rowH + rowH / 2;
+        var numbers = new Dictionary<string, int>();
+        var rules = new List<LogicLink>();
+        var lastMark = new Dictionary<int, (double X, int Slot)>();
+        foreach (var l in e.Recorder.Links.Where(l => l.TimeS >= t0 && l.TimeS <= t1).OrderBy(l => l.TimeS))
         {
-            events.Add((pk.EntryTimeS, $"Il pacco {pk.Type.Id} entra in linea (prima fotocellula: identificazione)."));
-            var strap = e.Recorder.Tracks.Where(x => x.Group == TrackGroup.Strapper).SelectMany(x => x.Segments)
-                .Where(s => s.State == CycleState.Working && s.StartS >= pk.EntryTimeS).OrderBy(s => s.StartS).ToList();
-            if (strap.Count > 0)
+            if (!rowIndex.TryGetValue(l.ActionKey, out int ra)) continue;
+            if (!numbers.TryGetValue(l.RuleId, out int n))
             {
-                events.Add((strap[0].StartS, "Prima legatura: il pacco è fermo in posizione, stringifascio chiuso."));
-                // il pacco lascia la via di legatura quando impegna la fotocellula di uscita legatura
-                var exitPc = p.Photocells.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingExit);
-                double leave = (exitPc == null ? null : e.Recorder.Tracks.FirstOrDefault(x => x.Key == "PC:" + exitPc.Id)?.Segments
-                    .FirstOrDefault(sg => sg.State == CycleState.On && sg.StartS > strap[0].StartS)?.StartS) ?? (stopperSeg?.StartS ?? double.MaxValue);
-                double lastEnd = strap.Where(s => s.StartS < leave).Select(s => s.EndS).DefaultIfEmpty(strap[0].EndS).Max();
-                events.Add((lastEnd, "Ultima legatura finita: il pacco lascia la via di legatura."));
+                if (numbers.Count >= MaxRules) continue;
+                n = numbers.Count + 1;
+                numbers[l.RuleId] = n;
+                rules.Add(l);
             }
-            if (stopperSeg != null) events.Add((stopperSeg.StartS, "Il pacco arriva in battuta sul fermo finale."));
-            var lift = e.Recorder.Tracks.FirstOrDefault(x => x.Group == TrackGroup.Transfer)?.Segments
-                .FirstOrDefault(s => s.StartS >= pk.EntryTimeS && s.State == CycleState.Lifting);
-            if (lift != null) events.Add((lift.StartS, "Il trasferitore solleva e porta via il pacco."));
-            if (trfReturn != null) events.Add((trfReturn.StartS, "Pacco depositato: il trasferitore torna, pronto per il successivo."));
-        }
-        events = events.Where(x => x.T >= t0 && x.T <= t1).OrderBy(x => x.T).ToList();
-        double prevX = double.NegativeInfinity, prevDy = 0;
-        for (int i = 0; i < events.Count; i++)
-        {
-            double xx = X(events[i].T);
-            double dy = xx - prevX < 16 ? prevDy + 15 : 0;                 // eventi quasi contemporanei: cerchi uno sotto l'altro
-            c.Append("[4 3] 0 d 0.9 w\n"); Line(c, xx, gy1, xx, chartTop); c.Append("[] 0 d 0.5 w\n");
-            Circle(c, xx, gy1 - 22 - dy, 6.5);
-            Text(c, xx - 2.5, gy1 - 25 - dy, 8, (i + 1).ToString(ci));
-            prevX = xx; prevDy = dy;
+            double x = X(l.TimeS), ya = RowY(ra);
+            if (rowIndex.TryGetValue(l.CauseKey, out int rc) && rc != ra)
+            {
+                double yc = RowY(rc), dir = ya < yc ? 1 : -1;     // la freccia punta verso la riga dell'azione
+                Gray(c, 0); c.Append("0.8 w\n");
+                Line(c, x, yc, x, ya);
+                Rect(c, x - 1.7, yc - 1.7, 3.4, 3.4, true);         // pallino: l'evento
+                Line(c, x - 2.6, ya + dir * 4.5, x, ya); Line(c, x + 2.6, ya + dir * 4.5, x, ya);
+                c.Append("0.5 w\n");
+            }
+            // numero della regola accanto all'inizio dell'azione; i numeri vicini sulla stessa riga si sfalsano
+            int slot = lastMark.TryGetValue(ra, out var prev) && x - prev.X < 11 ? prev.Slot + 1 : 0;
+            lastMark[ra] = (x, slot);
+            double cx = x + 6.5, cy = ya + Math.Min(6, rowH * 0.25) - (slot % 3) * Math.Min(8, rowH * 0.3);
+            Circle(c, cx, cy, 4.4);
+            string num = n.ToString(ci);
+            Text(c, cx - (num.Length > 1 ? 3.4 : 1.8), cy - 2.2, 6.2, num);
         }
         // tempo ciclo a regime
         if (r.CycleTimeMeanS is double tc && pk != null)
         {
-            double a = X(pk.EntryTimeS), b = X(Math.Min(t1, pk.EntryTimeS + tc)), yb = gy1 - 52;
+            double a = X(pk.EntryTimeS), b = X(Math.Min(t1, pk.EntryTimeS + tc)), yb = gy1 - 30;
             c.Append("1.2 w\n"); Line(c, a, yb, b, yb); Line(c, a, yb - 4, a, yb + 4); Line(c, b, yb - 4, b, yb + 4); c.Append("0.5 w\n");
             string tt = $"Tempo ciclo a regime Tc = {N(tc, "0.0")} s";
             Gray(c, 1); Rect(c, (a + b) / 2 - tt.Length * 2.3, yb - 6, tt.Length * 4.6, 12, true); Gray(c, 0);
@@ -237,13 +244,34 @@ public static class CyclogramPrintPdf
         c.Append("1.6 w\n"); Line(c, lx, ly + 1, lx + 6, ly + 8); Line(c, lx + 6, ly + 8, lx + 18, ly + 8); Line(c, lx + 18, ly + 8, lx + 24, ly + 1); c.Append("0.5 w\n");
         Text(c, lx + 29, ly + 1.5, 7.5, "velocità della via (m/s)");
 
-        // ---------------------------------------------------- tabelle
+        // ---------------------------------------------------- logica del ciclo: quando -> allora
         double ty = M + tablesH - 12;
         double colW = (W - 2 * M - 20) / 2;
-        Text(c, M, ty, 9, "EVENTI");
-        double ey = ty - 12;
-        for (int i = 0; i < events.Count; i++) { Text(c, M, ey, 7.5, $"{i + 1}.  t = {N(events[i].T - t0, "0.0")} s  {events[i].Text}"); ey -= 10; }
-        ey -= 6;
+        Text(c, M, ty, 9, "LOGICA DEL CICLO: QUANDO ACCADE L'EVENTO, PARTE L'AZIONE");
+        Text(c, M + 330, ty, 7.5, "Sul ciclogramma: quadratino nero = evento sulla sua riga; freccia = azione che parte; il numero rimanda a questa tabella.");
+        var logicRows = rules.Select((l, i) => new[] { (i + 1).ToString(ci), l.When, l.Then }).ToList();
+        if (logicRows.Count == 0) Text(c, M, ty - 14, 7.5, "Nessun collegamento logico registrato in questo ciclo.");
+        int half = (logicRows.Count + 1) / 2;
+        var logicHead = new[] { "N.", "QUANDO (evento logico)", "ALLORA (azione)" };
+        var logicCols = new[] { 0.05, 0.47, 0.48 };
+        if (half > 0) Table(c, M, ty - 4, colW, logicHead, logicRows.Take(half).ToList(), logicCols);
+        if (logicRows.Count > half) Table(c, M + colW + 20, ty - 4, colW, logicHead, logicRows.Skip(half).ToList(), logicCols);
+        return c.ToString();
+    }
+
+    /// <summary>Seconda pagina: i valori usati dal ciclo (vie a rulli, macchine, fotocellule).</summary>
+    private static string DataPage(SimulationEngine e)
+    {
+        var p = e.Project;
+        var c = new StringBuilder();
+        string title = string.IsNullOrWhiteSpace(p.Name) ? "Linea di legatura" : p.Name;
+        Text(c, M, H - M - 8, 16, "Ciclogramma di un ciclo a regime: valori usati");
+        Text(c, M, H - M - 24, 9.5, title);
+        c.Append("1.5 w\n"); Line(c, M, H - M - 40, W - M, H - M - 40); c.Append("0.5 w\n");
+        // ---------------------------------------------------- tabelle
+        double ty = H - M - 62;
+        double colW = (W - 2 * M - 20) / 2;
+        double ey = ty;
         Text(c, M, ey, 9, "VIE A RULLI: VELOCITÀ, ACCELERAZIONI, SPAZI");
         ey -= 4;
         var secRows = p.Sections.OrderBy(s => s.StartMm).Select(s => new[]

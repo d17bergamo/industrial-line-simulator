@@ -257,6 +257,7 @@ public sealed partial class SimulationEngine
             st.State = StationState.Compacting;
             p.State = PackageState.Strapping;
             Emit(SimEventType.CompactorPhase, EventSeverity.Info, $"{p.Id} in posizione di compattazione, via a rulli ferma", Compactor.Id, p.Id);
+            Link("FERMATA", "Encoder: pacco alla quota di fermata", "La via di legatura si ferma, il compattatore chiude", StationKey, "CMP", p.Id);
             TryCommandClose(Compactor, Project.Compactor.PositionMm, st, p);
         }
         else if (BundleClamp != null)
@@ -264,6 +265,7 @@ public sealed partial class SimulationEngine
             st.State = StationState.Clamping;
             p.State = PackageState.Strapping;
             Emit(SimEventType.BundleClampPhase, EventSeverity.Info, $"{p.Id} in posizione di legatura", BundleClamp.Id, p.Id);
+            Link("FERMATA", "Encoder: pacco alla quota di fermata", "La via di legatura si ferma, lo stringifascio chiude", StationKey, "KNOF", p.Id);
             TryCommandClose(BundleClamp, BundleClampPositionsMm(), st, p);
         }
         else
@@ -399,6 +401,9 @@ public sealed partial class SimulationEngine
         st.State = StationState.Strapping;
         st.StrappingPhaseDone = false;
         p.State = PackageState.Strapping;
+        if (stop.Tasks.Count > 0)
+            Link("LEGA", ClampKey.Length > 0 ? "Dispositivo chiuso (conferma) e filo caricato" : "Encoder: pacco fermo alla quota di fermata e filo caricato",
+                "Le legatrici della fermata legano", ClampKey.Length > 0 ? ClampKey : StationKey, "STR:" + stop.Tasks[0].StrapperId, p.Id);
         Emit(SimEventType.PositioningCompleted, EventSeverity.Info,
             $"{p.Id} in fermata {st.StopIndex + 1}: {string.Join(", ", stop.Tasks.Select(x => $"{x.StrapperId}→#{x.StrapIndex + 1}"))}", st.Zone.Id, p.Id);
         foreach (var task in stop.Tasks)
@@ -421,6 +426,8 @@ public sealed partial class SimulationEngine
     private void BeginUnclamp(StationRuntime st, PackageRuntime p)
     {
         st.State = StationState.Unclamping;
+        if (ClampKey.Length > 0 && st.ActiveStrappers.Count > 0)
+            Link("APRE", "Legature della fermata finite", BundleClamp != null ? "Lo stringifascio apre" : "Il compattatore apre", "STR:" + st.ActiveStrappers[0].Id, ClampKey, p.Id);
         if (BundleClamp != null && !st.ClampOpenCommanded)
         {
             if (BundleClamp.CommandOpen())
@@ -450,6 +457,8 @@ public sealed partial class SimulationEngine
             p.State = PackageState.Positioning;
             Emit(SimEventType.PositioningStarted, EventSeverity.Info,
                 $"{p.Id} verso fermata {st.StopIndex + 1}/{st.Plan.Stops.Count} (testa a {st.TargetHeadM * 1000:0} mm)", st.Zone.Id, p.Id);
+            Link("PROSSIMA", "Fermata finita: dispositivi aperti e legatrici a riposo", "La via di legatura porta il pacco alla fermata successiva",
+                ClampKey.Length > 0 ? ClampKey : "STR:" + stop.Tasks[0].StrapperId, StationKey, p.Id);
         }
         else
         {
@@ -458,6 +467,8 @@ public sealed partial class SimulationEngine
             p.State = PackageState.Transport;
             Emit(SimEventType.StrappingCompleted, EventSeverity.Info,
                 $"{p.Id} legato: {p.StrapsDone}/{p.StrapsTotal} legature in {st.Plan.Stops.Count} fermate.", st.Zone.Id, p.Id);
+            Link("LEGATO", "Ultima legatura finita, dispositivi aperti", "Pacco legato: riparte verso il trasferitore",
+                ClampKey.Length > 0 ? ClampKey : "STR:" + stop.Tasks[0].StrapperId, StationKey, p.Id);
         }
     }
 
@@ -893,6 +904,10 @@ public sealed partial class SimulationEngine
         }
         Emit(SimEventType.StopPhase, EventSeverity.Info,
             $"{p.Id} destinato al fermo {s.Id}, intestatura di {(s.Reference == StopReference.Head ? "testa" : "coda")} (testa a {s.TargetHeadM * 1000:0} mm, coda a {(s.TargetHeadM - p.LengthM) * 1000:0} mm)", s.Id, p.Id);
+        if (DoubleBanking)
+            Link("SECONDO", "Primo pacco sul fermo finale e posto libero dietro", "Fermo scomparente su: il secondo pacco si posiziona", "STOPPER", "STOP:" + s.Id, p.Id);
+        else
+            Link("FERMO_CODA", "Pacco destinato al fermo scomparente", "Il pacco si posiziona per l'intestatura di coda", StopperZoneKey, "STOP:" + s.Id, p.Id);
     }
 
     /// <summary>Comando della zona dello stopper con fermi scomparenti.</summary>
@@ -920,12 +935,20 @@ public sealed partial class SimulationEngine
             return InverterMode.Position;
         }
         if (_stops.Any(s => s.State == StopState.Aligning)) { reason = "Intestatura di coda in corso"; return InverterMode.Stop; }
-        if (z.MultiCanAcceptNew && !ShouldAutoStop(z)) { reason = "Marcia: ingresso del pacco successivo"; return InverterMode.Run; }
         bool anyHeld = Stopper.Package != null || _stops.Any(s => s.Package != null);
+        // Decisione dell'utente (2026-11-14): con un pacco già in battuta la via resta ferma (i rulli non girano sotto il pacco)
+        // e riparte quando il pacco successivo impegna la fotocellula a monte (arresto davanti al trasferitore).
+        bool run = anyHeld ? PackageAtUpstreamPhotocell(z) : !ShouldAutoStop(z);
+        if (z.MultiCanAcceptNew && run) { reason = "Marcia: ingresso del pacco successivo"; return InverterMode.Run; }
         autoStop = z.MultiCanAcceptNew;
         reason = anyHeld ? "Pacchi allineati: attesa trasferitore/pacco successivo" : "Arresto automatico: nessun pacco da movimentare";
         return InverterMode.Stop;
     }
+
+    /// <summary>Un pacco impegna la fotocellula a monte della via (quella di ripartenza o di arresto davanti al trasferitore).</summary>
+    private bool PackageAtUpstreamPhotocell(ZoneRuntime z)
+        => (z.RestartPhotocell?.Output ?? false)
+           || _photocells.Any(pc => pc.Config.IsEnabled && pc.Config.ActsAsTransferStop && pc.Output && pc.PositionM < z.Info.StartM + 1e-9);
 
     private void UpdateIntermediateStops(double dt)
     {
@@ -1125,6 +1148,7 @@ public sealed partial class SimulationEngine
         }
         Emit(SimEventType.WeighingPhase, EventSeverity.Info,
             $"{p.Id} indirizzato al bilico {p.ScaleId} ({where}, testa a {lead.TargetHeadM * 1000:0} mm)", lead.Id, p.Id);
+        Link("PESA", "Pacco depositato sul bilico", "Pesatura: stabilizzazione e acquisizione del peso", "TRANSFER", "SCALE:" + lead.Id, p.Id);
     }
 
     private void UpdateScales(double t, double dt)

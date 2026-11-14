@@ -140,6 +140,13 @@ public sealed class SimFrame
     public ScaleState[] ScaleStates { get; init; } = Array.Empty<ScaleState>();
 }
 
+/// <summary>
+/// Collegamento logico del ciclo: QUANDO accade un evento (sulla riga <paramref name="CauseKey"/>) ALLORA parte un'azione
+/// (sulla riga <paramref name="ActionKey"/>). Lo registra il motore nel punto in cui prende la decisione; le chiavi sono
+/// quelle delle righe del ciclogramma. La stessa regola (<paramref name="RuleId"/>) si ripete a ogni ciclo.
+/// </summary>
+public sealed record LogicLink(double TimeS, string RuleId, string When, string Then, string CauseKey, string ActionKey, string? PackageId = null);
+
 /// <summary>Registratore: tracce del ciclogramma (a segmenti) e fotogrammi periodici.</summary>
 public sealed class SimulationRecorder
 {
@@ -147,6 +154,23 @@ public sealed class SimulationRecorder
 
     public List<CycleTrack> Tracks { get; } = new();
     public List<SimFrame> Frames { get; } = new();
+    /// <summary>Collegamenti logici evento → azione, in ordine di tempo.</summary>
+    public List<LogicLink> Links { get; } = new();
+
+    /// <summary>Finestra scorrevole: toglie fotogrammi, tratti e collegamenti finiti prima di <paramref name="fromS"/>.</summary>
+    internal void TrimBefore(double fromS)
+    {
+        int n = 0;
+        while (n < Frames.Count - 1 && Frames[n].TimeS < fromS) n++;
+        if (n > 0) Frames.RemoveRange(0, n);
+        foreach (var t in Tracks)
+        {
+            int k = 0;
+            while (k < t.Segments.Count - 1 && t.Segments[k].EndS < fromS) k++;
+            if (k > 0) t.Segments.RemoveRange(0, k);
+        }
+        Links.RemoveAll(l => l.TimeS < fromS);
+    }
 
     public CycleTrack Track(string key, string label, TrackGroup group)
     {

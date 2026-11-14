@@ -25,6 +25,12 @@ public sealed class SimulationSettings
     [UiProperty("Intervallo registrazione fotogrammi", "ms", "Simulazione", Order = 3)]
     public double RecordIntervalMs { get; set; } = 50;
 
+    /// <summary>
+    /// Finestra di registrazione del ciclogramma (s): 0 = tutta la simulazione. Nella simulazione continua l'app tiene
+    /// gli ultimi 5 minuti (decisione dell'utente del 2026-11-14): a regime bastano e la memoria non cresce.
+    /// </summary>
+    public double RecordWindowS { get; set; }
+
     [UiProperty("Timeout rilevamento blocco (deadlock)", "s", "Simulazione", Order = 4)]
     public double DeadlockTimeoutS { get; set; } = 120;
 

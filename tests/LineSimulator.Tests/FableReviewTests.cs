@@ -119,4 +119,110 @@ public class FableReviewTests
         Assert.Equal(preview.Messages, run.Messages);
         Assert.True(p.Photocells.Count > count);
     }
+
+    // ------------------------------------------------------------------ decisioni dell'utente del 2026-11-14
+
+    /// <summary>Esempio in double banking con fermo scomparente e trasferitore collo di bottiglia (pesatura lunga).</summary>
+    private static LineProject DoubleBankingBottleneck(string model)
+    {
+        var p = SampleProjects.All.Single(m => m.Name.StartsWith(model)).Factory();
+        foreach (var b in p.Scales) { b.StabilizationTimeS = 150; b.ConfirmTimeoutS = 400; }
+        if (!p.IntermediateStops.Any(s => s.IsEnabled))
+            p.IntermediateStops.Add(new IntermediateStopConfig
+            {
+                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
+                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+            });
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        return p;
+    }
+
+    /// <summary>
+    /// Decisione 1: in double banking il secondo pacco entra sulla via del trasferitore solo quando il primo è intestato
+    /// sul fermo finale. Decisione 2: con il primo pacco in battuta la via del trasferitore resta ferma finché il secondo
+    /// non arriva (i rulli non girano sotto il pacco fermo).
+    /// </summary>
+    [Theory]
+    [InlineData("3 legatrici")]
+    [InlineData("2 legatrici - pacchi 6/9/12/18 m")]
+    public void DoubleBanking_SecondWaitsForTheFirst_AndRollersStopUnderTheHeldPackage(string model)
+    {
+        var p = DoubleBankingBottleneck(model);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.Equal(0, e.Collisions);
+        Assert.True(e.SlipEvents == 0, string.Join("\n", e.Events.Where(x => x.Type == SimEventType.Slip).Select(x => x.ToString()).Take(5)));
+        Assert.True(e.Transfer.Cycles < e.Packages.Count, "nessun ciclo con due pacchi: lo scenario non prova il double banking");
+
+        var zone = e.Topology.StopperZone!;
+        int zi = e.Zones.Select(z => z.Id).ToList().IndexOf(zone.Id);
+        double start = zone.StartM, dt = p.Simulation.RecordIntervalMs / 1000.0;
+        double earlySecond = 0, spinning = 0;
+        foreach (var f in e.Recorder.Frames)
+        {
+            var onZone = f.Packages.Where(k => k.LiftM < 1e-6 && k.LateralM < 1e-6 && k.HeadM > start + 1.0 && k.HeadM - k.LengthM < zone.EndM).ToList();
+            // 1) due pacchi sulla via del trasferitore mentre il primo non è ancora intestato
+            if (onZone.Count >= 2 && f.StopperState is StopperState.Idle or StopperState.Aligning) earlySecond += dt;
+            // 2) primo pacco intestato, nessun pacco in movimento vicino alla via: i rulli devono essere fermi
+            bool someoneMoving = f.Packages.Any(k => k.LiftM < 1e-6 && Math.Abs(k.Velocity) > 0.01 && k.HeadM > start - 4.0 && k.HeadM - k.LengthM < zone.EndM);
+            if (f.StopperState == StopperState.Aligned && !someoneMoving && Math.Abs(f.ZoneSpeeds[zi]) > 0.05) spinning += dt;
+        }
+        Assert.True(earlySecond < 0.5, $"secondo pacco sulla via del trasferitore per {earlySecond:0.0} s con il primo non ancora intestato");
+        Assert.True(spinning < 3.0, $"via del trasferitore in marcia per {spinning:0.0} s sotto il pacco fermo");
+    }
+
+    /// <summary>Decisione 3: con la finestra di registrazione il ciclogramma tiene solo gli ultimi minuti; senza, tutto.</summary>
+    [Fact]
+    public void RecordWindow_KeepsOnlyTheLastMinutes()
+    {
+        var all = new SimulationEngine(SampleProjects.CreateTwoStrappers12m());
+        all.RunToCompletion();
+        Assert.True(all.Recorder.Frames[0].TimeS < 1.0);
+
+        var p = SampleProjects.CreateTwoStrappers12m();
+        p.Simulation.RecordWindowS = 60;
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, e.FinishReason);
+        Assert.True(e.Time > 200, $"simulazione troppo corta per la prova: {e.Time:0} s");
+        Assert.InRange(e.Recorder.Frames[0].TimeS, e.Time - 75, e.Time - 55);
+        Assert.All(e.Recorder.Tracks, t => Assert.True(t.Segments.Count <= 1 || t.Segments[1].StartS >= e.Time - 75, t.Key));
+        Assert.All(e.Recorder.Links, l => Assert.True(l.TimeS >= e.Time - 75));
+        // i risultati non dipendono dalla finestra
+        Assert.Equal(all.ComputeResults().PackagesPerHour, e.ComputeResults().PackagesPerHour);
+    }
+
+    /// <summary>
+    /// Ciclogramma: ogni azione è collegata all'evento logico che la fa partire. Il motore registra i collegamenti
+    /// (stessa regola = stesso codice) con le chiavi delle righe del ciclogramma; il PDF li numera e li elenca.
+    /// </summary>
+    [Fact]
+    public void Cyclogram_LinksEveryActionToItsLogicalEvent()
+    {
+        foreach (var (name, create) in SampleProjects.All)
+        {
+            var e = new SimulationEngine(create());
+            e.RunToCompletion();
+            Assert.True(e.CompletedNormally, name + ": " + e.FinishReason);
+            var keys = e.Recorder.Tracks.Select(t => t.Key).ToHashSet();
+            Assert.All(e.Recorder.Links, l =>
+            {
+                Assert.True(keys.Contains(l.ActionKey), $"{name}: azione senza riga ({l.RuleId}: '{l.ActionKey}')");
+                Assert.True(keys.Contains(l.CauseKey), $"{name}: evento senza riga ({l.RuleId}: '{l.CauseKey}')");
+                Assert.True(l.When.Length is > 0 and <= 70 && l.Then.Length is > 0 and <= 70, $"{name}: testo vuoto o troppo lungo per la tabella ({l.RuleId})");
+            });
+            var rules = e.Recorder.Links.Select(l => l.RuleId).ToHashSet();
+            foreach (var r in new[] { "INGRESSO", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "LEGATO", "BATTUTA", "SOLLEVA", "PESA", "RIPOSO" })
+                Assert.True(rules.Contains(r), $"{name}: manca la regola {r} (registrate: {string.Join(", ", rules)})");
+            // la stessa regola ha sempre lo stesso testo: un solo numero nella tabella
+            Assert.All(e.Recorder.Links.GroupBy(l => l.RuleId), g => Assert.Single(g.Select(l => l.When + "|" + l.Then).Distinct()));
+
+            var pdf = System.Text.Encoding.Latin1.GetString(CyclogramPrintPdf.Build(create()));
+            Assert.Contains("LOGICA DEL CICLO", pdf);
+            Assert.Contains("QUANDO (evento logico)", pdf);
+            Assert.Contains("ALLORA (azione)", pdf);
+            Assert.Contains("VIE A RULLI", pdf);
+        }
+    }
 }

@@ -51,6 +51,8 @@ public sealed partial class SimulationEngine : ILogicContext
     private double _lastProgressTime;
     private double _nextRecordTime;
     private readonly double _recordInterval;
+    private readonly double _recordWindow;
+    private double _nextTrimTime;
     private readonly double _minSafety;
     private readonly double _frictionDecel;
     private readonly double _transferClearanceM;
@@ -67,6 +69,7 @@ public sealed partial class SimulationEngine : ILogicContext
         Topology = new LineTopology(project);
         Dt = Math.Clamp(project.Simulation.TimeStepMs, 0.1, 100) / 1000.0;
         _recordInterval = Math.Max(Dt, project.Simulation.RecordIntervalMs / 1000.0);
+        _recordWindow = Math.Max(0, project.Simulation.RecordWindowS);
         _minSafety = project.Simulation.MinSafetyDistanceMm / 1000.0;
         _frictionDecel = Math.Max(1e-6, project.Simulation.MaxFrictionDeceleration);
         _transferClearanceM = project.PackageTypes.Count > 0 ? project.PackageTypes.Max(t => t.GraphicWidthMm) / 1000.0 : 0.6;
@@ -243,6 +246,12 @@ public sealed partial class SimulationEngine : ILogicContext
         {
             CaptureFrameToRecorder();
             _nextRecordTime += _recordInterval;
+        }
+        // Finestra scorrevole (simulazione continua): restano gli ultimi minuti di ciclogramma, quelli a regime
+        if (_recordWindow > 0 && t1 >= _nextTrimTime)
+        {
+            Recorder.TrimBefore(t1 - _recordWindow);
+            _nextTrimTime = t1 + 10;
         }
         CheckTermination(t1);
         return !IsFinished;
@@ -458,6 +467,12 @@ public sealed partial class SimulationEngine : ILogicContext
                 prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
                 : strapped && !passed ? $"{waiting.Id} avanza: {prev.Id} è legato e la sua coda ha liberato la fotocellula di uscita legatura ({StrappingExitM * 1000:0} mm)"
                 : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
+            if (prev != null && _zones.Count > 0)
+            {
+                var exitPc = _photocells.Where(pc => pc.Config.IsEnabled && pc.Config.Purpose == PhotocellPurpose.StrappingExit).OrderBy(pc => pc.PositionM).LastOrDefault();
+                Link("INGRESSO", "Pacco precedente legato e fotocellula di uscita legatura libera", "Il pacco fermo sulla prima fotocellula parte verso la legatura",
+                    exitPc != null ? "PC:" + exitPc.Id : InvKey(_zones[0]), InvKey(_zones[0]), waiting.Id);
+            }
             return;
         }
         if (_nextIndex >= cfg.PackageCount || _typeSequence.Count == 0) return;
@@ -681,7 +696,10 @@ public sealed partial class SimulationEngine : ILogicContext
                     // Il rallentamento serve al pacco in arrivo. Il pacco già in battuta non tiene la via in bassa velocità:
                     // altrimenti in double banking il secondo pacco entrerebbe a velocità alta su rulli lenti (slittamento).
                     if (HeldAtStop(pc.RawPackage ?? pc.OutputPackage)) break;
-                    req.Low = true; req.SpeedReasons.Add($"Rallentamento {pc.Id}"); break;
+                    req.Low = true; req.SpeedReasons.Add($"Rallentamento {pc.Id}");
+                    if (pc.RoseThisScan)
+                        Link("RALLENTA", "Testa del pacco sulla fotocellula di rallentamento", "La via passa in velocità bassa", "PC:" + pc.Id, "INV:" + pc.ControlledZoneId, pc.OutputPackage?.Id);
+                    break;
                 case PhotocellAction.SpeedUp: req.High = true; req.SpeedReasons.Add($"Alta {pc.Id}"); break;
                 case PhotocellAction.Stop: req.Stop = true; req.StopReasons.Add($"Arresto {pc.Id}"); break;
             }
@@ -691,7 +709,9 @@ public sealed partial class SimulationEngine : ILogicContext
         bool transferRaised = Transfer.State != TransferState.Home;
         foreach (var pc in _photocells)
         {
-            if (!pc.Config.ActsAsTransferStop || !pc.Config.IsEnabled || !pc.Output) continue;
+            if (!pc.Config.ActsAsTransferStop) continue;
+            string zoneKey = "INV:" + pc.ControlledZoneId;
+            if (!pc.Config.IsEnabled || !pc.Output) { _transferStopActive.Remove(pc.Id); continue; }
             // In single banking il pacco si ferma anche se nell'area del trasferitore c'è già un altro pacco (consenso "fermo libero")
             // (contano solo i pacchi già usciti dalla zona comandata: quello ancora a cavallo deve poter proseguire)
             double zoneEnd = _zoneById.TryGetValue(pc.ControlledZoneId, out var cz) ? cz.Info.EndM : Transfer.StartM;
@@ -699,16 +719,36 @@ public sealed partial class SimulationEngine : ILogicContext
             bool noPlace = !DoubleBanking || (pc.OutputPackage != null && !CanBeSecond(pc.OutputPackage));
             bool areaBusy = noPlace && _active.Any(o => o != pc.OutputPackage && o.OnRollers && o.TailM >= zoneEnd - 1e-6
                                                                && o.HeadM > Transfer.StartM + 1e-6 && o.TailM < Transfer.EndM - 1e-6);
-            if (!transferRaised && !areaBusy) continue;
+            // Decisione dell'utente (2026-11-14): in double banking il secondo pacco aspetta qui finché il primo non è
+            // in battuta e intestato sul fermo finale (durante l'intestatura i rulli girano piano: entrando slitterebbe).
+            // Come sopra, il primo conta solo quando la sua coda ha lasciato la zona comandata.
+            var first = _finalAssigned;
+            bool firstNotReady = DoubleBanking && first != null && first != pc.OutputPackage && first.OnRollers
+                                 && first.TailM >= zoneEnd - 1e-6 && Stopper.State != StopperState.Aligned;
+            if (!transferRaised && !areaBusy && !firstNotReady)
+            {
+                if (_transferStopActive.Remove(pc.Id))
+                    Link("VIA_LIBERA", "Trasferitore a riposo e posto libero", "La via a monte riparte: il pacco entra", "TRANSFER", zoneKey, pc.OutputPackage?.Id);
+                continue;
+            }
             if (_requests.TryGetValue(pc.ControlledZoneId, out var req))
             {
                 req.Stop = true;
-                req.StopReasons.Add(transferRaised ? $"trasferitore sollevato ({pc.Id})" : $"area del trasferitore occupata ({pc.Id})");
+                req.StopReasons.Add(transferRaised ? $"trasferitore sollevato ({pc.Id})" : areaBusy ? $"area del trasferitore occupata ({pc.Id})" : $"primo pacco non ancora in battuta ({pc.Id})");
             }
+            if (_transferStopActive.Add(pc.Id))
+                Link(transferRaised ? "ARRESTO_TRF" : areaBusy ? "ARRESTO_AREA" : "ARRESTO_PRIMO",
+                    transferRaised ? "Fotocellula di arresto occupata, trasferitore non a riposo"
+                    : areaBusy ? "Fotocellula di arresto occupata, area del trasferitore occupata"
+                    : "Fotocellula di arresto occupata, primo pacco non ancora intestato",
+                    "La via a monte si ferma: il pacco aspetta", "PC:" + pc.Id, zoneKey, pc.OutputPackage?.Id);
         }
         LogicEvaluator.ApplyRules(Project.Rules, this, _requests, _nextSignals);
         (_signals, _nextSignals) = (_nextSignals, _signals);
     }
+
+    /// <summary>Fotocellule di arresto davanti al trasferitore che in questo momento tengono ferma la via (per registrare il fronte).</summary>
+    private readonly HashSet<string> _transferStopActive = new();
 
     /// <summary>Pacco già fermo in battuta (fermo finale, fermo scomparente di testa o di coda).</summary>
     private static bool HeldAtStop(PackageRuntime? p) => p != null && (p.InStopperContact || p.InIntermediateStopContact || p.HeldByTailStop);
@@ -825,13 +865,17 @@ public sealed partial class SimulationEngine : ILogicContext
             z.Accepting = z.AcceptsFor(null);
 
             if (z.AutoStopped && !prevAuto && t > 0)
+            {
                 Emit(SimEventType.AutoStop, EventSeverity.Info, $"{z.Id}: arresto automatico (nessun pacco da movimentare)", z.Id);
+                Link("AUTOSTOP", "Nessun pacco da muovere sulla via", "La via si ferma (arresto automatico)", InvKey(z), InvKey(z));
+            }
             else if (prevAuto && !z.AutoStopped && mode != InverterMode.Stop)
             {
                 var pcStart = z.RestartPhotocell != null && z.RestartPhotocell.Output ? z.RestartPhotocell : z.OwnPhotocells.FirstOrDefault(x => x.Output);
                 demandCause = pcStart?.RawPackage ?? pcStart?.LastPackage;
                 Emit(SimEventType.AutoStart, EventSeverity.Info,
                     $"{z.Id}: ripartenza comandata da {pcStart?.Id ?? "fotocellula"}{(demandCause != null ? $" (arrivo {demandCause.Id})" : "")}", z.Id, demandCause?.Id);
+                Link("AUTOSTART", "Pacco sulla fotocellula a monte della via", "La via riparte", pcStart != null ? "PC:" + pcStart.Id : InvKey(z), InvKey(z), demandCause?.Id);
             }
 
             // Svincolo con i motori commutati: il comando effettivo è quello della via di legatura (ApplyFollowers), quindi il
@@ -905,7 +949,10 @@ public sealed partial class SimulationEngine : ILogicContext
             f.AutoStopped = false;
             f.Reason = $"Motori commutati sull'inverter di legatura ({s.Id}: {s.Reason})";
             if (!was)
+            {
                 Emit(SimEventType.InverterCommand, EventSeverity.Info, $"{f.Id}: motori commutati sull'inverter di legatura {s.Id} ({st.Package!.Id} in legatura)", f.Id, st.Package.Id);
+                Link("COMMUTA", "La fermata porta la testa del pacco sullo svincolo", "Motori dello svincolo commutati sull'inverter di legatura", InvKey(s), InvKey(f), st.Package.Id);
+            }
         }
     }
 
@@ -1046,6 +1093,8 @@ public sealed partial class SimulationEngine : ILogicContext
                     double impact = vNew;
                     p.InStopperContact = true;
                     Emit(SimEventType.StopperContact, EventSeverity.Info, $"{p.Id} in battuta allo stopper a {impact:0.###} m/s", Project.Stopper.Id, p.Id);
+                    Link("BATTUTA", "Pacco in battuta sul fermo finale",
+                        "Intestatura: rulli lenti per " + Stopper.AlignmentTotalS.ToString("0.#", CultureInfo.GetCultureInfo("it-IT")) + " s", StopperZoneKey, "STOPPER", p.Id);
                     if (impact > Stopper.Config.MaxImpactSpeed + 1e-9)
                     {
                         ExcessiveImpacts++;
@@ -1230,6 +1279,9 @@ public sealed partial class SimulationEngine : ILogicContext
         {
             p.EncoderReferenced = true;
             Emit(SimEventType.PositioningStarted, EventSeverity.Info, $"{p.Id} riferito all'encoder di legatura ({pc.Id})", pc.Id, p.Id);
+            var firstStr = _strappers.FirstOrDefault(x => x.Config.IsEnabled);
+            Link("RIFERIMENTO", "Testa del pacco sulla fotocellula di riferimento", "Encoder azzerato, le legatrici caricano il filo",
+                "PC:" + pc.Id, firstStr != null ? "STR:" + firstStr.Id : StationKey, p.Id);
         }
         if (p.StrapStatus is StrapStatus.Done or StrapStatus.NotRequired) return;
         foreach (var s in _strappers.Where(x => x.Config.IsEnabled && !x.IsSma && !x.Busy))
@@ -1398,6 +1450,13 @@ public sealed partial class SimulationEngine : ILogicContext
         };
         string pk = tr.Packages.Count > 1 ? $" ({string.Join("+", tr.Packages.Select(p => p.Id))})" : "";
         Emit(SimEventType.TransferPhase, EventSeverity.Info, $"Trasferitore: {txt}{pk}", Project.Transfer.Id, tr.Package?.Id);
+        if (s == TransferState.Lifting && tr.Packages.Count > 0)
+            Link(tr.Packages.Count > 1 ? "SOLLEVA_2" : "SOLLEVA", tr.Packages.Count > 1 ? "Due pacchi intestati e trasferitore a riposo" : "Pacco intestato e trasferitore a riposo",
+                "Il trasferitore solleva, trasla, abbassa e deposita", "STOPPER", "TRANSFER", tr.Package?.Id);
+        else if (s == TransferState.Lifting)
+            Link("SOLLEVA_BILICO", "Pacco pesato e nessun altro pacco in arrivo", "Il trasferitore porta via il pacco dal bilico", "TRANSFER", "TRANSFER");
+        else if (s == TransferState.Home)
+            Link("RIPOSO", "Trasferitore tornato a riposo", "Consenso all'ingresso di un nuovo pacco nell'area", "TRANSFER", StopperZoneKey);
     }
 
     // ------------------------------------------------------------------ 9. Statistiche, registrazione, termine
@@ -1607,6 +1666,16 @@ public sealed partial class SimulationEngine : ILogicContext
 
     private void Emit(SimEventType type, EventSeverity sev, string msg, string? comp = null, string? pkg = null)
         => _events.Add(new SimEvent(++_eventSeq, Time, type, sev, msg, comp, pkg));
+
+    /// <summary>Registra un collegamento logico "quando → allora" per il ciclogramma (chiavi = righe del ciclogramma).</summary>
+    private void Link(string rule, string when, string then, string causeKey, string actionKey, string? pkg = null)
+        => Recorder.Links.Add(new LogicLink(Time, rule, when, then, causeKey, actionKey, pkg));
+
+    private static string InvKey(ZoneRuntime? z) => z == null ? string.Empty : "INV:" + z.Id;
+    private string StopperZoneKey => Topology.StopperZone == null ? string.Empty : "INV:" + Topology.StopperZone.Id;
+    private string StationKey => InvKey(Station?.Zone);
+    /// <summary>Riga del dispositivo che chiude sul pacco in legatura (stringifascio, altrimenti compattatore), vuota se non c'è.</summary>
+    private string ClampKey => BundleClamp != null ? "KNOF" : Compactor != null ? "CMP" : string.Empty;
 
     // ------------------------------------------------------------------ ILogicContext
 
