@@ -1207,7 +1207,7 @@ public sealed partial class SimulationEngine : ILogicContext
         }
         if (any) return v;
         // Pacco in ingresso a monte della linea: avanza con la via rulli di legatura solo dopo il consenso
-        if (p.InfeedReleased && p.HeadM <= Topology.LineStartM + 1e-6 && _sections.Count > 0)
+        if (p.InfeedReleased && p.HeadM <= Topology.LineStartM + OnRollersM && _sections.Count > 0)
             return _sections[0].Enabled ? _sections[0].Zone.ActualSpeed : 0;
         return 0;
     }
