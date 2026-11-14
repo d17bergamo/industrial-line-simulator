@@ -171,7 +171,7 @@ public sealed partial class SimulationEngine
                         p.HeadM = st.TargetHeadM; // posizionamento a encoder: errore residuo < 0.2 mm
                     }
                     p.Velocity = 0;
-                    st.Zone.ActualSpeed = 0;
+                    StopAtPosition(st.Zone);
                     st.Zone.PositionCommand = 0;
                     ArrivedAtStop(st, p, t);
                 }
@@ -624,7 +624,7 @@ public sealed partial class SimulationEngine
                     }
                     else p.HeadM = r.TargetHeadM;
                     p.Velocity = 0;
-                    r.Zone.ActualSpeed = 0;
+                    StopAtPosition(r.Zone);
                     r.Zone.PositionCommand = 0;
                     r.State = RejectorState.InPosition;
                     r.ElapsedS = 0;
@@ -827,8 +827,8 @@ public sealed partial class SimulationEngine
             var a = Stopper.Package ?? _finalAssigned;
             if (a == null) return s.PositionM;
             double behind = Stopper.PositionM - a.LengthM - Project.Transfer.DoubleBankingGapMm / 1000.0;
-            // via su due inverter: il secondo pacco si ferma al più tardi sul punto di divisione (resta tutto a monte)
-            return TransferSplitM is double split ? Math.Min(behind, split) : behind;
+            // via su due inverter: il secondo pacco si ferma al più tardi prima del primo rullo di valle (resta tutto a monte)
+            return TransferSplitM != null ? Math.Min(behind, ValleFirstRollerM - RollerMarginM) : behind;
         }
         return s.Reference == StopReference.Head ? s.PositionM : s.PositionM + p.LengthM;
     }
@@ -848,11 +848,12 @@ public sealed partial class SimulationEngine
             return head <= Stopper.PositionM + 1e-6;
         // Via del trasferitore su due inverter: si abbinano solo due pacchi che stanno il primo tutto a valle e il secondo
         // tutto a monte del punto di divisione (così il primo resta fermo mentre il secondo si posiziona)
-        if (DoubleBanking && TransferSplitM is double split)
+        // (un pacco sta su una parte quando copre almeno un suo rullo)
+        if (DoubleBanking && TransferSplitM != null)
         {
             var f = Stopper.Package ?? _finalAssigned;
-            if (f != null && Stopper.PositionM - f.LengthM < split - 1e-6) return false;
-            if (reach > split + 1e-6) return false;
+            if (f != null && Stopper.PositionM - f.LengthM < MonteLastRollerM + RollerMarginM - 1e-6) return false;
+            if (reach > ValleFirstRollerM - RollerMarginM + 1e-6) return false;
         }
         if (s.IsVirtual)
         {
@@ -1010,7 +1011,7 @@ public sealed partial class SimulationEngine
                 }
                 else p.HeadM = s.TargetHeadM + s.OvershootM;
                 p.Velocity = 0;
-                if (zone != null) { zone.ActualSpeed = 0; zone.PositionCommand = 0; }
+                if (zone != null) { StopAtPosition(zone); zone.PositionCommand = 0; }
                 if (!clear && !s.IsVirtual)
                 {
                     InterlockEvents++;

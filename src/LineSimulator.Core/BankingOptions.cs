@@ -41,7 +41,7 @@ public static class BankingOptions
         double split = TransferSplitRule.SplitFor(p, t);
         if (split <= 0)
             return "la via del trasferitore non si può dividere in due inverter con il primo pacco tutto a valle e il secondo tutto a monte: serve un fermo scomparente o un trasferitore più lungo";
-        if (p.Stopper.PositionMm - t.LengthMm < split - 1e-6)
+        if (p.Stopper.PositionMm - t.LengthMm < TransferSplitRule.FirstTailMinMm(p, split) - 1e-6)
             return $"il pacco da {t.LengthMm:0} mm è più lungo della parte di valle della via del trasferitore ({p.Stopper.PositionMm - split:0} mm dal punto di divisione al fermo finale)";
         return $"due pacchi da {t.LengthMm:0} mm non stanno sul trasferitore, il primo a valle e il secondo a monte del punto di divisione ({split:0} mm)";
     }
@@ -61,11 +61,12 @@ public static class BankingOptions
         // il primo pacco deve stare tutto a valle del punto di divisione e il secondo tutto a monte (nessuno strisciamento)
         double firstTail = stopper - len;
         double split = TransferSplitRule.SplitFor(p, t);
-        if (split <= 0 || firstTail < split - 1e-6) return false;
+        if (split <= 0 || firstTail < TransferSplitRule.FirstTailMinMm(p, split) - 1e-6) return false;
+        double head2Max = TransferSplitRule.SecondHeadMaxMm(p, split);
         if (stops.Count == 0)
         {
             if (h == StopReference.Tail) return false;                                  // il secondo si ferma a distanza dal primo
-            double head2 = Math.Min(firstTail - p.Transfer.DoubleBankingGapMm, split);  // al più tardi sul punto di divisione
+            double head2 = Math.Min(firstTail - p.Transfer.DoubleBankingGapMm, head2Max);  // al più tardi prima dei rulli di valle
             return head2 - len >= start - p.Transfer.EffectiveMaxOverhangMm - 1e-6;
         }
         double safety = p.Simulation.MinSafetyDistanceMm;
@@ -74,7 +75,7 @@ public static class BankingOptions
             double head2 = h == StopReference.Head ? s.PositionMm : s.PositionMm + len;
             double reach = h == StopReference.Head ? head2 : head2 + s.TailOvershootMm;
             if (head2 - len < start - 1e-6) continue;
-            if (reach > split + 1e-6) continue;
+            if (reach > head2Max + 1e-6) continue;
             if (head2 > firstTail - safety + 1e-6) continue;
             if (reach > firstTail - Math.Min(safety, TailOvershootClearanceMm) + 1e-6) continue;
             return true;

@@ -8,10 +8,12 @@ namespace LineSimulator.Core;
 /// posiziona. La via si divide quindi in due parti: a valle (dal punto di divisione al fermo finale) sta il primo pacco,
 /// a monte il secondo. La via resta un solo modulo con gli stessi rulli e la stessa lunghezza
 /// (<see cref="RollerSection.SplitAtMm"/>): l'inverter di valle tiene il nome del modulo, quello di monte ha il suffisso "a".
-/// Dove si divide:
-/// - con un fermo scomparente e intestatura di testa: sul fermo, che sta tra i due pacchi (tra due rulli, a valle del fermo);
-/// - altrimenti dietro al primo pacco più lungo in double banking (distanza del double banking, tra due rulli verso monte):
-///   il secondo pacco si ferma con la testa sul punto di divisione.
+/// Dove si divide (sempre a metà tra due rulli):
+/// - con un fermo scomparente e intestatura di testa: nello spazio tra i rulli in cui sta il fermo, che è tra i due pacchi;
+/// - altrimenti subito dopo l'ultimo rullo sotto la testa del secondo pacco, fermo dietro al primo pacco più lungo in
+///   double banking.
+/// Un pacco "sta" su una parte quando copre almeno un suo rullo: il primo non deve coprire rulli di monte, il secondo non
+/// deve coprire rulli di valle (<see cref="FirstTailMinMm"/>, <see cref="SecondHeadMaxMm"/>).
 /// Se nessuna tipologia è in double banking la divisione automatica si toglie; quella fatta a mano non si tocca.
 /// </summary>
 public static class TransferSplitRule
@@ -35,12 +37,29 @@ public static class TransferSplitRule
     /// </summary>
     public static double SplitFor(LineProject p, PackageType t) => IsManual(p) ? SplitMm(p) : DesiredMm(p, t);
 
-    /// <summary>Spazio tra due rulli (mezzeria) più vicino a <paramref name="xMm"/>, verso valle o verso monte.</summary>
-    public static double RollerGapMm(RollerSection m, double xMm, bool downstream)
+    /// <summary>Margine tra la fine di un pacco e l'asse del primo rullo dell'altra parte (mm).</summary>
+    public const double RollerMarginMm = 10;
+
+    private static double Pitch(RollerSection m) => m.RollerPitchMm > 0 ? m.RollerPitchMm : RollerSection.DefaultPitchMm;
+
+    /// <summary>Metà del passo rulli della via del trasferitore: distanza tra il punto di divisione e i rulli ai suoi lati.</summary>
+    public static double HalfPitchMm(LineProject p) => LayoutRules.TransferModule(p) is { } m ? Pitch(m) / 2 : 0;
+
+    /// <summary>Coda minima del primo pacco perché non copra rulli di monte (oltre l'ultimo rullo di monte).</summary>
+    public static double FirstTailMinMm(LineProject p, double splitMm) => splitMm - HalfPitchMm(p) + RollerMarginMm;
+
+    /// <summary>Testa massima del secondo pacco perché non copra rulli di valle (prima del primo rullo di valle).</summary>
+    public static double SecondHeadMaxMm(LineProject p, double splitMm) => splitMm + HalfPitchMm(p) - RollerMarginMm;
+
+    /// <summary>
+    /// Mezzeria dello spazio tra rulli subito dopo l'ultimo rullo con l'asse entro <paramref name="xMm"/> (gli assi stanno a
+    /// mezzo passo dall'inizio del modulo, poi a ogni passo); 0 se prima di <paramref name="xMm"/> non c'è nessun rullo.
+    /// </summary>
+    public static double GapAfterLastRollerMm(RollerSection m, double xMm)
     {
-        double pitch = m.RollerPitchMm > 0 ? m.RollerPitchMm : RollerSection.DefaultPitchMm;
-        double k = (xMm - m.StartMm) / pitch;
-        return m.StartMm + (downstream ? Math.Ceiling(k - 1e-6) : Math.Floor(k + 1e-6)) * pitch;
+        double pitch = Pitch(m);
+        double j = Math.Floor((xMm - m.StartMm - pitch / 2) / pitch + 1e-9);
+        return j < 0 ? 0 : m.StartMm + (j + 1) * pitch;
     }
 
     /// <summary>
@@ -63,7 +82,7 @@ public static class TransferSplitRule
         string why;
         if (stop != null && head)
         {
-            x = RollerGapMm(m, stop.PositionMm, downstream: true);
+            x = GapAfterLastRollerMm(m, stop.PositionMm);
             why = $"fermo scomparente {stop.Id}";
         }
         else
@@ -74,7 +93,7 @@ public static class TransferSplitRule
             var fit = dbl.Where(t => 2 * t.LengthMm + gap <= room + 1e-6).ToList();
             if (fit.Count == 0) return (0, "");
             double longest = fit.Max(t => t.LengthMm);
-            x = RollerGapMm(m, stopper - longest - gap, downstream: false);
+            x = GapAfterLastRollerMm(m, stopper - longest - gap - RollerMarginMm);
             why = $"dietro al primo pacco da {longest:0} mm";
         }
         if (x <= m.StartMm + 1 || x >= stopper - 1) return (0, "");

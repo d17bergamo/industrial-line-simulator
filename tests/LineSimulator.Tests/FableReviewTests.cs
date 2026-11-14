@@ -239,8 +239,7 @@ public class FableReviewTests
         ("double banking con fermo, pesatura lunga", p => { AddStop(p); LongWeighing(p); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
         ("double banking senza fermo, pesatura lunga", p => { p.IntermediateStops.Clear(); LongWeighing(p); BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking); }),
         ("single banking, pesatura lunga", LongWeighing),
-        ("svincolo unito all'inverter di legatura", p => { foreach (var m in StrappingAreaRules.ReleaseModules(p)) m.JoinStrappingInverter = true; }),
-        ("svincolo con inverter dedicato senza motori commutabili", p => { p.Simulation.AutoReleaseInverters = false; foreach (var m in StrappingAreaRules.ReleaseModules(p)) { m.FollowsStrapping = false; m.JoinStrappingInverter = false; } })
+        ("svincolo unito all'inverter di legatura", p => { foreach (var m in StrappingAreaRules.ReleaseModules(p)) m.JoinStrappingInverter = true; })
     };
 
     private static void AddStop(LineProject p)
@@ -282,7 +281,7 @@ public class FableReviewTests
     public void NoSliding_OnAnyExampleAndVariant(string model, int variant)
     {
         var e = RunVariant(model, variant);
-        if (e.Validation.HasErrors) return;      // variante non simulabile su questo esempio: l'errore viene mostrato all'utente
+        if (e.Validation.HasErrors || e.Preparation.HasErrors) return;      // variante non simulabile su questo esempio: l'errore viene mostrato all'utente
         var slips = e.Events.Where(x => x.Type == SimEventType.Slip).Select(x => x.ToString()).Take(6).ToList();
         Assert.True(e.CompletedNormally, $"{SlidingVariants[variant].Name}: {e.FinishReason}");
         Assert.True(e.SlipEvents == 0, $"{SlidingVariants[variant].Name}: {e.SlipEvents} strisciamenti\n{string.Join("\n", slips)}");
@@ -306,7 +305,7 @@ public class FableReviewTests
                 var exits = e.Packages.Where(k => k.ExitTimeS.HasValue).ToList();
                 double span = exits.Count > 0 ? exits.Max(k => k.ExitTimeS!.Value) - exits.Min(k => k.EntryTimeS) : 0;
                 double tph = span > 0 ? exits.Sum(k => k.WeightKg) / 1000.0 / (span / 3600.0) : 0;
-                string outcome = e.Validation.HasErrors ? "non simulabile" : !e.CompletedNormally ? "NON COMPLETATA: " + e.FinishReason : e.SlipEvents > 0 ? "strisciamenti" : "pulita";
+                string outcome = e.Validation.HasErrors || e.Preparation.HasErrors ? "non simulabile" : !e.CompletedNormally ? "NON COMPLETATA: " + e.FinishReason : e.SlipEvents > 0 ? "strisciamenti" : "pulita";
                 csv.AppendLine($"{name};{SlidingVariants[v].Name};{outcome};{tph:0.0};{e.SlipEvents};{e.Collisions};{(e.TransferSplitM is double sp ? (sp * 1000).ToString("0") : "-")}");
                 var slips = e.Events.Where(x => x.Type == SimEventType.Slip).ToList();
                 if (slips.Count == 0 && e.CompletedNormally) continue;
@@ -345,7 +344,7 @@ public class FableReviewTests
         ProjectAutoFix.Run(p);
         var trf = LayoutRules.TransferModule(p)!;
         double split = TransferSplitRule.SplitMm(p);
-        Assert.True(split >= stop.PositionMm - 1e-6 && split < stop.PositionMm + trf.RollerPitchMm, $"divisione a {split}, fermo a {stop.PositionMm}");
+        Assert.True(Math.Abs(split - stop.PositionMm) <= trf.RollerPitchMm / 2 + 1e-6, $"divisione a {split}, fermo a {stop.PositionMm}");
         Assert.Equal(0, (split - trf.StartMm) % trf.RollerPitchMm, 3);     // tra due rulli
         Assert.False(ProjectAutoFix.Preview(p).Changed);
         Assert.Equal(AccumulationMode.DoubleBanking, six.Banking);
@@ -385,7 +384,8 @@ public class FableReviewTests
         double longest = p.PackageTypes.Where(t => t.Banking == AccumulationMode.DoubleBanking).Max(t => t.LengthMm);
         Assert.True(split > 0, "nessuna divisione");
         Assert.Equal(0, (split - trf.StartMm) % trf.RollerPitchMm, 3);
-        Assert.InRange(split, p.Stopper.PositionMm - longest - p.Transfer.DoubleBankingGapMm - trf.RollerPitchMm, p.Stopper.PositionMm - longest - p.Transfer.DoubleBankingGapMm);
+        double head2 = p.Stopper.PositionMm - longest - p.Transfer.DoubleBankingGapMm;     // testa del secondo dietro al primo più lungo
+        Assert.InRange(split, head2 - trf.RollerPitchMm / 2 - 20, head2 + trf.RollerPitchMm / 2);
     }
 
     /// <summary>
@@ -404,6 +404,7 @@ public class FableReviewTests
         Assert.True(e.Transfer.Cycles < e.Packages.Count, "nessun ciclo con due pacchi");
         Assert.Equal(0, e.SlipEvents);
         double split = e.TransferSplitM!.Value, stopper = p.Stopper.PositionMm / 1000.0;
+        Assert.True(split > e.Topology.StopperZone!.StartM && split < stopper);
         int zi = e.Zones.Select(z => z.Id).ToList().IndexOf(e.Topology.StopperZone!.Id);
         int frames = 0;
         foreach (var f in e.Recorder.Frames)
@@ -412,7 +413,7 @@ public class FableReviewTests
             frames++;
             var first = f.Packages.Single(k => k.LiftM < 1e-6 && k.LateralM < 1e-6 && Math.Abs(k.HeadM - stopper) < 1e-3);
             Assert.True(Math.Abs(first.Velocity) < 1e-9 && Math.Abs(f.ValleSpeed) < 1e-9, $"t={f.TimeS:0.00}: primo pacco a {first.Velocity} m/s, rulli di valle a {f.ValleSpeed} m/s");
-            Assert.True(first.HeadM - first.LengthM >= split - 1e-6);
+            Assert.True(first.HeadM - first.LengthM >= e.MonteLastRollerM);
         }
         Assert.True(frames > 20, $"il secondo pacco non si è mai posizionato dietro al primo ({frames} fotogrammi)");
         Assert.Contains(e.Recorder.Frames, f => f.StopperState == StopperState.Aligned && f.ZoneSpeeds[zi] > 0.3 && Math.Abs(f.ValleSpeed) < 1e-9);

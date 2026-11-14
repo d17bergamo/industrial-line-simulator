@@ -87,9 +87,13 @@ public sealed partial class SimulationEngine : ILogicContext
                 double split = z == Topology.StopperZone && s == LayoutRules.TransferModule(project) ? TransferSplitRule.SplitMm(project) / 1000.0 : 0;
                 if (split > s.StartMm / 1000.0 + 1e-6 && split < s.EndMm / 1000.0 - 1e-6)
                 {
+                    // ogni parte arriva fino all'asse del suo ultimo rullo: tra i due rulli a cavallo della divisione non c'è nulla
                     TransferSplitM = split;
-                    _sections.Add((s.StartMm / 1000.0, split, zr, s.IsEnabled, false));
-                    _sections.Add((split, s.EndMm / 1000.0, zr, s.IsEnabled, true));
+                    double half = TransferSplitRule.HalfPitchMm(project) / 1000.0;
+                    MonteLastRollerM = split - half;
+                    ValleFirstRollerM = split + half;
+                    _sections.Add((s.StartMm / 1000.0, MonteLastRollerM, zr, s.IsEnabled, false));
+                    _sections.Add((ValleFirstRollerM, s.EndMm / 1000.0, zr, s.IsEnabled, true));
                 }
                 else
                 _sections.Add((s.StartMm / 1000.0, s.EndMm / 1000.0, zr, s.IsEnabled, false));
@@ -1034,22 +1038,55 @@ public sealed partial class SimulationEngine : ILogicContext
     private Dictionary<ZoneRuntime, double> HandoverSpeedCaps()
     {
         var caps = new Dictionary<ZoneRuntime, double>();
+        _syncGroups.Clear();
         double align = Stopper.Config.AlignmentRollerSpeed;
-        var under = new List<ZoneRuntime>();
         foreach (var p in _active)
         {
             if (!p.OnRollers) continue;
-            under.Clear();
+            var under = new List<ZoneRuntime>();
+            ZoneRuntime? ahead = null;
             foreach (var s in _sections)
             {
-                if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
+                if (s.End <= p.TailM + OnRollersM || s.Start >= p.HeadM - OnRollersM)
+                {
+                    // zona subito a valle, vuota, che il pacco sta per impegnare: lo aspetta alla sua velocità
+                    if (ahead == null && under.Count > 0 && s.Start >= p.HeadM - OnRollersM && s.Start <= p.HeadM + ApproachM && !under.Contains(s.Zone)
+                        && !_active.Any(q => q != p && q.OnRollers && q.HeadM > s.Zone.Info.StartM + 1e-9 && q.TailM < s.Zone.Info.EndM - 1e-9))
+                        ahead = s.Zone;
+                    continue;
+                }
                 if (!under.Contains(s.Zone)) under.Add(s.Zone);
             }
-            if (under.Count < 2) continue;
+            if (under.Count == 0 || (under.Count < 2 && ahead == null)) continue;
             double slowest = under.Min(z => Math.Min(z.TargetSpeed(align), caps.TryGetValue(z, out var c0) ? c0 : double.PositiveInfinity));
-            foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var c) ? c : double.PositiveInfinity, slowest);
+            if (under.Count > 1)
+                foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var c) ? c : double.PositiveInfinity, slowest);
+            if (ahead != null) { caps[ahead] = Math.Min(caps.TryGetValue(ahead, out var ca) ? ca : double.PositiveInfinity, slowest); under.Add(ahead); }
+            foreach (var z in under)
+            {
+                if (!_syncGroups.TryGetValue(z, out var g)) _syncGroups[z] = g = new List<ZoneRuntime>();
+                foreach (var o in under) if (o != z && !g.Contains(o)) g.Add(o);
+            }
         }
         return caps;
+    }
+
+    /// <summary>Un pacco "è sui rulli" di un tratto quando lo impegna per almeno 5 mm (il contatto sul filo del confine non conta).</summary>
+    private const double OnRollersM = 0.005;
+    /// <summary>Distanza dalla zona a valle entro cui la zona, se vuota, si mette alla velocità del pacco in arrivo.</summary>
+    private const double ApproachM = 1.0;
+    /// <summary>Zone che in questa scansione hanno lo stesso comando di velocità perché un pacco le impegna insieme.</summary>
+    private readonly Dictionary<ZoneRuntime, List<ZoneRuntime>> _syncGroups = new();
+
+    /// <summary>
+    /// Arresto a fine posizionamento: l'inverter è fermo sulla quota (ultimo tratto sotto 0,05 m/s). Si fermano con lui le
+    /// zone sincronizzate perché lo stesso pacco le impegna.
+    /// </summary>
+    private void StopAtPosition(ZoneRuntime z)
+    {
+        z.ActualSpeed = 0;
+        if (_syncGroups.TryGetValue(z, out var g))
+            foreach (var o in g) if (o.ActualSpeed <= 0.06) o.ActualSpeed = 0;
     }
 
     // ------------------------------------------------------------------ Via del trasferitore su due inverter
@@ -1058,6 +1095,10 @@ public sealed partial class SimulationEngine : ILogicContext
     public double? TransferSplitM { get; private set; }
     /// <summary>Velocità dei rulli della parte di valle (dal punto di divisione al fermo finale).</summary>
     public double ValleSpeed { get; private set; }
+    /// <summary>Asse dell'ultimo rullo di monte e del primo rullo di valle, ai lati del punto di divisione (m).</summary>
+    public double MonteLastRollerM { get; private set; }
+    public double ValleFirstRollerM { get; private set; }
+    private const double RollerMarginM = TransferSplitRule.RollerMarginMm / 1000.0;
     /// <summary>Nome dell'inverter della parte di monte della via del trasferitore (la valle tiene il nome della via).</summary>
     public string? MonteInverterId => TransferSplitM == null || Topology.StopperZone == null ? null : Topology.StopperZone.Id + "a";
     private bool _valleSynced = true;
@@ -1067,7 +1108,7 @@ public sealed partial class SimulationEngine : ILogicContext
     /// della via (ingresso, posizionamento e intestatura del secondo pacco) muovono solo la parte di monte.
     /// </summary>
     public bool ValleHeld => TransferSplitM is double s && Stopper.Package is { } a && Stopper.State == StopperState.Aligned
-                             && a.OnRollers && a.TailM >= s - 1e-6;
+                             && a.OnRollers && s > 0 && a.TailM >= MonteLastRollerM + RollerMarginM / 2;
 
     private void UpdateValleDrive(double dt, bool ramp)
     {
@@ -1114,7 +1155,7 @@ public sealed partial class SimulationEngine : ILogicContext
                                 || _stops.Any(s => s.Package == p && s.State is StopState.Positioning or StopState.Aligning or StopState.Returning);
             foreach (var s in _sections)
             {
-                if (s.End <= p.TailM + 1e-9 || s.Start >= p.HeadM - 1e-9) continue;
+                if (s.End <= p.TailM + OnRollersM || s.Start >= p.HeadM - OnRollersM) continue;
                 if (s.Zone.Mode == InverterMode.Reverse) continue;
                 double sv = PartSpeed(s);
                 double reference = s.Valle && ValleHeld ? 0 : s.Zone.ReferenceSpeed;
@@ -1123,6 +1164,9 @@ public sealed partial class SimulationEngine : ILogicContext
                 if (diff > tol && diff > worst) { worst = diff; where = PartId(s); rollers = sv; }
             }
         }
+        // una differenza che dura meno di tre scansioni (30 ms, meno di 1 mm) è l'arresto sulla quota, non uno strisciamento
+        p.SlidingScans = where != null ? p.SlidingScans + 1 : 0;
+        if (where != null && p.SlidingScans < 3) where = null;
         if (where != null && p.SlidingOn == null)
         {
             SlipEvents++;
