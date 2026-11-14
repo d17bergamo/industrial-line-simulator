@@ -56,8 +56,9 @@ public class TailStrapAccumulationTests
         Assert.NotNull(r.ReleaseProject);
         Assert.True(StrappingAreaRules.HeadIntoAccumulationMm(r.ReleaseProject!) <= 1e-6, Info(r.ReleaseProject!));
 
-        // obiettivo raggiunto: nessuna segnalazione dall'ottimizzatore (resta l'informazione nei controlli)
-        var ok = ProductivityAdvisor.Analyze(p, 1, maxSteps: 1);
+        // con lo svincolo allungato l'obiettivo minimo è garantito e non c'è più nessuna segnalazione
+        var ok = ProductivityAdvisor.Analyze(r.ReleaseProject!, 1, maxSteps: 0);
+        Assert.True(ok.TargetReached, ok.Summary);
         Assert.Null(ok.ReleaseWarning);
     }
 
