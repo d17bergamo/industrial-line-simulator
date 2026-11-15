@@ -12,6 +12,9 @@
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <CompressionEnabled>false</CompressionEnabled>
     <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+    <!-- Senza i dati ICU: i file .dat non si possono pubblicare come pagina. I numeri li formatta la pagina (virgola decimale). -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
     <!-- Compilazione anticipata: il motore gira molto più veloce sul telefono (serve il workload wasm-tools). -->
     <RunAOTCompilation>true</RunAOTCompilation>
   </PropertyGroup>

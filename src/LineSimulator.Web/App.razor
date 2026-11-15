@@ -227,7 +227,6 @@
 </main>
 
 @code {
-    private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
     private static readonly int[] Speeds = { 1, 4, 10, 30 };
 
     // Disegno: la linea scorre dall'alto verso il basso (sul telefono c'è più spazio in altezza), il trasferitore porta a destra.
@@ -277,7 +276,7 @@
     private CancellationTokenSource? _playCts;
 
     private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
-    private static string N(double? v, string format) => v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v.Value.ToString(format, It) : "–";
+    private static string N(double? v, string format) => v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v.Value.ToString(format, CultureInfo.InvariantCulture).Replace('.', ',') : "–";
 
     private double Y(double xM) => Top + (xM - _lineStart) * _ky;
 
