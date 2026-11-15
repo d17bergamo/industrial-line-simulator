@@ -6,7 +6,7 @@ name: Versione web
 on:
   push:
     branches-ignore: [ main ]
-    paths: [ 'src/**', 'tools/web-check.mjs', '.github/workflows/web.yml' ]
+    paths: [ 'src/**', 'tools/web-*', '.github/workflows/web.yml' ]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,7 @@ jobs:
         run: |
           dotnet workload install wasm-tools > /dev/null
           dotnet publish src/LineSimulator.Web/LineSimulator.Web.csproj -c Release -o out
+          python3 tools/web-pack.py out/wwwroot
           mkdir -p web
           (cd out/wwwroot && zip -q -r ../../web/simulatore-web.zip . && find . -type f -printf '%s %p\n' | sort -k2 > ../../web/web-file.txt)
           du -sh out/wwwroot
