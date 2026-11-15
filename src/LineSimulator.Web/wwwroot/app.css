@@ -45,8 +45,10 @@ button.attivo { border-color: var(--accento); color: var(--accento); font-weight
 ul.elenco { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .88rem; color: var(--tenue); }
 ul.elenco li { margin-bottom: .3rem; }
 .vista { display: block; width: 100%; height: 72vh; max-height: 900px; touch-action: pan-y; }
-.comandi { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .5rem; }
-.comandi .tempo { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--tenue); font-size: .9rem; }
+.comandi { display: flex; align-items: center; gap: .35rem; margin-top: .5rem; }
+.comandi button { flex: 1 1 0; padding: .6rem .2rem; }
+.comandi button:first-child { flex: 1.6 1 0; }
+.tempo { text-align: right; font-variant-numeric: tabular-nums; color: var(--tenue); font-size: .9rem; margin-top: .4rem; }
 input[type=range] { width: 100%; margin: .7rem 0 0; accent-color: var(--accento); height: 28px; }
 .eventi { margin-top: .5rem; font-size: .82rem; color: var(--tenue); min-height: 5.6em; }
 .eventi div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -10,7 +10,7 @@
     <section class="carta">
         <h2>Linea</h2>
         <label class="campo">Esempio
-            <select id="esempio" @bind="_model" disabled="@_busy">
+            <select id="esempio" @bind="Model" disabled="@_busy">
                 @for (int i = 0; i < SampleProjects.All.Count; i++)
                 {
                     <option value="@i">@SampleProjects.All[i].Name</option>
@@ -18,6 +18,15 @@
                 @if (_uploaded != null)
                 {
                     <option value="-1">File: @_uploadedName</option>
+                }
+            </select>
+        </label>
+        <label class="campo">Misura dei pacchi
+            <select id="misura" @bind="_type" disabled="@_busy">
+                <option value="*">Tutte le misure, a rotazione</option>
+                @foreach (var t in Types)
+                {
+                    <option value="@t.Id">@N(t.LengthMm / 1000, "0.#") m (@t.Id)</option>
                 }
             </select>
         </label>
@@ -173,8 +182,8 @@
                 {
                     <button class="@(v == _speed ? "attivo" : "")" @onclick="() => _speed = v">×@(v)</button>
                 }
-                <span class="tempo">@N(_t, "0.0") / @N(_end, "0") s</span>
             </div>
+            <div class="tempo">@N(_t, "0.0") / @N(_end, "0") s</div>
             <input type="range" min="0" max="@F(_end)" step="0.5" value="@F(_t)" @oninput="OnSeek" aria-label="Tempo della simulazione" />
 
             <div class="eventi">
@@ -227,6 +236,29 @@
     private sealed record Band(string Id, int Zone, double StartM, double EndM, bool Valle);
 
     private int _model;
+    private string _type = "*";
+    private List<PackageType>? _types;
+
+    private int Model
+    {
+        get => _model;
+        set { _model = value; _types = null; _type = "*"; }
+    }
+
+    /// <summary>Tipologie di pacco della linea scelta (per la scelta della misura).</summary>
+    private List<PackageType> Types
+    {
+        get
+        {
+            if (_types != null) return _types;
+            try { _types = Source().PackageTypes.ToList(); }
+            catch { _types = new List<PackageType>(); }
+            return _types;
+        }
+    }
+
+    private LineProject Source() =>
+        _model < 0 && _uploaded != null ? ProjectSerializer.Deserialize(_uploaded) : SampleProjects.All[Math.Clamp(_model, 0, SampleProjects.All.Count - 1)].Factory();
     private int _count = 10;
     private bool _double, _stop, _busy, _playing;
     private double _progress;
@@ -272,7 +304,7 @@
             ProjectSerializer.Deserialize(json);   // verifica che si legga
             _uploaded = json;
             _uploadedName = e.File.Name;
-            _model = -1;
+            Model = -1;
         }
         catch (Exception ex)
         {
@@ -282,7 +314,8 @@
 
     private LineProject BuildProject()
     {
-        var p = _model < 0 && _uploaded != null ? ProjectSerializer.Deserialize(_uploaded) : SampleProjects.All[Math.Clamp(_model, 0, SampleProjects.All.Count - 1)].Factory();
+        var p = Source();
+        p.Infeed.TypeSequence = _type == "*" ? p.PackageTypes.Select(t => t.Id).ToList() : new List<string> { _type };
         p.Infeed.PackageCount = _count;
         p.Infeed.Continuous = false;
         p.Simulation.RecordWindowS = 0;
