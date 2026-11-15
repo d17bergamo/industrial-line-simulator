@@ -1,0 +1,421 @@
+@* Versione web del simulatore: una sola pagina, pensata per il telefono. Usa il motore condiviso, nessuna logica propria. *@
+@implements IDisposable
+
+<main>
+    <header class="testa">
+        <h1>Simulatore Linea</h1>
+        <small id="pronto">versione web</small>
+    </header>
+
+    <section class="carta">
+        <h2>Linea</h2>
+        <label class="campo">Esempio
+            <select id="esempio" @bind="_model" disabled="@_busy">
+                @for (int i = 0; i < SampleProjects.All.Count; i++)
+                {
+                    <option value="@i">@SampleProjects.All[i].Name</option>
+                }
+                @if (_uploaded != null)
+                {
+                    <option value="-1">File: @_uploadedName</option>
+                }
+            </select>
+        </label>
+        <label class="campo">Pacchi da simulare
+            <select @bind="_count" disabled="@_busy">
+                <option value="6">6</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="40">40</option>
+            </select>
+        </label>
+        <label class="spunta"><input type="checkbox" @bind="_double" disabled="@_busy" /> Double banking (dove i pacchi ci stanno)</label>
+        <label class="spunta"><input type="checkbox" @bind="_stop" disabled="@_busy" /> Fermo scomparente al centro</label>
+        <label class="campo">Oppure apri un progetto salvato (.json)
+            <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
+        </label>
+        <button id="simula" class="primario" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
+        @if (_busy)
+        {
+            <div class="barra"><div class="barra-valore" style="width:@F(_progress * 100)%"></div></div>
+        }
+    </section>
+
+    @if (_errors.Count > 0)
+    {
+        <section class="errore" id="errori">
+            <b>La simulazione non può partire</b>
+            <ul class="elenco">
+                @foreach (var m in _errors)
+                {
+                    <li>@m</li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (_engine != null && _res != null)
+    {
+        <section class="carta" id="risultati">
+            <h2>Risultato</h2>
+            <div class="numeri">
+                <div class="numero"><b>@N(_res.TonnesPerHour, "0.0")</b><span>t/h</span></div>
+                <div class="numero"><b>@N(_res.PackagesPerHour, "0.0")</b><span>pacchi/h</span></div>
+                <div class="numero"><b>@N(_res.CycleTimeMeanS, "0.0")</b><span>s per pacco</span></div>
+                <div class="numero @(_res.SlipEvents == 0 ? "ok" : "male")"><b>@_res.SlipEvents</b><span>strisciamenti</span></div>
+                <div class="numero @(_res.Collisions == 0 ? "ok" : "male")"><b>@_res.Collisions</b><span>collisioni</span></div>
+                <div class="numero"><b>@_res.PackagesExited/@_res.PackagesRequested</b><span>pacchi usciti</span></div>
+            </div>
+            @if (_res.Completed && !_res.HasProblems && _res.SlipEvents == 0)
+            {
+                <p class="esito ok">Simulazione pulita, durata @N(_res.SimulatedTimeS, "0") s.</p>
+            }
+            else
+            {
+                <p class="esito male">@(_res.Completed ? "Simulazione finita con anomalie." : "Simulazione non completata: " + _res.FinishReason)</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(_res.BottleneckName))
+            {
+                <p class="esito">Collo di bottiglia: <b>@_res.BottleneckName</b>. @_res.BottleneckExplanation</p>
+            }
+            @if (_split != null)
+            {
+                <p class="esito">Via del trasferitore su due inverter, divisa a @N(_split * 1000, "0") mm.</p>
+            }
+            @if (_res.Problems.Count > 0)
+            {
+                <details open>
+                    <summary>Anomalie (@_res.Problems.Count)</summary>
+                    <ul class="elenco">
+                        @foreach (var x in _res.Problems.Take(12))
+                        {
+                            <li>@N(x.TimeS, "0.0") s: @x.Message</li>
+                        }
+                    </ul>
+                </details>
+            }
+            @if (_changes.Count > 0)
+            {
+                <details>
+                    <summary>Correzioni automatiche applicate (@_changes.Count)</summary>
+                    <ul class="elenco">
+                        @foreach (var m in _changes)
+                        {
+                            <li>@m</li>
+                        }
+                    </ul>
+                </details>
+            }
+        </section>
+
+        <section class="carta">
+            <h2>Vista dall'alto</h2>
+            <svg class="vista" viewBox="0 0 @VW @VH" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vista dall'alto della linea">
+                @* aree del trasferitore e dell'accumulo *@
+                <g>
+                    <rect x="@F(BandX)" y="@F(Y(_engine.Transfer.StartM))" width="@F(BandW + _strokeM * KX)" height="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)"
+                          fill="none" stroke="var(--bordo)" stroke-dasharray="6 5" stroke-width="2" rx="4" />
+                    @if (_accM > 0)
+                    {
+                        <rect x="@F(BandX + _strokeM * KX)" y="@F(Y(_engine.Transfer.StartM))" width="@F(BandW + _accM * KX)" height="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)"
+                              fill="none" stroke="var(--bordo)" stroke-width="2" rx="4" />
+                    }
+                </g>
+                @* vie a rulli: un rettangolo per inverter, colore secondo la velocità *@
+                @foreach (var b in _bands)
+                {
+                    <g>
+                        <rect x="@F(BandX)" y="@F(Y(b.StartM) + 1)" width="@F(BandW)" height="@F(Math.Max(1, (b.EndM - b.StartM) * _ky - 2))" rx="3" fill="@BandFill(Speed(b))" />
+                        <text x="4" y="@F(Y(b.StartM) + 22)" font-size="20">@b.Id</text>
+                        <text x="4" y="@F(Y(b.StartM) + 44)" font-size="17">@N(Speed(b), "0.00")</text>
+                    </g>
+                }
+                @* legatrici *@
+                @for (int i = 0; i < _engine.Strappers.Count; i++)
+                {
+                    var s = _engine.Strappers[i];
+                    bool work = _frame != null && i < _frame.StrapperStates.Length && _frame.StrapperStates[i] != StrapperState.Idle;
+                    <g>
+                        <rect x="@F(BandX - 10)" y="@F(Y(s.PositionM) - 5)" width="@F(BandW + 20)" height="10" rx="3" fill="@(work ? "var(--lega)" : "var(--macchina)")" opacity="@(work ? "1" : "0.75")" />
+                        <text x="@F(BandX + BandW + 16)" y="@F(Y(s.PositionM) + 7)" font-size="19">@s.Id</text>
+                    </g>
+                }
+                @* fotocellule *@
+                @for (int i = 0; i < _engine.Photocells.Count; i++)
+                {
+                    bool on = _frame != null && i < _frame.PhotocellOutputs.Length && _frame.PhotocellOutputs[i];
+                    <g><circle cx="@F(BandX - 9)" cy="@F(Y(_engine.Photocells[i].PositionM))" r="6" fill="@(on ? "var(--fc-on)" : "var(--fc)")" /></g>
+                }
+                @* fermi scomparenti e fermo finale *@
+                @for (int i = 0; i < _engine.IntermediateStops.Count; i++)
+                {
+                    bool up = _frame != null && i < _frame.StopRaised.Length && _frame.StopRaised[i];
+                    <g><rect x="@F(BandX - 4)" y="@F(Y(_engine.IntermediateStops[i].PositionM) - 2.5)" width="@F(BandW + 8)" height="5" fill="@(up ? "var(--errore)" : "var(--attesa)")" opacity="@(up ? "1" : "0.5")" /></g>
+                }
+                <g><rect x="@F(BandX - 6)" y="@F(Y(_engine.Stopper.PositionM))" width="@F(BandW + 12)" height="7" fill="var(--errore)" /></g>
+                @* pacchi *@
+                @if (_frame != null)
+                {
+                    @foreach (var p in _frame.Packages)
+                    {
+                        double h = Math.Max(8, p.LengthM * _ky);
+                        <g>
+                            <rect x="@F(BandX + 6 + p.LateralM * KX)" y="@F(Y(p.HeadM - p.LengthM))" width="@F(BandW - 12)" height="@F(h)" rx="5" fill="@PackFill(p.State)" />
+                            <text class="et-pacco" x="@F(BandX + BandW / 2 + p.LateralM * KX)" y="@F(Y(p.HeadM - p.LengthM / 2) + 7)" font-size="19" text-anchor="middle">@p.Id</text>
+                        </g>
+                    }
+                }
+            </svg>
+
+            <div class="comandi">
+                <button id="play" @onclick="TogglePlay">@(_playing ? "Pausa" : "Avvia")</button>
+                @foreach (var v in Speeds)
+                {
+                    <button class="@(v == _speed ? "attivo" : "")" @onclick="() => _speed = v">×@(v)</button>
+                }
+                <span class="tempo">@N(_t, "0.0") / @N(_end, "0") s</span>
+            </div>
+            <input type="range" min="0" max="@F(_end)" step="0.5" value="@F(_t)" @oninput="OnSeek" aria-label="Tempo della simulazione" />
+
+            <div class="eventi">
+                @foreach (var x in RecentEvents())
+                {
+                    <div class="@(x.Severity == EventSeverity.Error ? "grave" : x.Severity == EventSeverity.Warning ? "avviso" : "")">@N(x.TimeS, "0.0") s · @x.Message</div>
+                }
+            </div>
+            <div class="legenda">
+                <span><i style="background:var(--rulli-marcia)"></i>rulli in marcia</span>
+                <span><i style="background:var(--rulli-lenta)"></i>rulli lenti</span>
+                <span><i style="background:var(--lega)"></i>legatura</span>
+                <span><i style="background:var(--intesta)"></i>intestatura</span>
+                <span><i style="background:var(--trasf)"></i>sul trasferitore</span>
+                <span><i style="background:var(--fc-on)"></i>fotocellula occupata</span>
+            </div>
+        </section>
+
+        <section class="carta">
+            <details>
+                <summary>Pacchi (@_res.Packages.Count)</summary>
+                <table class="pacchi">
+                    <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>attesa s</th><th>legature</th></tr></thead>
+                    <tbody>
+                        @foreach (var k in _res.Packages)
+                        {
+                            <tr>
+                                <td>@k.Id</td>
+                                <td>@N(k.LengthMm / 1000, "0.#")</td>
+                                <td>@N(k.EntryTimeS, "0")</td>
+                                <td>@N(k.ExitTimeS, "0")</td>
+                                <td>@N(k.WaitingTimeS, "0")</td>
+                                <td>@k.StrapsDone/@k.StrapsTotal</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        </section>
+    }
+</main>
+
+@code {
+    private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
+    private static readonly int[] Speeds = { 1, 4, 10, 30 };
+
+    // Disegno: la linea scorre dall'alto verso il basso (sul telefono c'è più spazio in altezza), il trasferitore porta a destra.
+    private const double VW = 460, VH = 1000, BandX = 80, BandW = 70, KX = 34, Top = 24;
+
+    private sealed record Band(string Id, int Zone, double StartM, double EndM, bool Valle);
+
+    private int _model;
+    private int _count = 10;
+    private bool _double, _stop, _busy, _playing;
+    private double _progress;
+    private string? _uploaded, _uploadedName;
+    private readonly List<string> _errors = new();
+    private List<string> _changes = new();
+
+    private SimulationEngine? _engine;
+    private SimulationResults? _res;
+    private SimFrame? _frame;
+    private List<SimEvent> _events = new();
+    private List<Band> _bands = new();
+    private double? _split;
+    private double _t, _end, _ky = 1, _lineStart, _strokeM, _accM;
+    private int _speed = 4;
+    private CancellationTokenSource? _playCts;
+
+    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string N(double? v, string format) => v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v.Value.ToString(format, It) : "–";
+
+    private double Y(double xM) => Top + (xM - _lineStart) * _ky;
+
+    private double Speed(Band b) => _frame == null ? 0 : b.Valle ? _frame.ValleSpeed : b.Zone < _frame.ZoneSpeeds.Length ? _frame.ZoneSpeeds[b.Zone] : 0;
+
+    private static string BandFill(double v) => v > 0.45 ? "var(--rulli-marcia)" : Math.Abs(v) > 0.005 ? "var(--rulli-lenta)" : "var(--rulli)";
+
+    private static string PackFill(PackageState s) => s switch
+    {
+        PackageState.Positioning or PackageState.Strapping => "var(--lega)",
+        PackageState.Aligning or PackageState.Aligned => "var(--intesta)",
+        PackageState.Accumulated => "var(--attesa)",
+        PackageState.Transport => "var(--pacco)",
+        _ => "var(--trasf)"
+    };
+
+    private async Task OnFile(InputFileChangeEventArgs e)
+    {
+        _errors.Clear();
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(8_000_000));
+            string json = await reader.ReadToEndAsync();
+            ProjectSerializer.Deserialize(json);   // verifica che si legga
+            _uploaded = json;
+            _uploadedName = e.File.Name;
+            _model = -1;
+        }
+        catch (Exception ex)
+        {
+            _errors.Add("Il file non è un progetto del simulatore: " + ex.Message);
+        }
+    }
+
+    private LineProject BuildProject()
+    {
+        var p = _model < 0 && _uploaded != null ? ProjectSerializer.Deserialize(_uploaded) : SampleProjects.All[Math.Clamp(_model, 0, SampleProjects.All.Count - 1)].Factory();
+        p.Infeed.PackageCount = _count;
+        p.Infeed.Continuous = false;
+        p.Simulation.RecordWindowS = 0;
+        if (_stop && !p.IntermediateStops.Any(s => s.IsEnabled))
+            p.IntermediateStops.Add(new IntermediateStopConfig
+            {
+                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
+                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+            });
+        if (_double) BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        return p;
+    }
+
+    private async Task Run()
+    {
+        if (_busy) return;
+        StopPlay();
+        _busy = true; _progress = 0; _errors.Clear();
+        _engine = null; _res = null; _frame = null;
+        StateHasChanged();
+        await Task.Delay(30);
+        try
+        {
+            var p = BuildProject();
+            var fix = ProjectAutoFix.Run(p);
+            var e = new SimulationEngine(p);
+            _changes = fix.Messages.Concat(e.Preparation.Changes).Distinct().ToList();
+            _errors.AddRange(fix.Errors);
+            _errors.AddRange(e.Preparation.Errors);
+            _errors.AddRange(e.Validation.Errors.Select(i => i.Message));
+            if (_errors.Count > 0)
+            {
+                var distinct = _errors.Distinct().ToList();
+                _errors.Clear(); _errors.AddRange(distinct);
+                return;
+            }
+            int n = 0;
+            while (e.Step())
+            {
+                if (++n % 2000 != 0) continue;
+                _progress = Math.Min(0.98, e.Packages.Count(k => k.ExitTimeS.HasValue) / (double)Math.Max(1, _count));
+                StateHasChanged();
+                await Task.Delay(1);
+            }
+            _res = e.ComputeResults();
+            _events = e.Events.Where(x => x.Severity != EventSeverity.Trace).ToList();
+            _lineStart = e.Topology.LineStartM;
+            _ky = (VH - Top - 16) / Math.Max(1, e.Topology.LineEndM - e.Topology.LineStartM);
+            _strokeM = p.Transfer.TranslationStrokeMm / 1000.0;
+            _accM = p.AccumulationTransfer.IsEnabled ? p.AccumulationTransfer.WidthMm / 1000.0 : 0;
+            _split = e.TransferSplitM;
+            _bands = new List<Band>();
+            for (int i = 0; i < e.Zones.Count; i++)
+            {
+                var z = e.Zones[i];
+                bool split = e.TransferSplitM is double sp && e.Topology.StopperZone != null && z.Id == e.Topology.StopperZone.Id && sp > z.Info.StartM && sp < z.Info.EndM;
+                if (split)
+                {
+                    _bands.Add(new Band(e.MonteInverterId ?? z.Id + "a", i, z.Info.StartM, e.TransferSplitM!.Value, false));
+                    _bands.Add(new Band(z.Id, i, e.TransferSplitM!.Value, z.Info.EndM, true));
+                }
+                else _bands.Add(new Band(z.Id, i, z.Info.StartM, z.Info.EndM, false));
+            }
+            _end = e.Recorder.Frames.Count > 0 ? e.Recorder.Frames[^1].TimeS : e.Time;
+            _t = 0;
+            _frame = e.Recorder.FrameAt(0);
+            _engine = e;
+        }
+        catch (Exception ex)
+        {
+            _errors.Add("Errore durante la simulazione: " + ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void TogglePlay()
+    {
+        if (_playing) { StopPlay(); return; }
+        if (_engine == null) return;
+        if (_t >= _end - 0.05) _t = 0;
+        _playing = true;
+        _playCts = new CancellationTokenSource();
+        _ = PlayLoop(_playCts.Token);
+    }
+
+    private void StopPlay()
+    {
+        _playing = false;
+        _playCts?.Cancel();
+        _playCts = null;
+    }
+
+    private async Task PlayLoop(CancellationToken ct)
+    {
+        const int tickMs = 70;
+        var last = DateTime.UtcNow;
+        while (!ct.IsCancellationRequested && _engine != null)
+        {
+            try { await Task.Delay(tickMs, ct); } catch (TaskCanceledException) { return; }
+            var now = DateTime.UtcNow;
+            double dt = Math.Min(0.5, (now - last).TotalSeconds);
+            last = now;
+            _t = Math.Min(_end, _t + dt * _speed);
+            _frame = _engine.Recorder.FrameAt(_t);
+            if (_t >= _end - 1e-6) { _playing = false; _playCts = null; StateHasChanged(); return; }
+            StateHasChanged();
+        }
+    }
+
+    private void OnSeek(ChangeEventArgs e)
+    {
+        if (_engine == null) return;
+        if (double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
+        {
+            _t = Math.Clamp(v, 0, _end);
+            _frame = _engine.Recorder.FrameAt(_t);
+        }
+    }
+
+    /// <summary>Ultimi eventi fino all'istante mostrato (ricerca binaria: l'elenco è in ordine di tempo).</summary>
+    private IEnumerable<SimEvent> RecentEvents()
+    {
+        int lo = 0, hi = _events.Count;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) / 2;
+            if (_events[mid].TimeS <= _t) lo = mid + 1; else hi = mid;
+        }
+        for (int i = Math.Max(0, lo - 4); i < lo; i++) yield return _events[i];
+    }
+
+    public void Dispose() => StopPlay();
+}

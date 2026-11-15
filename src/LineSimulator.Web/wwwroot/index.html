@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulatore Linea</title>
+    <base href="./" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="app.css" />
+    <script type="importmap"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="avvio">
+            <h1>Simulatore Linea</h1>
+            <p id="avvio-testo">Caricamento del simulatore…</p>
+            <div class="barra"><div class="barra-dentro"></div></div>
+        </div>
+    </div>
+    <div id="errore-avvio" hidden></div>
+    <script>
+        // Se il simulatore non parte, lo scrive sulla pagina (sul telefono non c'è la console).
+        function erroreAvvio(m) {
+            var e = document.getElementById('errore-avvio');
+            e.hidden = false;
+            e.textContent = 'Il simulatore non è partito: ' + m;
+        }
+        window.addEventListener('error', function (ev) { erroreAvvio(ev.message || 'errore di caricamento'); });
+        window.addEventListener('unhandledrejection', function (ev) { erroreAvvio((ev.reason && ev.reason.message) || String(ev.reason)); });
+    </script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+</html>

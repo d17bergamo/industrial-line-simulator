@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <!--
+    Versione web del simulatore: gira nel browser (anche del telefono) senza installazione.
+    Usa lo stesso motore del programma Windows (Models, Core, Optimization, Engine) e, dell'infrastruttura, solo i file
+    che servono (controlli automatici e lettura dei progetti JSON): i PDF e l'Excel restano nel programma Windows.
+    Non fa parte delle soluzioni: la compila il workflow "Versione web".
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>LineSimulator.Web</RootNamespace>
+    <AssemblyName>LineSimulator.Web</AssemblyName>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <CompressionEnabled>false</CompressionEnabled>
+    <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LineSimulator.Models\LineSimulator.Models.csproj" />
+    <ProjectReference Include="..\LineSimulator.Core\LineSimulator.Core.csproj" />
+    <ProjectReference Include="..\LineSimulator.Optimization\LineSimulator.Optimization.csproj" />
+    <ProjectReference Include="..\LineSimulator.Engine\LineSimulator.Engine.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\LineSimulator.Infrastructure\ProjectAutoFix.cs" Link="Infrastructure\ProjectAutoFix.cs" />
+    <Compile Include="..\LineSimulator.Infrastructure\ProjectSerializer.cs" Link="Infrastructure\ProjectSerializer.cs" />
+    <Compile Include="..\LineSimulator.Infrastructure\ProjectUpgrade.cs" Link="Infrastructure\ProjectUpgrade.cs" />
+  </ItemGroup>
+</Project>

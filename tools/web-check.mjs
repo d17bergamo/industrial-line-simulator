@@ -1,0 +1,50 @@
+// Prova della versione web con un browser da telefono: carica la pagina, lancia una simulazione, salva le schermate.
+// Uso: node web-check.mjs <url> <cartella di uscita>
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+
+const [url, out] = process.argv.slice(2);
+fs.mkdirSync(out, { recursive: true });
+const log = [];
+const say = m => { log.push(m); console.log(m); };
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const page = await ctx.newPage();
+page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') say(`[console ${m.type()}] ${m.text()}`); });
+page.on('pageerror', e => say(`[errore pagina] ${e.message}`));
+page.on('requestfailed', r => say(`[richiesta fallita] ${r.url()} ${r.failure()?.errorText}`));
+let ok = false;
+try {
+  let t0 = Date.now();
+  await page.goto(url);
+  await page.waitForSelector('#pronto', { timeout: 120000 });
+  say(`avvio: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  await page.screenshot({ path: `${out}/web-1-avvio.png` });
+  for (const [name, setup] of [['base', async () => {}], ['double', async () => {
+    await page.locator('label.spunta input').nth(0).check();
+    await page.locator('label.spunta input').nth(1).check();
+  }]]) {
+    await setup();
+    t0 = Date.now();
+    await page.click('#simula');
+    await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
+    say(`simulazione ${name}: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    say(`risultato ${name}: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 600)}`);
+    await page.screenshot({ path: `${out}/web-2-${name}-risultato.png`, fullPage: true });
+    if (await page.locator('#play').count()) {
+      await page.click('#play');
+      await page.waitForTimeout(name === 'base' ? 9000 : 20000);
+      await page.locator('svg.vista').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${out}/web-3-${name}-animazione.png` });
+      await page.click('#play');
+    }
+  }
+  ok = true;
+} catch (e) {
+  say(`[prova fallita] ${e.message}`);
+  try { await page.screenshot({ path: `${out}/web-errore.png`, fullPage: true }); } catch {}
+} finally {
+  fs.writeFileSync(`${out}/web-prova.txt`, log.join('\n') + '\n');
+  await browser.close();
+}
+process.exit(ok ? 0 : 1);

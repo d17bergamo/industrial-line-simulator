@@ -1,0 +1,53 @@
+name: Versione web
+
+# Compila la versione web (gira nel browser, anche del telefono, senza installazione), la prova con un browser da
+# telefono e pubblica il pacchetto e le schermate nella prerelease "web-anteprima".
+
+on:
+  push:
+    branches-ignore: [ main ]
+    paths: [ 'src/**', 'tools/web-check.mjs', '.github/workflows/web.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pubblica la versione web
+        run: |
+          dotnet publish src/LineSimulator.Web/LineSimulator.Web.csproj -c Release -o out
+          mkdir -p web
+          (cd out/wwwroot && zip -q -r ../../web/simulatore-web.zip . && find . -type f -printf '%s %p\n' | sort -k2 > ../../web/web-file.txt)
+          du -sh out/wwwroot
+
+      - name: Prova con un browser da telefono
+        run: |
+          mkdir -p prova && cd prova
+          npm init -y > /dev/null
+          npm install playwright@1.49.1 > /dev/null
+          npx playwright install --with-deps chromium > /dev/null
+          python3 -m http.server 8377 -d ../out/wwwroot > /dev/null 2>&1 &
+          sleep 2
+          cp ../tools/web-check.mjs . && node web-check.mjs http://localhost:8377/index.html ../web
+
+      - name: Pubblica pacchetto e schermate
+        if: always() && hashFiles('web/*') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete web-anteprima --yes --cleanup-tag || true
+          gh release create web-anteprima web/* --target "${{ github.sha }}" --prerelease \
+            --title "Versione web (${{ github.ref_name }})" --notes "Pacchetto della versione web e schermate della prova, ramo ${{ github.ref_name }}, commit ${{ github.sha }}."
