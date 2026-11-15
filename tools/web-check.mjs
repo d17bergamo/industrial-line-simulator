@@ -7,7 +7,7 @@ const [url, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const log = [];
 const say = m => { log.push(m); console.log(m); };
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 const page = await ctx.newPage();
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') say(`[console ${m.type()}] ${m.text()}`); });
@@ -39,6 +39,31 @@ try {
       await page.click('#play');
     }
   }
+  // vista 3D: accensione, riproduzione, viste predefinite
+  await page.click('#vista3d');
+  await page.waitForTimeout(2500);
+  say(`3D: ${await page.locator('.vista3d canvas').count() ? 'canvas presente' : 'canvas assente'}; avviso: ${await page.locator('.vista3d + p.esito').count()}`);
+  await page.click('#play');
+  await page.waitForTimeout(22000);
+  await page.click('#play');
+  await page.locator('.vista3d').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/web-4-3d-insieme.png` });
+  for (const v of ['Legatura', 'Trasferitore', 'Alto']) {
+    await page.click(`.viste button:has-text("${v}")`);
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${out}/web-4-3d-${v.toLowerCase()}.png` });
+  }
+  // tema scuro
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.click('#simula');
+  await page.waitForSelector('#risultati', { timeout: 600000 });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${out}/web-5-scuro-3d.png`, fullPage: true });
+  await page.click('#vista2d');
+  await page.click('#play');
+  await page.waitForTimeout(15000);
+  await page.click('#play');
+  await page.screenshot({ path: `${out}/web-5-scuro-2d.png`, fullPage: true });
   ok = true;
 } catch (e) {
   say(`[prova fallita] ${e.message}`);

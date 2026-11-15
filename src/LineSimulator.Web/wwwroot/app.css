@@ -1,4 +1,5 @@
 :root {
+    color-scheme: light dark;
     --sfondo: #f4f5f7; --carta: #ffffff; --testo: #1b1f24; --tenue: #5d6773; --bordo: #d9dde3;
     --accento: #0b6bcb; --accento-testo: #ffffff; --ok: #1a7f4b; --avviso: #b45309; --errore: #c0262d;
     --rulli: #e3e6ea; --rulli-marcia: #9fd8b5; --rulli-lenta: #f2d28a; --pacco: #51606f; --pacco-testo: #ffffff;
@@ -62,3 +63,18 @@ table.pacchi th, table.pacchi td { text-align: right; padding: .3rem .25rem; bor
 table.pacchi th:first-child, table.pacchi td:first-child { text-align: left; }
 table.pacchi th { color: var(--tenue); font-weight: 500; }
 details summary { cursor: pointer; font-weight: 600; padding: .2rem 0; }
+
+/* comandi nativi: stessi colori della pagina anche con il tema scuro */
+select, input, button { color-scheme: inherit; }
+label.campo select option { background: var(--carta); color: var(--testo); }
+input[type=file]::file-selector-button { font: inherit; margin-right: .6rem; padding: .35rem .7rem; border-radius: 8px; border: 1px solid var(--bordo); background: var(--carta); color: var(--testo); }
+details summary { color: var(--testo); }
+.esito { color: var(--testo); }
+.schede { display: flex; gap: .35rem; margin-bottom: .6rem; }
+.schede button { flex: 1 1 0; }
+.schede button.attivo { background: var(--accento); border-color: var(--accento); color: var(--accento-testo); }
+.vista3d { width: 100%; height: 62vh; max-height: 760px; border-radius: 10px; overflow: hidden; border: 1px solid var(--bordo); }
+.vista3d canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.comandi.viste button:first-child { flex: 1 1 0; }
+.comandi.viste button { font-size: .85rem; }
+.nota { margin: .4rem 0 0; font-size: .78rem; color: var(--tenue); }

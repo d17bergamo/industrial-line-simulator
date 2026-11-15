@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Simulatore Linea</title>
     <base href="./" />
     <link rel="preload" id="webassembly" />
@@ -28,6 +29,8 @@
         window.addEventListener('error', function (ev) { erroreAvvio(ev.message || 'errore di caricamento'); });
         window.addEventListener('unhandledrejection', function (ev) { erroreAvvio((ev.reason && ev.reason.message) || String(ev.reason)); });
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="scene3d.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 </html>

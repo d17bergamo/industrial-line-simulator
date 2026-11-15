@@ -1,5 +1,6 @@
 @* Versione web del simulatore: una sola pagina, pensata per il telefono. Usa il motore condiviso, nessuna logica propria. *@
 @implements IDisposable
+@inject IJSRuntime JS
 
 <main>
     <header class="testa">
@@ -118,8 +119,26 @@
         </section>
 
         <section class="carta">
-            <h2>Vista dall'alto</h2>
-            <svg class="vista" viewBox="0 0 @VW @VH" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vista dall'alto della linea">
+            <div class="schede">
+                <button id="vista2d" class="@(_view3d ? "" : "attivo")" @onclick="() => SetView(false)">Dall'alto</button>
+                <button id="vista3d" class="@(_view3d ? "attivo" : "")" @onclick="() => SetView(true)">3D</button>
+            </div>
+            @if (_view3d)
+            {
+                <div class="vista3d"><canvas id="c3d"></canvas></div>
+                @if (_no3d)
+                {
+                    <p class="esito male">Su questo dispositivo la grafica 3D non è disponibile.</p>
+                }
+                <div class="comandi viste">
+                    <button @onclick="@(() => View3D("insieme"))">Insieme</button>
+                    <button @onclick="@(() => View3D("legatura"))">Legatura</button>
+                    <button @onclick="@(() => View3D("trasferitore"))">Trasferitore</button>
+                    <button @onclick="@(() => View3D("alto"))">Alto</button>
+                </div>
+                <p class="nota">Un dito ruota, due dita avvicinano e spostano.</p>
+            }
+            <svg class="vista" style="@(_view3d ? "display:none" : "")" viewBox="0 0 @VW @VH" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vista dall'alto della linea">
                 @* aree del trasferitore e dell'accumulo *@
                 <g>
                     <rect x="@F(BandX)" y="@F(Y(_engine.Transfer.StartM))" width="@F(BandW + _strokeM * KX)" height="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)"
@@ -274,6 +293,107 @@
     private double _t, _end, _ky = 1, _lineStart, _strokeM, _accM;
     private int _speed = 4;
     private CancellationTokenSource? _playCts;
+    private bool _view3d, _init3d, _no3d;
+
+    // Dati per la vista 3D (scene3d.js): la scena una volta, poi lo stato a ogni fotogramma.
+    private sealed class Scene3D
+    {
+        public double StartM { get; set; }
+        public double EndM { get; set; }
+        public double PitchM { get; set; }
+        public double StrokeM { get; set; }
+        public double AccM { get; set; }
+        public double TransferStartM { get; set; }
+        public double TransferEndM { get; set; }
+        public double StopperM { get; set; }
+        public List<Band> Bands { get; set; } = new();
+        public double[] Strappers { get; set; } = Array.Empty<double>();
+        public string[] StrapperIds { get; set; } = Array.Empty<string>();
+        public double[] Photocells { get; set; } = Array.Empty<double>();
+        public double[] Stops { get; set; } = Array.Empty<double>();
+    }
+
+    private sealed class Frame3D
+    {
+        public double[] Speeds { get; set; } = Array.Empty<double>();
+        public bool[] Strappers { get; set; } = Array.Empty<bool>();
+        public bool[] Photocells { get; set; } = Array.Empty<bool>();
+        public bool[] Stops { get; set; } = Array.Empty<bool>();
+        public double[] Packs { get; set; } = Array.Empty<double>();
+        public string[] Ids { get; set; } = Array.Empty<string>();
+    }
+
+    private void SetView(bool threeD)
+    {
+        if (_view3d == threeD) return;
+        _view3d = threeD;
+        _no3d = false;
+        if (threeD) _init3d = true;
+        else Js("scena3d.dispose");
+    }
+
+    private void View3D(string name) => Js("scena3d.view", name);
+
+    private void Js(string fn, params object?[] args)
+    {
+        try { ((IJSInProcessRuntime)JS).InvokeVoid(fn, args); } catch (Exception) { }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!_init3d || !_view3d || _engine == null) return;
+        _init3d = false;
+        var e = _engine;
+        var scene = new Scene3D
+        {
+            StartM = e.Topology.LineStartM, EndM = e.Topology.LineEndM,
+            PitchM = (e.Project.Sections.FirstOrDefault()?.RollerPitchMm ?? RollerSection.DefaultPitchMm) / 1000.0,
+            StrokeM = _strokeM, AccM = _accM,
+            TransferStartM = e.Transfer.StartM, TransferEndM = e.Transfer.EndM, StopperM = e.Stopper.PositionM,
+            Bands = _bands,
+            Strappers = e.Strappers.Select(s => s.PositionM).ToArray(),
+            StrapperIds = e.Strappers.Select(s => s.Id).ToArray(),
+            Photocells = e.Photocells.Select(p => p.PositionM).ToArray(),
+            Stops = e.IntermediateStops.Select(s => s.PositionM).ToArray()
+        };
+        bool ok = false;
+        try { ok = ((IJSInProcessRuntime)JS).Invoke<bool>("scena3d.init", "c3d", scene); } catch (Exception) { }
+        if (!ok) { _no3d = true; StateHasChanged(); return; }
+        Push3D();
+    }
+
+    private static int StateCode(PackageState s) => s switch
+    {
+        PackageState.Transport => 0,
+        PackageState.Positioning or PackageState.Strapping => 1,
+        PackageState.Aligning or PackageState.Aligned => 2,
+        PackageState.Accumulated => 3,
+        _ => 4
+    };
+
+    private void Push3D()
+    {
+        if (!_view3d || _no3d || _frame == null || _engine == null) return;
+        var f = _frame;
+        var packs = new double[f.Packages.Length * 7];
+        var ids = new string[f.Packages.Length];
+        for (int i = 0; i < f.Packages.Length; i++)
+        {
+            var p = f.Packages[i];
+            int k = i * 7;
+            packs[k] = p.HeadM; packs[k + 1] = p.LengthM; packs[k + 2] = p.LateralM; packs[k + 3] = p.LiftM;
+            packs[k + 4] = StateCode(p.State); packs[k + 5] = p.GraphicWidthMm / 1000.0; packs[k + 6] = p.GraphicHeightMm / 1000.0;
+            ids[i] = p.Id;
+        }
+        Js("scena3d.frame", new Frame3D
+        {
+            Speeds = _bands.Select(Speed).ToArray(),
+            Strappers = f.StrapperStates.Select(s => s != StrapperState.Idle).ToArray(),
+            Photocells = f.PhotocellOutputs.ToArray(),
+            Stops = f.StopRaised.ToArray(),
+            Packs = packs, Ids = ids
+        });
+    }
 
     private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
     private static string N(double? v, string format) => v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v.Value.ToString(format, CultureInfo.InvariantCulture).Replace('.', ',') : "–";
@@ -332,6 +452,7 @@
     {
         if (_busy) return;
         StopPlay();
+        Js("scena3d.dispose");
         _busy = true; _progress = 0; _errors.Clear();
         _engine = null; _res = null; _frame = null;
         StateHasChanged();
@@ -382,6 +503,8 @@
             _t = 0;
             _frame = e.Recorder.FrameAt(0);
             _engine = e;
+            _init3d = _view3d;
+            _no3d = false;
         }
         catch (Exception ex)
         {
@@ -422,6 +545,7 @@
             last = now;
             _t = Math.Min(_end, _t + dt * _speed);
             _frame = _engine.Recorder.FrameAt(_t);
+            Push3D();
             if (_t >= _end - 1e-6) { _playing = false; _playCts = null; StateHasChanged(); return; }
             StateHasChanged();
         }
@@ -434,6 +558,7 @@
         {
             _t = Math.Clamp(v, 0, _end);
             _frame = _engine.Recorder.FrameAt(_t);
+            Push3D();
         }
     }
 
@@ -449,5 +574,9 @@
         for (int i = Math.Max(0, lo - 4); i < lo; i++) yield return _events[i];
     }
 
-    public void Dispose() => StopPlay();
+    public void Dispose()
+    {
+        StopPlay();
+        Js("scena3d.dispose");
+    }
 }
