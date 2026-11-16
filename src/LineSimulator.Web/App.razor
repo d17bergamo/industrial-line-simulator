@@ -5,7 +5,7 @@
 <main>
     <header class="testa">
         <h1>Simulatore Linea</h1>
-        <small id="pronto">versione web</small>
+        <button id="pronto" @onclick="NextTheme">Tema: @_theme</button>
     </header>
 
     <section class="carta">
@@ -330,6 +330,20 @@
         _no3d = false;
         if (threeD) _init3d = true;
         else Js("scena3d.dispose");
+    }
+
+    private string _theme = "auto";
+
+    protected override void OnInitialized()
+    {
+        try { _theme = ((IJSInProcessRuntime)JS).Invoke<string>("tema.leggi") ?? "auto"; } catch (Exception) { }
+    }
+
+    private void NextTheme()
+    {
+        _theme = _theme == "auto" ? "scuro" : _theme == "scuro" ? "chiaro" : "auto";
+        Js("tema.imposta", _theme);
+        if (_view3d) _init3d = true;   // la scena 3D prende i colori del tema quando viene creata
     }
 
     private void View3D(string name) => Js("scena3d.view", name);

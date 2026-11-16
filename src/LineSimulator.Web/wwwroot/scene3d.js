@@ -62,7 +62,7 @@
         var lateral = L.strokeM + L.accM;
         if (name === 'legatura') {
             var mid = L.strappers.length ? (L.strappers[0] + L.strappers[L.strappers.length - 1]) / 2 - L.startM : len * 0.2;
-            o.target.set(mid, 1, 0); o.radius = 13; o.theta = -1.15; o.phi = 1.05;
+            o.target.set(mid, 1, 0); o.radius = S.cam.aspect < 1 ? 24 : 15; o.theta = -1.15; o.phi = 1.0;
         } else if (name === 'trasferitore') {
             o.target.set((L.transferStartM + L.transferEndM) / 2 - L.startM, 0.8, lateral / 2);
             o.radius = Math.max(16, (L.transferEndM - L.transferStartM) * 1.1); o.theta = -0.55; o.phi = 0.95;
@@ -71,7 +71,7 @@
             var a = S.cam.aspect, half = Math.tan(S.cam.fov * Math.PI / 360);
             o.radius = Math.max((len / 2 + 2) / (half * a), (lateral / 2 + 4) / half); o.theta = -Math.PI / 2; o.phi = 0.09;
         } else {
-            o.target.set(len * 0.56, 0.5, lateral * 0.25); o.radius = len * 0.72; o.theta = -0.6; o.phi = 1.08;
+            o.target.set(len * 0.5, 0, lateral * 0.3); o.radius = len * (S.cam.aspect < 1 ? 1.15 : 0.7); o.theta = -0.95; o.phi = 0.98;
         }
         placeCamera();
     }
@@ -176,8 +176,8 @@
         scene.add(end);
 
         // trasferitore: travi trasversali tra i rulli, poi l'accumulo
-        var beam = new THREE.MeshLambertMaterial({ color: col.trasf });
-        var beamAcc = new THREE.MeshLambertMaterial({ color: col.attesa });
+        var beam = new THREE.MeshLambertMaterial({ color: 0x6f7a86 });
+        var beamAcc = new THREE.MeshLambertMaterial({ color: 0x9aa3ad });
         var tl = L.transferEndM - L.transferStartM, nb = Math.max(2, Math.round(tl / 3));
         for (var j = 0; j < nb; j++) {
             var bx = L.transferStartM - L.startM + (j + 0.5) * tl / nb;

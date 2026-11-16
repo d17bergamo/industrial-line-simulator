@@ -1,18 +1,28 @@
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --sfondo: #f4f5f7; --carta: #ffffff; --testo: #1b1f24; --tenue: #5d6773; --bordo: #d9dde3;
     --accento: #0b6bcb; --accento-testo: #ffffff; --ok: #1a7f4b; --avviso: #b45309; --errore: #c0262d;
     --rulli: #e3e6ea; --rulli-marcia: #9fd8b5; --rulli-lenta: #f2d28a; --pacco: #51606f; --pacco-testo: #ffffff;
     --lega: #d97706; --intesta: #0b6bcb; --attesa: #8a939e; --trasf: #7c5cc4; --macchina: #2f3b47; --fc: #b9c0c8; --fc-on: #e2a100;
 }
+/* Tema scuro: automatico con il sistema, oppure scelto con il pulsante in alto (data-tema). */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-tema=chiaro]) {
+        color-scheme: dark;
         --sfondo: #14171b; --carta: #1d2127; --testo: #e7eaee; --tenue: #9aa4b0; --bordo: #2f353d;
         --accento: #4c9bea; --accento-testo: #0c1116; --ok: #4fbf85; --avviso: #e0a54a; --errore: #f07178;
         --rulli: #2a3038; --rulli-marcia: #2f6b4a; --rulli-lenta: #7a6426; --pacco: #aab6c3; --pacco-testo: #14171b;
         --lega: #e89a3c; --intesta: #4c9bea; --attesa: #6b7480; --trasf: #a48be0; --macchina: #c9d1da; --fc: #4a525c; --fc-on: #f2c230;
     }
 }
+:root[data-tema=scuro] {
+    color-scheme: dark;
+    --sfondo: #14171b; --carta: #1d2127; --testo: #e7eaee; --tenue: #9aa4b0; --bordo: #2f353d;
+    --accento: #4c9bea; --accento-testo: #0c1116; --ok: #4fbf85; --avviso: #e0a54a; --errore: #f07178;
+    --rulli: #2a3038; --rulli-marcia: #2f6b4a; --rulli-lenta: #7a6426; --pacco: #aab6c3; --pacco-testo: #14171b;
+    --lega: #e89a3c; --intesta: #4c9bea; --attesa: #6b7480; --trasf: #a48be0; --macchina: #c9d1da; --fc: #4a525c; --fc-on: #f2c230;
+}
+:root[data-tema=chiaro] { color-scheme: light; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--sfondo); color: var(--testo); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 h1 { font-size: 1.25rem; margin: 0; }
@@ -78,3 +88,4 @@ details summary { color: var(--testo); }
 .comandi.viste button:first-child { flex: 1 1 0; }
 .comandi.viste button { font-size: .85rem; }
 .nota { margin: .4rem 0 0; font-size: .78rem; color: var(--tenue); }
+header.testa button { min-height: 36px; padding: .3rem .7rem; font-size: .85rem; }

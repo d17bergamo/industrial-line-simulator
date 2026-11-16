@@ -20,6 +20,16 @@
     </div>
     <div id="errore-avvio" hidden></div>
     <script>
+        // Tema: "auto" segue il sistema; la scelta resta nel browser, se il browser lo permette.
+        window.tema = {
+            leggi: function () { try { return localStorage.getItem('tema') || 'auto'; } catch (e) { return 'auto'; } },
+            imposta: function (v) {
+                if (v === 'auto') document.documentElement.removeAttribute('data-tema');
+                else document.documentElement.setAttribute('data-tema', v);
+                try { localStorage.setItem('tema', v); } catch (e) { }
+            }
+        };
+        window.tema.imposta(window.tema.leggi());
         // Se il simulatore non parte, lo scrive sulla pagina (sul telefono non c'è la console).
         function erroreAvvio(m) {
             var e = document.getElementById('errore-avvio');

@@ -54,7 +54,8 @@ try {
     await page.screenshot({ path: `${out}/web-4-3d-${v.toLowerCase()}.png` });
   }
   // tema scuro
-  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.click('#pronto');   // tema scuro scelto con il pulsante
+  say(`tema: ${await page.locator('#pronto').innerText()}`);
   await page.click('#simula');
   await page.waitForSelector('#risultati', { timeout: 600000 });
   await page.waitForTimeout(2500);
