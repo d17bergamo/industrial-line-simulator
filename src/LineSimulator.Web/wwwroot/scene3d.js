@@ -56,22 +56,39 @@
         S.need = true;
     }
 
+    // Allontana la camera finché tutti i punti dati stanno nell'inquadratura (con un po' di margine).
+    function fit(points) {
+        var o = S.orbit, v = new THREE.Vector3();
+        for (var n = 0; n < 60; n++) {
+            placeCamera();
+            S.cam.updateMatrixWorld();
+            var inside = points.every(function (p) {
+                v.set(p[0], p[1], p[2]).project(S.cam);
+                return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.86 && v.z < 1;
+            });
+            if (inside) return;
+            o.radius *= 1.07;
+        }
+    }
+
     function view(name) {
         if (!S) return;
         var o = S.orbit, L = S.layout, len = S.len;
-        var lateral = L.strokeM + L.accM;
+        var lateral = L.strokeM + L.accM, t0 = L.transferStartM - L.startM, t1 = L.transferEndM - L.startM;
         if (name === 'legatura') {
-            var mid = L.strappers.length ? (L.strappers[0] + L.strappers[L.strappers.length - 1]) / 2 - L.startM : len * 0.2;
-            o.target.set(mid, 1, 0); o.radius = S.cam.aspect < 1 ? 24 : 15; o.theta = -1.15; o.phi = 1.0;
+            var first = L.strappers.length ? L.strappers[0] - L.startM : 0;
+            var last = L.strappers.length ? L.strappers[L.strappers.length - 1] - L.startM : len * 0.3;
+            o.target.set((first + last) / 2, 1, 0); o.radius = 8; o.theta = -1.15; o.phi = 1.0;
+            fit([[first - 3, 0, -2], [last + 3, 0, -2], [first - 3, 3, 1], [last + 3, 3, 1]]);
         } else if (name === 'trasferitore') {
-            o.target.set((L.transferStartM + L.transferEndM) / 2 - L.startM, 0.8, lateral / 2);
-            o.radius = Math.max(16, (L.transferEndM - L.transferStartM) * 1.1); o.theta = -0.55; o.phi = 0.95;
+            o.target.set((t0 + t1) / 2, 0.5, lateral / 2); o.radius = 8; o.theta = -0.75; o.phi = 0.9;
+            fit([[t0, 0, -1], [t1, 0, -1], [t0, 1.5, lateral], [t1, 1.5, lateral]]);
         } else if (name === 'alto') {
-            o.target.set(len / 2, 0, lateral / 2);
-            var a = S.cam.aspect, half = Math.tan(S.cam.fov * Math.PI / 360);
-            o.radius = Math.max((len / 2 + 2) / (half * a), (lateral / 2 + 4) / half); o.theta = -Math.PI / 2; o.phi = 0.09;
+            o.target.set(len / 2, 0, lateral / 2); o.radius = 8; o.theta = -Math.PI / 2; o.phi = 0.09;
+            fit([[0, 0, -1.5], [len, 0, -1.5], [0, 0, lateral], [len, 0, lateral]]);
         } else {
-            o.target.set(len * 0.5, 0, lateral * 0.3); o.radius = len * (S.cam.aspect < 1 ? 1.15 : 0.7); o.theta = -0.95; o.phi = 0.98;
+            o.target.set(len * 0.5, 0, lateral * 0.3); o.radius = 8; o.theta = -1.0; o.phi = 0.95;
+            fit([[0, 0, -1.5], [len, 0, -1.5], [0, 3, 0], [len, 3, 0], [t0, 0, lateral], [t1, 0, lateral]]);
         }
         placeCamera();
     }
