@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        UpdateThemeButton();
         _vm = new MainViewModel();
         DataContext = _vm;
         LayoutViewport.Children.Add(_vm.LayoutScene.Visual);
@@ -372,9 +373,12 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void UpdateThemeButton() => ThemeButton.Content = Theme.IsDark ? "☀  Tema chiaro" : "🌙  Tema scuro";
+
     private void ToggleTheme_Click(object sender, RoutedEventArgs e)
     {
         Theme.Toggle();
+        UpdateThemeButton();
         _vm.RefreshTheme();
     }
 
