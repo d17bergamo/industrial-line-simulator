@@ -77,61 +77,64 @@
 
     <DockPanel>
         <!-- Menu -->
-        <Menu DockPanel.Dock="Top" Background="{DynamicResource Surface}">
-            <MenuItem Header="_Home" Command="{Binding GoHomeCommand}"/>
-            <MenuItem Header="_File">
-                <MenuItem Header="_Nuovo progetto" Command="{Binding NewCommand}"/>
-                <MenuItem Header="_Apri..." Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"/>
-                <MenuItem Header="_Salva" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S"/>
-                <MenuItem Header="Salva _con nome..." Command="{Binding SaveAsCommand}"/>
-                <MenuItem Header="_Duplica progetto" Command="{Binding DuplicateCommand}"/>
-                <Separator/>
-                <MenuItem Header="Salva _layout..." Command="{Binding SaveLayoutCommand}"/>
-                <MenuItem Header="Apri l_ayout..." Command="{Binding OpenLayoutCommand}"/>
-                <MenuItem Header="Salva tipologie _pacchi..." Command="{Binding SavePackagesCommand}"/>
-                <MenuItem Header="Apri tipologie pa_cchi..." Command="{Binding OpenPackagesCommand}"/>
-                <Separator/>
-                <MenuItem Header="_Esempi" ItemsSource="{Binding Examples}">
-                    <MenuItem.ItemContainerStyle>
-                        <Style TargetType="MenuItem">
-                            <Setter Property="Header" Value="{Binding Name}"/>
-                            <Setter Property="Command" Value="{Binding DataContext.LoadExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                            <Setter Property="CommandParameter" Value="{Binding}"/>
-                        </Style>
-                    </MenuItem.ItemContainerStyle>
+        <DockPanel DockPanel.Dock="Top" Background="{DynamicResource Surface}">
+            <Button DockPanel.Dock="Right" x:Name="ThemeButton" Style="{StaticResource ToolButton}" Height="26" Margin="2,1,8,1" Padding="12,0" Content="🌙  Tema scuro" Click="ToggleTheme_Click"
+                    ToolTip="Passa dal tema chiaro a quello scuro e viceversa"/>
+        <Menu Background="{DynamicResource Surface}">
+                <MenuItem Header="_Home" Command="{Binding GoHomeCommand}"/>
+                <MenuItem Header="_File">
+                    <MenuItem Header="_Nuovo progetto" Command="{Binding NewCommand}"/>
+                    <MenuItem Header="_Apri..." Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"/>
+                    <MenuItem Header="_Salva" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S"/>
+                    <MenuItem Header="Salva _con nome..." Command="{Binding SaveAsCommand}"/>
+                    <MenuItem Header="_Duplica progetto" Command="{Binding DuplicateCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Salva _layout..." Command="{Binding SaveLayoutCommand}"/>
+                    <MenuItem Header="Apri l_ayout..." Command="{Binding OpenLayoutCommand}"/>
+                    <MenuItem Header="Salva tipologie _pacchi..." Command="{Binding SavePackagesCommand}"/>
+                    <MenuItem Header="Apri tipologie pa_cchi..." Command="{Binding OpenPackagesCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="_Esempi" ItemsSource="{Binding Examples}">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Name}"/>
+                                <Setter Property="Command" Value="{Binding DataContext.LoadExampleCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <Setter Property="CommandParameter" Value="{Binding}"/>
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                    <Separator/>
+                    <MenuItem Header="Esporta risultati _CSV..." Command="{Binding ExportCsvCommand}"/>
+                    <MenuItem Header="Esporta risultati _Excel..." Command="{Binding ExportExcelCommand}"/>
+                    <MenuItem Header="Esporta _logica di controllo (JSON/CSV)..." Command="{Binding ExportControlLogicCommand}"/>
+                    <MenuItem Header="Esporta specifica _funzionale (Word)..." Command="{Binding ExportFunctionalSpecCommand}"/>
+                    <MenuItem Header="Esporta _vista dall'alto (PDF)..." Command="{Binding ExportTopViewPdfCommand}"/>
+                    <MenuItem Header="Esporta _ciclogramma da stampare (PDF, bianco e nero)..." Command="{Binding ExportPrintCyclogramCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="_Esci" Click="Exit_Click"/>
                 </MenuItem>
-                <Separator/>
-                <MenuItem Header="Esporta risultati _CSV..." Command="{Binding ExportCsvCommand}"/>
-                <MenuItem Header="Esporta risultati _Excel..." Command="{Binding ExportExcelCommand}"/>
-                <MenuItem Header="Esporta _logica di controllo (JSON/CSV)..." Command="{Binding ExportControlLogicCommand}"/>
-                <MenuItem Header="Esporta specifica _funzionale (Word)..." Command="{Binding ExportFunctionalSpecCommand}"/>
-                <MenuItem Header="Esporta _vista dall'alto (PDF)..." Command="{Binding ExportTopViewPdfCommand}"/>
-                <MenuItem Header="Esporta _ciclogramma da stampare (PDF, bianco e nero)..." Command="{Binding ExportPrintCyclogramCommand}"/>
-                <Separator/>
-                <MenuItem Header="_Esci" Click="Exit_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Vista">
-                <MenuItem Header="Dall'_alto" Click="ViewTop_Click"/>
-                <MenuItem Header="_Laterale" Click="ViewSide_Click"/>
-                <MenuItem Header="_Isometrica" Click="ViewIso_Click"/>
-                <MenuItem Header="_Adatta alla linea" Click="ViewFit_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Simulazione">
-                <MenuItem Header="Avvia" Command="{Binding PlayCommand}" InputGestureText="F5"/>
-                <MenuItem Header="Pausa" Command="{Binding PauseCommand}"/>
-                <MenuItem Header="Stop (risultati parziali)" Command="{Binding StopCommand}"/>
-                <MenuItem Header="Reset" Command="{Binding ResetCommand}"/>
-                <Separator/>
-                <MenuItem Header="Passo singolo" Command="{Binding StepCommand}" InputGestureText="F10"/>
-                <MenuItem Header="Evento successivo" Command="{Binding NextEventCommand}" InputGestureText="F11"/>
-                <MenuItem Header="Esegui fino al termine" Command="{Binding RunToEndCommand}"/>
-            </MenuItem>
-            <MenuItem Header="_Ottimizzazione">
-                <MenuItem Header="Ottimizza zone di comando (minimo numero di inverter)..." Command="{Binding OptimizeCommandZonesCommand}"/>
-                <MenuItem Header="Raggiungi l'obiettivo di produttività..." Command="{Binding ReachTargetCommand}"/>
-            </MenuItem>
-            <MenuItem Header="_Tema chiaro / scuro" Click="ToggleTheme_Click" ToolTip="Passa dal tema chiaro a quello scuro e viceversa"/>
-        </Menu>
+                <MenuItem Header="_Vista">
+                    <MenuItem Header="Dall'_alto" Click="ViewTop_Click"/>
+                    <MenuItem Header="_Laterale" Click="ViewSide_Click"/>
+                    <MenuItem Header="_Isometrica" Click="ViewIso_Click"/>
+                    <MenuItem Header="_Adatta alla linea" Click="ViewFit_Click"/>
+                </MenuItem>
+                <MenuItem Header="_Simulazione">
+                    <MenuItem Header="Avvia" Command="{Binding PlayCommand}" InputGestureText="F5"/>
+                    <MenuItem Header="Pausa" Command="{Binding PauseCommand}"/>
+                    <MenuItem Header="Stop (risultati parziali)" Command="{Binding StopCommand}"/>
+                    <MenuItem Header="Reset" Command="{Binding ResetCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Passo singolo" Command="{Binding StepCommand}" InputGestureText="F10"/>
+                    <MenuItem Header="Evento successivo" Command="{Binding NextEventCommand}" InputGestureText="F11"/>
+                    <MenuItem Header="Esegui fino al termine" Command="{Binding RunToEndCommand}"/>
+                </MenuItem>
+                <MenuItem Header="_Ottimizzazione">
+                    <MenuItem Header="Ottimizza zone di comando (minimo numero di inverter)..." Command="{Binding OptimizeCommandZonesCommand}"/>
+                    <MenuItem Header="Raggiungi l'obiettivo di produttività..." Command="{Binding ReachTargetCommand}"/>
+                </MenuItem>
+            </Menu>
+        </DockPanel>
         <!-- Barra di stato -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource HeaderBg}">
             <DockPanel Margin="8,3">
