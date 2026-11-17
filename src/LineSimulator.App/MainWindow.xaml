@@ -353,9 +353,9 @@
             <!-- Binario icone: mostra / nasconde i pannelli -->
             <Border Grid.Column="0" Width="60" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
                 <StackPanel Margin="0,10" HorizontalAlignment="Center">
-                    <ToggleButton Style="{StaticResource RailToggle}" Content="▦" IsChecked="{Binding ShowLibrary, Mode=TwoWay}" ToolTip="Libreria macchine: mostra / nascondi"/>
-                    <ToggleButton Style="{StaticResource RailToggle}" Content="☰" IsChecked="{Binding ShowInspector, Mode=TwoWay}" ToolTip="Proprietà e struttura: mostra / nascondi"/>
-                    <ToggleButton Style="{StaticResource RailToggle}" Content="∿" IsChecked="{Binding ShowCyclogram, Mode=TwoWay}" ToolTip="Ciclogramma: mostra / nascondi"/>
+                    <ToggleButton Style="{StaticResource RailToggle}" Content="▦" IsChecked="{Binding ShowLibrary, Mode=TwoWay}" ToolTip="Libreria macchine: apri / riduci"/>
+                    <ToggleButton Style="{StaticResource RailToggle}" Content="☰" IsChecked="{Binding ShowInspector, Mode=TwoWay}" ToolTip="Proprietà e struttura: apri / riduci"/>
+                    <ToggleButton Style="{StaticResource RailToggle}" Content="∿" IsChecked="{Binding ShowCyclogram, Mode=TwoWay}" ToolTip="Ciclogramma: apri / riduci"/>
                 </StackPanel>
             </Border>
             <!-- Libreria (sinistra) -->
@@ -363,7 +363,7 @@
                     Visibility="{Binding ShowLibrary, Converter={StaticResource BoolVis}}">
                 <DockPanel Background="{DynamicResource Surface}">
                         <DockPanel DockPanel.Dock="Top" Margin="12,12,8,4">
-                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="✕" ToolTip="Nascondi la libreria" Command="{Binding ToggleLibraryCommand}"/>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="«" FontSize="16" ToolTip="Riduci la libreria sul lato" Command="{Binding ToggleLibraryCommand}"/>
                             <TextBlock Text="Libreria macchine" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource Text}" VerticalAlignment="Center"/>
                         </DockPanel>
                         <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource TextMuted}" Margin="6,0,6,6" TextWrapping="Wrap" Text="Trascina una macchina nell'area 3D per inserirla."/>
@@ -399,8 +399,40 @@
                         </ListBox>
                     </DockPanel>
             </Border>
+            <Border Grid.Column="1" Width="40" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowLibrary}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Margin="0,10,0,0">
+                    <Button Style="{StaticResource IconButton}" Content="»" FontSize="16" Command="{Binding ToggleLibraryCommand}" ToolTip="Apri la libreria macchine" HorizontalAlignment="Center"/>
+                    <TextBlock Text="LIBRERIA MACCHINE" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,14,0,0" HorizontalAlignment="Center">
+                        <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
             <Thumb Grid.Column="1" Width="6" HorizontalAlignment="Right" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20" DragDelta="LibraryThumb_DragDelta"
                    ToolTip="Trascina per allargare o stringere la libreria" Visibility="{Binding ShowLibrary, Converter={StaticResource BoolVis}}"/>
+            <Border Grid.Column="3" Width="40" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,0,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowInspector}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Margin="0,10,0,0">
+                    <Button Style="{StaticResource IconButton}" Content="«" FontSize="16" Command="{Binding ToggleInspectorCommand}" ToolTip="Apri proprietà e struttura" HorizontalAlignment="Center"/>
+                    <TextBlock Text="PROPRIETÀ E STRUTTURA" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,14,0,0" HorizontalAlignment="Center">
+                        <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
             <Thumb Grid.Column="3" Width="6" HorizontalAlignment="Left" Cursor="SizeWE" Background="Transparent" Panel.ZIndex="20" DragDelta="InspectorThumb_DragDelta"
                    ToolTip="Trascina per allargare o stringere il pannello delle proprietà" Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}"/>
             <TabControl Grid.Column="2" Style="{StaticResource FlatTabs}">
@@ -474,11 +506,25 @@
                         <Slider Minimum="0" Maximum="{Binding MaxTime}" Value="{Binding DisplayTime, Mode=TwoWay}" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </DockPanel>
                 </Border>
+<Border Grid.Row="2" Height="34" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,1,1,0">
+    <Border.Style>
+        <Style TargetType="Border">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ShowCyclogram}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Border.Style>
+    <DockPanel Margin="8,0">
+        <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="▲" FontSize="14" Command="{Binding ToggleCyclogramCommand}" ToolTip="Apri il ciclogramma"/>
+        <TextBlock Text="CICLOGRAMMA" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+    </DockPanel>
+</Border>
 <Grid Grid.Row="2" Visibility="{Binding ShowCyclogram, Converter={StaticResource BoolVis}}">
 <Border x:Name="CyclogramBorder" Height="240" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,1,1,0">
     <DockPanel>
         <DockPanel DockPanel.Dock="Top" Margin="8,4,4,2">
-            <Button DockPanel.Dock="Right" Content="✕" Padding="8,0" ToolTip="Nascondi il ciclogramma" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
+            <Button DockPanel.Dock="Right" Content="▼" Padding="8,0" ToolTip="Riduci il ciclogramma in basso" Command="{Binding ToggleCyclogramCommand}" BorderThickness="0" Background="Transparent"/>
             <Button DockPanel.Dock="Right" Style="{StaticResource ToolButton}" Content="🖨  Da stampare (PDF)" Command="{Binding ExportPrintCyclogramCommand}" ToolTip="Ciclogramma del ciclo a regime in bianco e nero, A3 orizzontale, con velocità, spazi e tempi" Margin="0,0,6,0"/>
             <TextBlock Text="Ciclogramma" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
             <TextBlock Text="  Clic sul diagramma: porta il 3D a quell'istante" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
@@ -744,7 +790,7 @@
             <Border Grid.Column="3" Width="{Binding InspectorWidth}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1,0,0,0"
                     Visibility="{Binding ShowInspector, Converter={StaticResource BoolVis}}">
                 <DockPanel>
-                    <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Content="✕" Margin="0,6,8,0" ToolTip="Nascondi il pannello" Command="{Binding ToggleInspectorCommand}"/>
+                    <Button DockPanel.Dock="Top" HorizontalAlignment="Right" Style="{StaticResource IconButton}" Content="»" FontSize="16" Margin="0,6,8,0" ToolTip="Riduci il pannello sul lato" Command="{Binding ToggleInspectorCommand}"/>
                     <TabControl BorderThickness="0" Padding="0" Style="{StaticResource FlatTabs}" SelectedIndex="{Binding InspectorTab, Mode=TwoWay}">
                         <TabItem Header="Proprietà"><DockPanel Background="{DynamicResource Surface}">
                     <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource TextMuted}" Margin="12,8,12,2" TextWrapping="Wrap" Text="Ogni modifica riporta la simulazione a zero."/>
