@@ -287,7 +287,11 @@ public sealed class TransferConfig : ComponentBase
     [UiProperty("Bilico a metà corsa (due prese: via rulli → bilico → accumulo)", "", "Funzionamento", Order = 26)]
     public bool ScaleAtMidStroke { get; set; }
 
-    [UiProperty("Attesa massima per completare il gruppo", "s", "Funzionamento", Order = 22)]
+    /// <summary>
+    /// Single banking: attesa massima del gruppo dal primo pacco allineato. Double banking (2026-11-18): il pacco solo aspetta
+    /// sempre il compagno; parte da solo solo se in ingresso non arriva materiale per questo tempo.
+    /// </summary>
+    [UiProperty("Attesa massima per completare il gruppo (double banking: senza materiale in ingresso)", "s", "Funzionamento", Order = 22)]
     public double BatchWaitTimeoutS { get; set; } = 60;
 
     [JsonIgnore]

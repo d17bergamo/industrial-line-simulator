@@ -1039,6 +1039,9 @@ public sealed partial class SimulationEngine
     }
 
     /// <summary>Gruppo di pacchi pronto per il trasferitore (null se non ancora pronto).</summary>
+    /// <summary>Istante dell'ultimo pacco arrivato in ingresso alla linea (s).</summary>
+    private double _lastInfeedS;
+
     private List<PackageRuntime>? ReadyBatch(double t)
     {
         // Mai sollevare mentre un altro pacco sta entrando nell'area del trasferitore: prima si ferma (e, se ci sta, entra nel gruppo)
@@ -1063,6 +1066,19 @@ public sealed partial class SimulationEngine
         var cand = NextCandidate(zone);
         bool more = cand != null ? NextFreeStopFor(cand) >= 0 : _nextIndex < Project.Infeed.PackageCount && FirstFreeStop() >= 0;
         if (!more) return aligned;
+        if (DoubleBanking)
+        {
+            // Regola dell'utente (2026-11-18): in double banking i pacchi partono sempre a coppia. Il pacco solo aspetta il
+            // successivo che forma la coppia; parte da solo solo se in ingresso non arriva materiale da un minuto
+            // (BatchWaitTimeoutS) e sulla linea non c'è un pacco che possa raggiungerlo.
+            if (cand != null) return null;
+            double idle = t - _lastInfeedS;
+            if (idle < Transfer.Config.BatchWaitTimeoutS - 1e-9) return null;
+            if (_reportedOnce.Add("pairidle:" + aligned[0].Id))
+                Emit(SimEventType.TransferWaiting, EventSeverity.Info,
+                    $"Trasferitore: in ingresso non arriva materiale da {idle:0} s, prelievo di {aligned[0].Id} senza il compagno", Project.Transfer.Id, aligned[0].Id);
+            return aligned;
+        }
         if (t - _batchWaitSince.Value >= Transfer.Config.BatchWaitTimeoutS - 1e-9)
         {
             Emit(SimEventType.TransferWaiting, EventSeverity.Info,

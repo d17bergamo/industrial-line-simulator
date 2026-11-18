@@ -258,7 +258,8 @@ public static class ControlLogicGenerator
         string aligned = string.Join(" & ", new[] { $"DEV({p.Stopper.Id},Aligned)" }.Concat(stops.Select(s => $"(DEV({s.Id},Aligned) | DEV({s.Id},Free))")));
         rules.Add(new ControlRule($"{p.Transfer.Id}.SOLLEVA", gt, aligned + $" & SIG({p.Transfer.Id}_GRUPPO_COMPLETO)",
             $"SOLLEVA trasferitore e trasla ({F(p.Transfer.LiftTimeS)} s + {F(p.Transfer.EffectiveTranslationTimeS)} s)", p.Transfer.Id,
-            $"{(dbl ? "Double" : "Single")} banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
+            dbl ? $"Double banking: i pacchi partono sempre a coppia; uno solo aspetta il compagno e parte da solo solo se in ingresso non arriva materiale per {F(p.Transfer.BatchWaitTimeoutS)} s."
+                  : $"Single banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
         signals.Add(new ControlSignal($"{p.Transfer.Id}_GRUPPO_COMPLETO", $"Pacchi allineati = {batch}, oppure il pacco successivo non può entrare, oppure attesa scaduta."));
         var scales = p.Scales.Where(s => s.IsEnabled).OrderBy(s => s.StartMm).ToList();
         if (scales.Count > 0 && p.Transfer.ScaleAtMidStroke && p.Transfer.Kind == TransferKind.Lifting)

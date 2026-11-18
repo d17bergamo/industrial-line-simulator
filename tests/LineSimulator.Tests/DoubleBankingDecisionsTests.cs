@@ -158,4 +158,43 @@ public class DoubleBankingDecisionsTests
         e.RunToCompletion();
         Clean(e);
     }
+
+    [Theory]
+    [InlineData("3 legatrici", false)]
+    [InlineData("3 legatrici", true)]
+    [InlineData("2 legatrici - pacchi 6/9/12/18", false)]
+    public void DoubleBanking_PackagesAlwaysLeaveInPairs(string model, bool longWeighing)
+    {
+        // regola dell'utente del 2026-11-18: i pacchi che si possono abbinare partono sempre a coppia, anche con la legatura
+        // lenta (il compagno arriva dopo più di un minuto dall'allineamento del primo)
+        var p = Model(model);
+        AddStop(p, DevicePlacement.Center);
+        OnlyShortest(p, 8);
+        if (longWeighing) LongWeighing(p);
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Clean(e);
+        Assert.True(Pairs(e) == 4, $"{Pairs(e)} cicli con due pacchi su 8 pacchi\n" +
+            string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting).Select(x => x.ToString()).Take(40)));
+        Assert.DoesNotContain(e.Events, x => x.Type == SimEventType.TransferWaiting && x.Message.Contains("attesa gruppo scaduta", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DoubleBanking_SinglePackageLeaves_OnlyWhenNoMaterialArrivesForAMinute()
+    {
+        // ingresso a intervallo fisso di 400 s: dopo un minuto senza materiale in ingresso il pacco solo parte
+        var p = Model("3 legatrici");
+        AddStop(p, DevicePlacement.Center);
+        OnlyShortest(p, 3);
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        p.Infeed.Mode = InfeedMode.FixedInterval;
+        p.Infeed.IntervalS = 400;
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Clean(e);
+        Assert.Contains(e.Events, x => x.Type == SimEventType.TransferWaiting && x.Message.Contains("non arriva materiale", StringComparison.Ordinal));
+        Assert.Equal(0, Pairs(e));
+    }
 }
+

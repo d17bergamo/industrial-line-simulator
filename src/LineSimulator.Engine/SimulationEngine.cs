@@ -459,6 +459,7 @@ public sealed partial class SimulationEngine : ILogicContext
         if (_weights.TryGetValue(pkg.Sequence, out var w)) pkg.WeightKg = w;
         pkg.StrapStatus = Station != null && pkg.StrapsTotal > 0 ? StrapStatus.Pending : StrapStatus.NotRequired;
         pkg.Velocity = DriveSpeed(pkg);
+        _lastInfeedS = t;
         _nextIndex++;
         _packages.Add(pkg);
         _active.Add(pkg);
@@ -529,6 +530,7 @@ public sealed partial class SimulationEngine : ILogicContext
         if (_weights.TryGetValue(pkg.Sequence, out var w)) pkg.WeightKg = w;
         pkg.StrapStatus = Station != null && pkg.StrapsTotal > 0 ? StrapStatus.Pending : StrapStatus.NotRequired;
         pkg.Velocity = 0;
+        _lastInfeedS = t;
         _nextIndex++;
         _packages.Add(pkg);
         _active.Add(pkg);
