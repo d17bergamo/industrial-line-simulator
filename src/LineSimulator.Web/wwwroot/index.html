@@ -30,6 +30,18 @@
             }
         };
         window.tema.imposta(window.tema.leggi());
+        // Zone comprimibili: apre la zona e scorre fin lì; comprime / espande tutto
+        window.zone = {
+            vai: function (id) {
+                var z = document.getElementById(id);
+                if (!z) return;
+                if (z.tagName === 'DETAILS') z.open = true;
+                z.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            },
+            tutte: function (aperte) {
+                document.querySelectorAll('details.zona').forEach(function (d) { d.open = aperte; });
+            }
+        };
         // Progetto modificato: copia negli appunti (i download sono bloccati nella pagina su claude.ai)
         window.salva = {
             copia: async function (testo) {

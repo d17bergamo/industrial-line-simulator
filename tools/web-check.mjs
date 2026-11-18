@@ -94,12 +94,19 @@ try {
   await page.waitForTimeout(300);
   say(`proprietà mostrate: ${await page.locator('#modifica .prop').count()}`);
   await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
-  // uscite: un PDF e il progetto vengono scaricati
-  await page.click('#uscite summary');
-  for (const label of ['Vista dall\'alto (PDF)', 'Salva il progetto (.json)', 'Gantt dei pacchi e gradini (PDF)', 'Risultati (Excel)']) {
+  // zone comprimibili: Comprimi tutto / Espandi tutto
+  await page.locator('button:has-text("Comprimi tutto"):visible').first().click();
+  say(`zone aperte dopo "Comprimi tutto": ${await page.locator('details.zona[open]').count()}`);
+  await page.screenshot({ path: `${out}/web-7-compresse.png`, fullPage: true });
+  await page.locator('button:has-text("Espandi tutto"):visible').first().click();
+  say(`zone aperte dopo "Espandi tutto": ${await page.locator('details.zona[open]').count()}`);
+  // documenti: PDF, progetto, Gantt, Excel e tutto in un file ZIP vengono scaricati
+  await page.click('header.testa button:has-text("Documenti")');
+  await page.waitForTimeout(600);
+  for (const label of ['Vista dall\'alto', 'Salva il progetto', 'Gantt dei pacchi e gradini', 'Risultati della simulazione', 'Tutto (.zip)']) {
     const btn = page.locator(`#uscite button:has-text("${label}")`);
-    if (await btn.count() === 0) { say(`uscita non trovata: ${label}`); continue; }
-    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), btn.first().click()]);
+    if (await btn.count() === 0 || await btn.first().isDisabled()) { say(`uscita non disponibile: ${label}`); continue; }
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 120000 }), btn.first().click()]);
     say(`scaricato: ${dl.suggestedFilename()}`);
   }
   await page.screenshot({ path: `${out}/web-8-uscite.png`, fullPage: true });
