@@ -160,9 +160,14 @@
             <p class="esito ok">Controlli: nessuna correzione da fare.</p>
         }
         <div class="comandi">
-            <button id="scarica" @onclick="Download">Scarica il progetto (.json)</button>
+            <button id="scarica" @onclick="Download">Copia il progetto (.json)</button>
             <button @onclick="ResetWork" disabled="@(!_edited)">Annulla le modifiche</button>
         </div>
+        @if (_json != null)
+        {
+            <p class="nota">@_jsonNote</p>
+            <textarea class="json" readonly rows="6" @onfocus="SelectJson" id="json-progetto">@_json</textarea>
+        }
     </section>
 
     <section class="carta">
@@ -591,15 +596,26 @@
         }
     });
 
-    private void Download()
+    private string? _json, _jsonNote;
+
+    /// <summary>
+    /// Nella pagina su claude.ai i download avviati dalla pagina sono bloccati: il progetto si copia negli appunti e si
+    /// mostra il testo, da incollare in un file .json (che si riapre qui o nel programma Windows).
+    /// </summary>
+    private async Task Download()
     {
         try
         {
-            string name = string.Concat((Work.Name ?? "progetto").Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or ' ' ? c : '_')).Trim();
-            Js("salva.json", (name.Length > 0 ? name : "progetto") + ".json", ProjectSerializer.Serialize(Work));
+            _json = ProjectSerializer.Serialize(Work);
+            bool ok = false;
+            try { ok = await JS.InvokeAsync<bool>("salva.copia", _json); } catch (Exception) { }
+            _jsonNote = ok ? "Progetto copiato negli appunti: incollalo in un file .json per riaprirlo qui o nel programma Windows."
+                           : "Copia automatica non disponibile: tocca il testo qui sotto, selezionalo tutto e copialo in un file .json.";
         }
-        catch (Exception ex) { _errors.Add("Salvataggio non riuscito: " + ex.Message); }
+        catch (Exception ex) { _errors.Add("Copia non riuscita: " + ex.Message); }
     }
+
+    private void SelectJson() => Js("salva.seleziona", "json-progetto");
 
     private int _count = 10;
     private bool _double, _stop, _busy, _playing;

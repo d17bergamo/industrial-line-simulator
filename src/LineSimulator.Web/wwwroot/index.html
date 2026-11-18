@@ -30,16 +30,12 @@
             }
         };
         window.tema.imposta(window.tema.leggi());
-        // Scarica il progetto modificato come file .json
+        // Progetto modificato: copia negli appunti (i download sono bloccati nella pagina su claude.ai)
         window.salva = {
-            json: function (nome, testo) {
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([testo], { type: 'application/json' }));
-                a.download = nome;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-            }
+            copia: async function (testo) {
+                try { await navigator.clipboard.writeText(testo); return true; } catch (e) { return false; }
+            },
+            seleziona: function (id) { var t = document.getElementById(id); if (t) { t.focus(); t.select(); } }
         };
         // Se il simulatore non parte, lo scrive sulla pagina (sul telefono non c'è la console).
         function erroreAvvio(m) {
