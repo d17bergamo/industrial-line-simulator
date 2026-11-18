@@ -13,12 +13,17 @@
             <button class="passo" @onclick='() => Go("uscite")'>Documenti</button>
         </nav>
         <div class="azioni">
-            <button class="piccolo" @onclick='() => Js("zone.tutte", false)' title="Chiude tutte le zone">Comprimi tutto</button>
-            <button class="piccolo" @onclick='() => Js("zone.tutte", true)' title="Apre tutte le zone">Espandi tutto</button>
-            <button class="piccolo primario-p" @onclick='() => Go("uscite")'>⬇ Documenti</button>
+            <button class="piccolo solo-ampio" @onclick='() => Js("zone.tutte", false)' title="Chiude tutte le zone">Comprimi tutto</button>
+            <button class="piccolo solo-ampio" @onclick='() => Js("zone.tutte", true)' title="Apre tutte le zone">Espandi tutto</button>
+            <button class="piccolo primario-p solo-ampio" @onclick='() => Go("uscite")'>⬇ Documenti</button>
             <button id="pronto" class="piccolo" @onclick="NextTheme">@(_theme == "scuro" ? "☀ Tema: scuro" : _theme == "chiaro" ? "🌙 Tema: chiaro" : "◐ Tema: auto")</button>
         </div>
     </header>
+    <div class="zone-telefono">
+        <button class="piccolo" @onclick='() => Js("zone.tutte", false)'>Comprimi tutto</button>
+        <button class="piccolo" @onclick='() => Js("zone.tutte", true)'>Espandi tutto</button>
+        <button class="piccolo primario-p" @onclick='() => Go("uscite")'>⬇ Documenti</button>
+    </div>
 
     <details class="zona" open id="linea"><summary>Linea</summary><div class="corpo">
         <label class="campo">Parti da

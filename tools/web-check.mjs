@@ -95,10 +95,10 @@ try {
   say(`proprietà mostrate: ${await page.locator('#modifica .prop').count()}`);
   await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
   // zone comprimibili: Comprimi tutto / Espandi tutto
-  await page.click('button:has-text("Comprimi tutto")');
+  await page.locator('button:has-text("Comprimi tutto"):visible').first().click();
   say(`zone aperte dopo "Comprimi tutto": ${await page.locator('details.zona[open]').count()}`);
   await page.screenshot({ path: `${out}/web-7-compresse.png`, fullPage: true });
-  await page.click('button:has-text("Espandi tutto")');
+  await page.locator('button:has-text("Espandi tutto"):visible').first().click();
   say(`zone aperte dopo "Espandi tutto": ${await page.locator('details.zona[open]').count()}`);
   // documenti: PDF, progetto, Gantt, Excel e tutto in un file ZIP vengono scaricati
   await page.click('header.testa button:has-text("Documenti")');

@@ -151,7 +151,15 @@ button.doc:hover:not(:disabled) { border-color: var(--accento); background: var(
 @media (max-width: 640px) {
     main { padding: .5rem .5rem 3rem; }
     header.testa { margin: -.5rem -.5rem .75rem; }
-    header.testa .azioni { width: 100%; }
-    header.testa .azioni button { flex: 1 1 0; }
+    header.testa { flex-wrap: nowrap; gap: .5rem; }
+    header.testa .azioni { width: auto; }
+    .solo-ampio { display: none; }
+    nav.passi { order: 3; flex: 1 0 100%; }
+    header.testa { flex-wrap: wrap; }
+    .zone-telefono { display: flex; gap: .4rem; margin-bottom: .75rem; }
+    .zone-telefono button { flex: 1 1 0; }
     .tutto button.primario { width: 100%; }
 }
+
+.zone-telefono { display: none; }
+@media (max-width: 640px) { .zone-telefono { display: flex; } }
