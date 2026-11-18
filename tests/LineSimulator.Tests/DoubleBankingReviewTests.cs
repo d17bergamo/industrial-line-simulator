@@ -87,12 +87,8 @@ public class DoubleBankingReviewTests
         var bad = e.Events.Where(x => x.Severity >= EventSeverity.Warning).Select(x => x.ToString()).Take(10).ToList();
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.Equal(0, e.Collisions);
-        if (!withStop)
-        {
-            // senza fermo il secondo pacco finirebbe sempre sullo stesso bilico del primo (due bilici da 12,5 m): niente abbinamento
-            Assert.Equal(e.Packages.Count + 1, e.Transfer.Cycles);
-            return;
-        }
+        // senza fermo il secondo pacco finisce in parte sul bilico del primo: dal 2026-11-18 si abbinano comunque, con la
+        // pesata in due tempi del trasferitore a doppio comando (il secondo peso è per differenza)
         Assert.True(e.Events.Any(x => x.Type == SimEventType.TransferPhase && x.Message.StartsWith("Trasferitore: sollevamento (")),
             "nessun ciclo con due pacchi\n" + string.Join("\n", e.Events.Where(x => x.Type is SimEventType.TransferPhase or SimEventType.TransferWaiting or SimEventType.InfeedWaiting || x.Message.Contains("fermo") || x.Message.Contains("POS")).Take(45).Select(x => x.ToString())));
         Assert.True(e.Transfer.Cycles < e.Packages.Count, $"{e.Transfer.Cycles} cicli per {e.Packages.Count} pacchi");

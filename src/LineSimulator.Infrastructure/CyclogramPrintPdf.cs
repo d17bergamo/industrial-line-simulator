@@ -28,7 +28,7 @@ public static class CyclogramPrintPdf
     {
         "INGRESSO", "AUTOSTART", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "PROSSIMA", "COMMUTA", "LEGATO",
         "ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO", "VIA_LIBERA", "RALLENTA", "BATTUTA", "VALLE_FERMA", "SECONDO", "FERMO_CODA",
-        "SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO", "PESA", "RIPOSO", "AUTOSTOP"
+        "SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO", "PESA", "PESA_DIFF", "RIPOSO", "AUTOSTOP"
     };
 
     public static void Save(string path, LineProject project, double? lineSpeedMps = null, string? typeId = null) => File.WriteAllBytes(path, Build(project, lineSpeedMps, typeId));

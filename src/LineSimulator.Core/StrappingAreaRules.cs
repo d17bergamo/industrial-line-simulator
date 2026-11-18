@@ -224,6 +224,15 @@ public static class StrappingAreaRules
         return done;
     }
 
+    // ------------------------------------------------------------------ Primo rullo dello svincolo
+
+    /// <summary>
+    /// Decisione dell'utente (2026-11-18): il primo rullo dello svincolo è sull'inverter della via di legatura (lunghezza del
+    /// tratto: un passo rulli). Il pacco che frena oltre la fotocellula di uscita legatura resta su rulli che si fermano con lui.
+    /// </summary>
+    public static double FirstReleaseRollerMm(RollerSection release) =>
+        release.RollerPitchMm > 0 ? release.RollerPitchMm : RollerSection.DefaultPitchMm;
+
     // ------------------------------------------------------------------ Ultima legatura di coda e accumulo
 
     /// <summary>
@@ -298,6 +307,8 @@ public static class StrappingAreaRules
         if (ReferenceEquals(m, strap)) return "inverter proprio";
         if (ReferenceEquals(m, trf)) return "inverter proprio (sempre, è il fronte accumulo)";
         string park = CanPark(p, m) ? $"; fa da parcheggio per un pacco fino a {m.LengthMm - ParkingMarginMm:0} mm" : "";
+        if (strap != null && m.EffectiveZoneId != strap.EffectiveZoneId && ReferenceEquals(ReleaseModules(p).FirstOrDefault(), m))
+            park += $"; il primo rullo ({FirstReleaseRollerMm(m):0} mm) è sull'inverter di legatura";
         if (m.FollowsStrapping) return "inverter dedicato, motori commutati sull'inverter di legatura solo durante le legature di coda" + park;
         if (strap != null && m.EffectiveZoneId == strap.EffectiveZoneId)
             return "unito all'inverter di legatura (un inverter in meno)";

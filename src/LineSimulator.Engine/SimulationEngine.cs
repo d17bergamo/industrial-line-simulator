@@ -101,6 +101,7 @@ public sealed partial class SimulationEngine : ILogicContext
                 if (s.Id != z.Id && !string.IsNullOrEmpty(s.Id)) { _zoneById.TryAdd(s.Id, zr); _requests.TryAdd(s.Id, _requests[z.Id]); }
             }
         }
+        CarveFirstReleaseRoller(project);
         _sections.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         foreach (var pc in project.Photocells)
@@ -732,7 +733,9 @@ public sealed partial class SimulationEngine : ILogicContext
             // (contano solo i pacchi già usciti dalla zona comandata: quello ancora a cavallo deve poter proseguire)
             double zoneEnd = _zoneById.TryGetValue(pc.ControlledZoneId, out var cz) ? cz.Info.EndM : Transfer.StartM;
             // In double banking si ferma solo il pacco che non ha un posto libero e compatibile dietro al primo
-            bool noPlace = !DoubleBanking || (pc.OutputPackage != null && !CanBeSecond(pc.OutputPackage));
+            // (decisione dell'utente del 2026-11-18: si ferma anche il pacco che in quel momento non trova un posto libero,
+            // con il fermo finale e il fermo scomparente già presi: altrimenti entra e urta il trasferitore)
+            bool noPlace = !DoubleBanking || (pc.OutputPackage != null && (!CanBeSecond(pc.OutputPackage) || PlacesTaken(pc.OutputPackage)));
             bool areaBusy = noPlace && _active.Any(o => o != pc.OutputPackage && o.OnRollers && o.TailM >= zoneEnd - 1e-6
                                                                && o.HeadM > Transfer.StartM + 1e-6 && o.TailM < Transfer.EndM - 1e-6);
             // Decisione dell'utente (2026-11-14): in double banking il secondo pacco aspetta qui finché il primo non è
@@ -1103,6 +1106,32 @@ public sealed partial class SimulationEngine : ILogicContext
         if (_syncGroups.TryGetValue(z, out var g))
             foreach (var o in g) if (o.ActualSpeed <= 0.06) o.ActualSpeed = 0;
     }
+
+    // ------------------------------------------------------------------ Primo rullo dello svincolo
+
+    /// <summary>
+    /// Decisione dell'utente (2026-11-18): il primo rullo dello svincolo è sull'inverter della via di legatura. Il pacco che
+    /// frena oltre la fotocellula di uscita legatura (o che con l'ultima legatura di coda la supera di pochi millimetri)
+    /// finisce su un rullo che si ferma con lui: nessuno strisciamento con lo svincolo fermo.
+    /// </summary>
+    private void CarveFirstReleaseRoller(LineProject project)
+    {
+        if (Topology.StrappingZone == null || !_zoneById.TryGetValue(Topology.StrappingZone.Id, out var strap)) return;
+        var rel = StrappingAreaRules.ReleaseModules(project).FirstOrDefault();
+        if (rel == null) return;
+        double start = rel.StartMm / 1000.0;
+        int i = _sections.FindIndex(s => Math.Abs(s.Start - start) < 1e-6 && s.Zone != strap);
+        if (i < 0) return;
+        var s0 = _sections[i];
+        double end = start + StrappingAreaRules.FirstReleaseRollerMm(rel) / 1000.0;
+        if (end >= s0.End - 1e-6) return;
+        _sections[i] = (end, s0.End, s0.Zone, s0.Enabled, s0.Valle);
+        _sections.Add((start, end, strap, s0.Enabled, false));
+        FirstReleaseRollerEndM = end;
+    }
+
+    /// <summary>Fine del primo rullo dello svincolo comandato dall'inverter di legatura (m); null se non c'è.</summary>
+    public double? FirstReleaseRollerEndM { get; private set; }
 
     // ------------------------------------------------------------------ Via del trasferitore su due inverter
 
@@ -1596,6 +1625,8 @@ public sealed partial class SimulationEngine : ILogicContext
             TransferState.Lowering => "abbassamento",
             TransferState.Depositing => "deposito",
             TransferState.Returning => "ritorno",
+            TransferState.WeighingUpstream => "metà a monte abbassata, pesata del pacco a monte (metà a valle sollevata)",
+            TransferState.LoweringDownstream => "abbassamento della metà a valle",
             _ => "in posizione"
         };
         string pk = tr.Packages.Count > 1 ? $" ({string.Join("+", tr.Packages.Select(p => p.Id))})" : "";

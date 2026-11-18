@@ -10,12 +10,17 @@ namespace LineSimulator.Core;
 /// (<see cref="RollerSection.SplitAtMm"/>): l'inverter di valle tiene il nome del modulo, quello di monte ha il suffisso "a".
 /// Dove si divide (sempre a metà tra due rulli):
 /// - con un fermo scomparente e intestatura di testa: nello spazio tra i rulli in cui sta il fermo, che è tra i due pacchi;
+/// - con un fermo scomparente e intestatura di coda: nello spazio libero tra la testa del secondo (con l'extra corsa) e la
+///   coda del primo (2026-11-18);
 /// - altrimenti subito dopo l'ultimo rullo sotto la testa del secondo pacco, fermo dietro al primo pacco più lungo in
 ///   double banking.
 /// Un pacco "sta" su una parte quando copre almeno un suo rullo: il primo non deve coprire rulli di monte, il secondo non
 /// deve coprire rulli di valle (<see cref="FirstTailMinMm"/>, <see cref="SecondHeadMaxMm"/>).
 /// Se nessuna tipologia è in double banking la divisione automatica si toglie; quella fatta a mano non si tocca.
 /// </summary>
+/// Con il double banking anche il trasferitore sollevabile ha un doppio comando, diviso nello stesso punto: solleva e trasla
+/// i due pacchi insieme; se vanno sullo stesso bilico abbassa prima la metà a monte e pesa, poi la metà a valle e pesa il
+/// totale (il secondo peso è per differenza).
 public static class TransferSplitRule
 {
     /// <summary>Suffisso dell'inverter di monte.</summary>
@@ -85,6 +90,27 @@ public static class TransferSplitRule
             x = GapAfterLastRollerMm(m, stop.PositionMm);
             why = $"fermo scomparente {stop.Id}";
         }
+        else if (stop != null)
+        {
+            // Intestatura di coda (decisione dell'utente del 2026-11-18): il secondo pacco sta oltre il fermo scomparente
+            // (coda sul fermo, testa più l'extra corsa a valle). Via e doppio comando del trasferitore si dividono nello
+            // spazio libero tra la testa del secondo e la coda del primo, dove nessun pacco sta a cavallo: dietro al pacco
+            // a monte più lungo per cui resta posto, davanti, almeno per il pacco più corto
+            double shortest = dbl.Min(t => t.LengthMm);
+            x = 0;
+            why = "";
+            foreach (var t in dbl.OrderByDescending(t => t.LengthMm))
+            {
+                double reach = stop.PositionMm + t.LengthMm + stop.TailOvershootMm;
+                double gx = GapAfterLastRollerMm(m, reach + RollerMarginMm);
+                if (gx <= m.StartMm + 1 || SecondHeadMaxMm(p, gx) < reach - 1e-6) continue;
+                if (stopper - shortest < FirstTailMinMm(p, gx) - 1e-6) continue;
+                x = gx;
+                why = $"intestatura di coda sul fermo scomparente {stop.Id}: nello spazio libero tra i due pacchi, dietro al pacco a monte da {t.LengthMm:0} mm";
+                break;
+            }
+            if (x <= 0) return (0, "");
+        }
         else
         {
             // dietro al primo pacco più lungo tra quelli che in due ci stanno (sbalzo ammesso a monte incluso)
@@ -120,7 +146,7 @@ public static class TransferSplitRule
         if (Math.Abs(now - was) < 0.5) return done;
         string down = m.Id, up = m.Id + UpstreamSuffix;
         if (now > 0 && was <= 0)
-            done.Add($"Via del trasferitore divisa in due inverter a {now:0} mm ({why}): il primo pacco resta fermo in battuta mentre il secondo si posiziona, senza strisciamenti. Inverter di valle {down} ({p.Stopper.PositionMm - now:0} mm), di monte {up} ({now - m.StartMm:0} mm).");
+            done.Add($"Via del trasferitore divisa in due inverter a {now:0} mm ({why}): il primo pacco resta fermo in battuta mentre il secondo si posiziona, senza strisciamenti. Inverter di valle {down} ({p.Stopper.PositionMm - now:0} mm), di monte {up} ({now - m.StartMm:0} mm). Il trasferitore sollevabile ha il doppio comando nello stesso punto.");
         else if (now > 0)
             done.Add($"Divisione della via del trasferitore spostata da {was:0} a {now:0} mm ({why}). Inverter di valle {down}, di monte {up}.");
         else

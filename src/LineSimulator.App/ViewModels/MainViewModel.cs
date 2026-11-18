@@ -1616,6 +1616,8 @@ public sealed partial class MainViewModel : ObservableObject
             TransferState.Lowering => "Discesa",
             TransferState.Depositing => "Deposito",
             TransferState.Returning => "Ritorno",
+            TransferState.WeighingUpstream => "Pesata metà a monte",
+            TransferState.LoweringDownstream => "Discesa metà a valle",
             var other => other.ToString()
         }, false));
         for (int i = 0; i < _project.Scales.Count; i++)

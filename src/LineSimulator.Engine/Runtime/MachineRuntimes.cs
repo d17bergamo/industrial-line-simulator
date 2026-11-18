@@ -262,7 +262,11 @@ public enum TransferState
     Depositing,
     Returning,
     /// <summary>Traslato, in attesa che i bilici di destinazione siano liberi (interblocco).</summary>
-    WaitingDestination
+    WaitingDestination,
+    /// <summary>Doppio comando (double banking, stesso bilico): metà a monte abbassata, pesata del pacco a monte; metà a valle sollevata.</summary>
+    WeighingUpstream,
+    /// <summary>Doppio comando: abbassamento della metà a valle dopo la pesata del pacco a monte.</summary>
+    LoweringDownstream
 }
 
 public sealed class TransferRuntime
@@ -304,6 +308,7 @@ public sealed class TransferRuntime
         TransferState.Lifting => Config.LiftTimeS,
         TransferState.Translating => Config.EffectiveTranslationTimeS,
         TransferState.Lowering => Config.LowerTimeS,
+        TransferState.LoweringDownstream => Config.LowerTimeS,
         TransferState.Depositing => Config.DepositTimeS,
         TransferState.Returning => Config.EffectiveTranslationTimeS,
         _ => 0

@@ -785,23 +785,10 @@ public sealed partial class SimulationEngine
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return -1;
         if (!FitsAtStop(p, idx - 1)) return -1;
-        if (SharesScaleWithFirst(p, idx - 1)) return -1;
+        // stesso bilico ammesso (decisione dell'utente del 2026-11-18): il trasferitore a doppio comando pesa prima il
+        // pacco a monte, poi abbassa la metà a valle e pesa il totale; il secondo peso è per differenza
         return idx;
     }
-
-    /// <summary>Trasferitore a due prese: i due pacchi del gruppo non possono finire sullo stesso bilico (ognuno ha la sua pesatura).</summary>
-    private bool SharesScaleWithFirst(PackageRuntime p, int stop)
-    {
-        var first = Stopper.Package ?? _finalAssigned;
-        if (first == null || _scales.Count == 0 || !Transfer.TwoPick || stop < 0 || stop >= _stops.Count) return false;
-        double head = StopTargetHead(_stops[stop], p);
-        var mine = ScalesUnder(head - p.LengthM, head);
-        var theirs = ScalesUnder(Stopper.PositionM - first.LengthM, Stopper.PositionM);
-        return mine.Overlaps(theirs);
-    }
-
-    private HashSet<ScaleRuntime> ScalesUnder(double tailM, double headM) =>
-        _scales.Where(s => Math.Min(s.EndM, headM) - Math.Max(s.StartM, tailM) > 0.05).ToHashSet();
 
     /// <summary>
     /// Il pacco può fare da secondo del gruppo in double banking per motivi stabili: tipologie di entrambi con double banking
@@ -811,8 +798,15 @@ public sealed partial class SimulationEngine
     {
         var first = Stopper.Package ?? _finalAssigned;
         if (!PairsInDoubleBanking(p) || (first != null && !PairsInDoubleBanking(first))) return false;
-        return _stops.Count == 0 || Enumerable.Range(0, _stops.Count).Any(k => FitsAtStop(p, k) && !SharesScaleWithFirst(p, k));
+        return _stops.Count == 0 || Enumerable.Range(0, _stops.Count).Any(k => FitsAtStop(p, k));
     }
+
+    /// <summary>
+    /// Double banking: fermo finale e fermi scomparenti già presi e pacco non ancora assegnato (decisione dell'utente del
+    /// 2026-11-18): la fotocellula davanti al trasferitore lo ferma finché il trasferitore non ha liberato i posti.
+    /// </summary>
+    private bool PlacesTaken(PackageRuntime p) =>
+        DoubleBanking && p.AssignedStop < 0 && p != _finalAssigned && FirstFreeStop() < 0;
 
     /// <summary>Scelta della tabella Pacchi (le tipologie che non ci stanno in due sono già riportate a single dalla preparazione).</summary>
     private bool PairsInDoubleBanking(PackageRuntime p) => BankingOptions.ChosenBanking(Project, p.Type) == AccumulationMode.DoubleBanking;
@@ -1097,6 +1091,9 @@ public sealed partial class SimulationEngine
     /// <summary>Pianifica i bilici di destinazione: false se un bilico necessario è ancora occupato (interblocco).</summary>
     private bool TryPlanScales(List<PackageRuntime> pkgs) => TryPlanScales(pkgs, Array.Empty<PackageRuntime>());
 
+    /// <summary>Gruppo di due pacchi sullo stesso bilico: pesata in due tempi con il trasferitore a doppio comando.</summary>
+    private bool _sharedPair;
+
     /// <summary>
     /// Bilici di destinazione dei pacchi. <paramref name="leaving"/>: pacchi pesati che lasciano il bilico nello stesso ciclo
     /// (trasferitore a due prese): i loro bilici contano come liberi.
@@ -1104,6 +1101,7 @@ public sealed partial class SimulationEngine
     private bool TryPlanScales(List<PackageRuntime> pkgs, IReadOnlyCollection<PackageRuntime> leaving)
     {
         _scalePlan.Clear();
+        _sharedPair = false;
         var used = new HashSet<ScaleRuntime>();
         foreach (var p in pkgs)
         {
@@ -1113,6 +1111,18 @@ public sealed partial class SimulationEngine
                 if (_reportedOnce.Add("noscale:" + p.Id))
                     Emit(SimEventType.DeviceAlarm, EventSeverity.Warning, $"{p.Id}: nessun bilico sotto il pacco, deposito senza pesatura", Project.Transfer.Id, p.Id);
                 _scalePlan[p] = new List<ScaleRuntime>();
+                continue;
+            }
+            if (cover.Any(used.Contains) && Transfer.TwoPick && pkgs.Count == 2)
+            {
+                // Double banking con il trasferitore a doppio comando: i due pacchi vanno sullo stesso bilico, pesati uno dopo
+                // l'altro (prima quello a monte, poi il totale); entrambi usano tutti i bilici sotto l'uno o l'altro
+                var other = pkgs.First(o => o != p);
+                var union = _scalePlan[other].Union(cover).OrderBy(s => s.StartM).ToList();
+                _scalePlan[other] = union;
+                _scalePlan[p] = union;
+                foreach (var s in cover) used.Add(s);
+                _sharedPair = true;
                 continue;
             }
             if (cover.Any(used.Contains))
@@ -1129,9 +1139,10 @@ public sealed partial class SimulationEngine
         return true;
     }
 
-    private void StartWeighing(PackageRuntime p, List<ScaleRuntime> scales, double t)
+    private void StartWeighing(PackageRuntime p, List<ScaleRuntime> scales, double t, PackageRuntime? companion = null)
     {
         var lead = scales[0];
+        lead.Companion = companion;
         lead.Lead = null;
         lead.Followers.Clear();
         lead.Package = p;
@@ -1260,14 +1271,22 @@ public sealed partial class SimulationEngine
                     {
                         double res = cfg.ResolutionKg > 0 ? cfg.ResolutionKg : 1;
                         double kg = Math.Round(p.WeightKg / res, MidpointRounding.AwayFromZero) * res;
+                        string diff = "";
+                        if (lead.Companion is { } c)
+                        {
+                            // pesata per differenza: il bilico legge il totale, il pacco a monte è già pesato
+                            double total = Math.Round((p.WeightKg + c.WeightKg) / res, MidpointRounding.AwayFromZero) * res;
+                            kg = total - (c.MeasuredWeightKg ?? 0);
+                            diff = $" per differenza (totale {total:0} kg − {c.Id} {c.MeasuredWeightKg:0} kg)";
+                        }
                         p.MeasuredWeightKg = kg;
                         p.WeighedTimeS = t;
                         lead.LastMeasuredKg = kg;
                         lead.Weighings++;
                         WeighedPackages++;
-                        Emit(SimEventType.WeightAcquired, EventSeverity.Info, $"{p.ScaleId}: peso di {p.Id} acquisito = {kg:0} kg{(p.WeighingValid ? "" : " (NON VALIDO)")}", lead.Id, p.Id);
+                        Emit(SimEventType.WeightAcquired, EventSeverity.Info, $"{p.ScaleId}: peso di {p.Id} acquisito = {kg:0} kg{diff}{(p.WeighingValid ? "" : " (NON VALIDO)")}", lead.Id, p.Id);
                         double capacity = cfg.CapacityKg + lead.Followers.Sum(f => f.Config.CapacityKg);
-                        if (kg > capacity)
+                        if (kg + (lead.Companion?.MeasuredWeightKg ?? 0) > capacity)
                             Alarm(SimEventType.DeviceAlarm, $"{lead.Id}: peso {kg:0} kg oltre la portata {capacity:0} kg", lead.Id, p.Id);
                         lead.State = ScaleState.Completed;
                         lead.ElapsedS = 0;

@@ -30,7 +30,7 @@ public class DoubleBankingLogicReportTests
             foreach (var heading in new[] { StopReference.Head, StopReference.Tail })
             {
                 var p = Setup(create(), withStop, heading);
-                sb.AppendLine($"##### {name} | {(withStop ? "con fermo scomparente" : "senza fermo scomparente")} | intestatura di {(heading == StopReference.Head ? "TESTA" : "CODA")}");
+                sb.AppendLine($"##### {name} | {(withStop ? (heading == StopReference.Tail ? "con fermo scomparente all'estremità a monte" : "con fermo scomparente al centro") : "senza fermo scomparente")} | intestatura di {(heading == StopReference.Head ? "TESTA" : "CODA")}");
                 var probe = ProjectSerializer.Clone(p);
                 var prep = SimulationPreparation.Prepare(probe);
                 var tr = probe.Transfer;
@@ -65,12 +65,17 @@ public class DoubleBankingLogicReportTests
 
     private static LineProject Setup(LineProject p, bool withStop, StopReference heading)
     {
-        if (withStop && !p.IntermediateStops.Any(s => s.IsEnabled))
+        // con l'intestatura di coda il secondo pacco sta oltre il fermo: il fermo va all'estremità a monte del trasferitore
+        var place = heading == StopReference.Tail ? DevicePlacement.End : DevicePlacement.Center;
+        if (withStop)
+        {
+            p.IntermediateStops.Clear();
             p.IntermediateStops.Add(new IntermediateStopConfig
             {
-                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
-                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+                Id = "FM1", Name = "Fermo scomparente", Placement = place,
+                PositionMm = StrappingAreaRules.StopPositionMm(p, place), AlignmentTimeS = 2.0
             });
+        }
         if (!withStop) p.IntermediateStops.Clear();
         BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
         p.Simulation.Heading = heading;
@@ -99,8 +104,9 @@ public class DoubleBankingLogicReportTests
         if (!detail) return;
         sb.AppendLine("     eventi del ciclo (fermi, trasferitore, attese):");
         var keep = e.Events.Where(x => x.Type is SimEventType.StopPhase or SimEventType.TransferWaiting
-                                       || (x.Type == SimEventType.TransferPhase && (x.Message.Contains("sollevamento") || x.Message.Contains("deposito")))
-                                       || (x.Type == SimEventType.AlignmentCompleted)).Take(40);
+                                       || (x.Type == SimEventType.TransferPhase && (x.Message.Contains("sollevamento") || x.Message.Contains("deposito") || x.Message.Contains("metà")))
+                                       || x.Type == SimEventType.WeightAcquired
+                                       || (x.Type == SimEventType.AlignmentCompleted)).Take(60);
         foreach (var x in keep) sb.AppendLine("       " + x);
     }
 }

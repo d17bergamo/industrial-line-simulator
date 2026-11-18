@@ -34,7 +34,15 @@ public sealed partial class SimulationEngine
 
     /// <summary>Pacchi sul bilico già pesati, pronti per la presa (capofila in stato Completato).</summary>
     private List<PackageRuntime> WeighedOnScale() =>
-        _scales.Where(s => s.Lead == null && s.Package != null && s.State == ScaleState.Completed).Select(s => s.Package!).Distinct().ToList();
+        _scales.Where(s => s.Lead == null && s.Package != null && s.State == ScaleState.Completed)
+            .SelectMany(s => s.Companion != null ? new[] { s.Companion, s.Package! } : new[] { s.Package! }).Distinct().ToList();
+
+    /// <summary>Pacco a monte (pesato per primo) e a valle del gruppo sullo stesso bilico.</summary>
+    private (PackageRuntime Monte, PackageRuntime Valle) SharedPair(TransferRuntime tr)
+    {
+        var o = tr.Packages.OrderBy(p => p.HeadM).ToList();
+        return (o[0], o[^1]);
+    }
 
     private bool ScaleWorking() => _scales.Any(s => s.Package != null && s.State != ScaleState.Completed);
 
@@ -74,6 +82,18 @@ public sealed partial class SimulationEngine
         }
 
         tr.BusyTimeS += dt;
+        if (tr.State == TransferState.WeighingUpstream)
+        {
+            // Doppio comando: la metà a valle resta sollevata finché il pacco a monte non è pesato
+            var (monte, valle) = SharedPair(tr);
+            valle.LiftM = lift; valle.LateralM = half;
+            foreach (var pk in tr.FromScale) { pk.LiftM = lift; pk.LateralM = 2 * half; }
+            var lead = _scales.FirstOrDefault(x => x.Package == monte && x.Lead == null);
+            if (lead == null || lead.State != ScaleState.Completed) return;
+            SetTransferPhase(tr, TransferState.LoweringDownstream, t);
+            Link("PESA_DIFF", "Pacco a monte pesato", "Abbassa la metà a valle: pesata del totale, secondo per differenza", "SCALE:" + lead.Id, "TRANSFER", valle.Id);
+            return;
+        }
         tr.ElapsedS += dt;
         double dur = tr.PhaseDuration(tr.State);
         double f = dur > 0 ? Math.Clamp(tr.ElapsedS / dur, 0, 1) : 1;
@@ -82,6 +102,7 @@ public sealed partial class SimulationEngine
             case TransferState.Lifting: tr.LiftM = lift * f; break;
             case TransferState.Translating: tr.LiftM = lift; tr.LateralM = half * f; break;
             case TransferState.Lowering: tr.LiftM = lift * (1 - f); tr.LateralM = half; break;
+            case TransferState.LoweringDownstream: tr.LiftM = lift * (1 - f); tr.LateralM = half; break;
             case TransferState.Depositing: tr.LiftM = 0; tr.LateralM = half; break;
             case TransferState.Returning: tr.LiftM = 0; tr.LateralM = half * (1 - f); break;
         }
@@ -90,6 +111,13 @@ public sealed partial class SimulationEngine
             double pl = tr.State == TransferState.Depositing ? 0 : tr.LiftM;
             foreach (var pk in tr.Packages) { pk.LiftM = pl; pk.LateralM = tr.LateralM; }
             foreach (var pk in tr.FromScale) { pk.LiftM = pl; pk.LateralM = half + tr.LateralM; }
+            if (_sharedPair && tr.Packages.Count == 2)
+            {
+                // Doppio comando: scende prima la metà a monte (il pacco a valle e quelli presi dal bilico restano su)
+                var (monte, valle) = SharedPair(tr);
+                if (tr.State == TransferState.Lowering) { valle.LiftM = lift; foreach (var pk in tr.FromScale) pk.LiftM = lift; }
+                if (tr.State == TransferState.LoweringDownstream) monte.LiftM = 0;
+            }
         }
         if (tr.ElapsedS < dur - 1e-9) return;
 
@@ -117,11 +145,30 @@ public sealed partial class SimulationEngine
                 SetTransferPhase(tr, TransferState.Lowering, t);
                 break;
             case TransferState.Lowering:
+                if (_sharedPair && tr.Packages.Count == 2)
+                {
+                    var (monte, _) = SharedPair(tr);
+                    monte.LiftM = 0;
+                    monte.LateralM = half;
+                    StartWeighing(monte, _scalePlan[monte], t);
+                    SetTransferPhase(tr, TransferState.WeighingUpstream, t);
+                    break;
+                }
                 SetTransferPhase(tr, TransferState.Depositing, t);
                 break;
+            case TransferState.LoweringDownstream:
+            {
+                var (monte, valle) = SharedPair(tr);
+                valle.LiftM = 0;
+                valle.LateralM = half;
+                StartWeighing(valle, _scalePlan[valle], t, companion: monte);
+                SetTransferPhase(tr, TransferState.Depositing, t);
+                break;
+            }
             case TransferState.Depositing:
                 foreach (var pk in tr.Packages)
                 {
+                    if (_sharedPair) break;             // già depositati uno alla volta dal doppio comando
                     pk.LiftM = 0;
                     pk.LateralM = half;
                     if (_scalePlan.TryGetValue(pk, out var scales) && scales.Count > 0) StartWeighing(pk, scales, t);
@@ -135,6 +182,7 @@ public sealed partial class SimulationEngine
                     else ExitToNextStation(pk, t, $"pesato ({pk.MeasuredWeightKg:0} kg)");
                 }
                 _scalePlan.Clear();
+                _sharedPair = false;
                 tr.Packages.Clear();
                 tr.FromScale.Clear();
                 tr.Cycles++;
@@ -150,10 +198,11 @@ public sealed partial class SimulationEngine
     /// <summary>Il trasferitore prende il pacco pesato: il bilico si libera.</summary>
     private void TakeFromScale(PackageRuntime p)
     {
-        foreach (var s in _scales.Where(s => s.Package == p))
+        foreach (var s in _scales.Where(s => s.Package == p || s.Companion == p))
         {
             s.State = ScaleState.Idle;
             s.Package = null;
+            s.Companion = null;
             s.Lead = null;
             s.Followers.Clear();
             s.ElapsedS = 0;
