@@ -7,36 +7,39 @@
 @using LineSimulator.Models
 @inject IJSRuntime JS
 
-<h3 class="categoria">Documenti del progetto</h3>
-<div class="comandi strumenti">
-    <button @onclick="TopView">Vista dall'alto (PDF)</button>
-    <button @onclick="PrintCyclogram">Ciclogramma da stampare (PDF)</button>
-    <select value="@_cycType" @onchange="@(e => _cycType = e.Value?.ToString() ?? string.Empty)" aria-label="Pacco del ciclogramma">
-        <option value="">tutti i pacchi</option>
-        @foreach (var t in Project.PackageTypes) { <option value="@t.Id">solo @t.Id</option> }
-    </select>
-    <button @onclick="ControlLogicZip">Logica di controllo (JSON + CSV)</button>
-    <button @onclick="FunctionalSpec">Specifica funzionale (Word)</button>
+<div class="tutto">
+    <div><b>Scarica tutto in un unico file</b><div class="nota">Disegni, specifiche, progetto@(Engine != null && Results != null ? " e risultati" : " (i risultati dopo una simulazione)") in un archivio ZIP</div></div>
+    <button class="primario" @onclick="AllZip">⬇ Tutto (.zip)</button>
 </div>
-<div class="comandi strumenti">
-    <button @onclick="SaveProject">Salva il progetto (.json)</button>
-    <button @onclick="SaveLayout">Salva solo il layout (.json)</button>
-    <button @onclick="CopyProject">Copia il progetto negli appunti</button>
-</div>
-
-<h3 class="categoria">Dopo la simulazione</h3>
-@if (Engine == null || Results == null)
-{
-    <p class="nota">Esegui una simulazione per Gantt, Excel e CSV dei risultati.</p>
-}
-else
-{
-    <div class="comandi strumenti">
-        <button @onclick="GanttPdf">Gantt dei pacchi e gradini (PDF)</button>
-        <button @onclick="Excel">Risultati (Excel)</button>
-        <button @onclick="CsvZip">Risultati (CSV)</button>
+<div class="documenti">
+    <div class="gruppo">
+        <h3 class="categoria">Disegni</h3>
+        <button class="doc" @onclick="TopView"><span class="fmt">PDF</span><span>Vista dall'alto</span><span class="giu">⬇</span></button>
+        <button class="doc" @onclick="PrintCyclogram"><span class="fmt">PDF</span><span>Ciclogramma da stampare</span><span class="giu">⬇</span></button>
+        <select value="@_cycType" @onchange="@(e => _cycType = e.Value?.ToString() ?? string.Empty)" aria-label="Pacco del ciclogramma">
+            <option value="">ciclogramma di tutti i pacchi</option>
+            @foreach (var t in Project.PackageTypes) { <option value="@t.Id">ciclogramma solo @t.Id</option> }
+        </select>
+        <button class="doc" @onclick="GanttPdf" disabled="@(Engine == null || Results == null)"><span class="fmt">PDF</span><span>Gantt dei pacchi e gradini</span><span class="giu">⬇</span></button>
     </div>
-}
+    <div class="gruppo">
+        <h3 class="categoria">Specifiche</h3>
+        <button class="doc" @onclick="FunctionalSpec"><span class="fmt">DOCX</span><span>Specifica funzionale</span><span class="giu">⬇</span></button>
+        <button class="doc" @onclick="ControlLogicZip"><span class="fmt">ZIP</span><span>Logica di controllo (JSON + CSV)</span><span class="giu">⬇</span></button>
+    </div>
+    <div class="gruppo">
+        <h3 class="categoria">Risultati</h3>
+        <button class="doc" @onclick="Excel" disabled="@(Engine == null || Results == null)"><span class="fmt">XLSX</span><span>Risultati della simulazione</span><span class="giu">⬇</span></button>
+        <button class="doc" @onclick="CsvZip" disabled="@(Engine == null || Results == null)"><span class="fmt">CSV</span><span>Risultati (tabelle)</span><span class="giu">⬇</span></button>
+        @if (Engine == null || Results == null) { <p class="nota">Si attivano dopo una simulazione.</p> }
+    </div>
+    <div class="gruppo">
+        <h3 class="categoria">Progetto</h3>
+        <button class="doc" @onclick="SaveProject"><span class="fmt">JSON</span><span>Salva il progetto</span><span class="giu">⬇</span></button>
+        <button class="doc" @onclick="SaveLayout"><span class="fmt">JSON</span><span>Solo il layout</span><span class="giu">⬇</span></button>
+        <button class="doc" @onclick="CopyProject"><span class="fmt">TXT</span><span>Copia negli appunti</span><span class="giu">⎘</span></button>
+    </div>
+</div>
 
 <h3 class="categoria">Obiettivo di produttività</h3>
 <div class="griglia">
@@ -135,6 +138,35 @@ else
         try { await action(); }
         catch (Exception ex) { _note = $"{what} non riuscito: {ex.Message}"; }
     }
+
+    private Task AllZip() => Run("Esportazione", async () =>
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+        {
+            void Bytes(string name, byte[] data) { using var st = zip.CreateEntry(name).Open(); st.Write(data, 0, data.Length); }
+            void TextEntry(string name, string text) => Bytes(name, new UTF8Encoding(true).GetBytes(text));
+            Bytes("disegni/" + Stem + "_vista_dall_alto.pdf", LayoutTopViewPdf.Build(Project));
+            Bytes("disegni/" + Stem + "_ciclogramma.pdf", CyclogramPrintPdf.Build(Project, null, null));
+            Bytes("specifiche/" + Stem + "_specifica_funzionale.docx", FunctionalSpecExporter.Build(Project, Results));
+            foreach (var (name, text) in ControlLogicGenerator.Files(ControlLogicGenerator.Generate(Project), Stem + "_logica")) TextEntry("specifiche/logica/" + name, text);
+            TextEntry("progetto/" + Stem + ".json", ProjectSerializer.Serialize(Project));
+            TextEntry("progetto/" + Stem + "_layout.json", ProjectSerializer.Serialize(SplitFiles.ExtractLayout(Project)));
+            if (Engine != null && Results != null)
+            {
+                var steps = StepCyclogram.Build(Engine.Recorder);
+                var gantt = PackageGantt.Build(Engine.Recorder);
+                Bytes("disegni/" + Stem + "_ciclogramma-gantt.pdf", PackageGanttPdf.Build(gantt, steps, Project.Name.Length > 0 ? Project.Name : "Linea di legatura"));
+                Bytes("risultati/" + Stem + "_risultati.xlsx", ReportExporter.ExcelBytes(Results, Engine));
+                TextEntry("risultati/riepilogo.csv", ReportExporter.SummaryCsv(Results));
+                TextEntry("risultati/pacchi.csv", ReportExporter.PackagesCsv(Results));
+                TextEntry("risultati/risorse.csv", ReportExporter.ResourcesCsv(Results));
+                TextEntry("risultati/eventi.csv", ReportExporter.EventsCsv(Engine.Events));
+                TextEntry("risultati/ciclogramma.csv", ReportExporter.CyclogramCsv(Engine.Recorder));
+            }
+        }
+        await Download(Stem + "_documenti.zip", ms.ToArray(), "application/zip");
+    });
 
     private Task TopView() => Run("PDF", () => Download(Stem + "_vista_dall_alto.pdf", LayoutTopViewPdf.Build(Project), "application/pdf"));
 

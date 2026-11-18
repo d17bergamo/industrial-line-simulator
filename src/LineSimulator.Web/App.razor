@@ -4,12 +4,23 @@
 
 <main>
     <header class="testa">
-        <h1>Simulatore Linea</h1>
-        <button id="pronto" @onclick="NextTheme">Tema: @_theme</button>
+        <div class="titolo"><h1>Simulatore Linea</h1><small>@Work.Name@(_edited ? " (modificato)" : "")</small></div>
+        <nav class="passi" aria-label="Vai alla zona">
+            <button class="passo" @onclick='() => Go("linea")'>Linea</button>
+            <button class="passo" @onclick='() => Go("modifica")'>Modifica</button>
+            <button class="passo" @onclick='() => Go("simulazione")'>Simulazione</button>
+            <button class="passo" @onclick='() => Go("risultati")'>Risultati</button>
+            <button class="passo" @onclick='() => Go("uscite")'>Documenti</button>
+        </nav>
+        <div class="azioni">
+            <button class="piccolo" @onclick='() => Js("zone.tutte", false)' title="Chiude tutte le zone">Comprimi tutto</button>
+            <button class="piccolo" @onclick='() => Js("zone.tutte", true)' title="Apre tutte le zone">Espandi tutto</button>
+            <button class="piccolo primario-p" @onclick='() => Go("uscite")'>⬇ Documenti</button>
+            <button id="pronto" class="piccolo" @onclick="NextTheme">@(_theme == "scuro" ? "☀ Tema: scuro" : _theme == "chiaro" ? "🌙 Tema: chiaro" : "◐ Tema: auto")</button>
+        </div>
     </header>
 
-    <section class="carta">
-        <h2>Linea</h2>
+    <details class="zona" open id="linea"><summary>Linea</summary><div class="corpo">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
                 @for (int i = 0; i < SampleProjects.All.Count; i++)
@@ -37,9 +48,9 @@
             <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
         </label>
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
-    </section>
+    </div></details>
 
-    <section class="carta" id="modifica">
+    <details class="zona" open id="modifica"><summary>Modifica del progetto</summary><div class="corpo">
         <div class="schede">
             <button class="@(_tab == 0 ? "attivo" : "")" @onclick="() => _tab = 0">Pacchi</button>
             <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie</button>
@@ -173,17 +184,14 @@
             <p class="nota">@_jsonNote</p>
             <textarea class="json" readonly rows="6" @onfocus="SelectJson" id="json-progetto">@_json</textarea>
         }
-    </section>
+    </div></details>
 
-    <section class="carta" id="uscite">
-        <details>
-            <summary>Uscite e strumenti: PDF, logica di controllo, Excel, Word, obiettivo, controllo, registro eventi</summary>
-            <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
-        </details>
-    </section>
+    <details class="zona" open id="uscite"><summary>Documenti ed esportazione</summary><div class="corpo">
+        <p class="nota">Altri strumenti qui sotto: obiettivo di produttività, ottimizzazione delle zone, controllo dell'equipaggiamento, registro eventi.</p>
+        <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
+    </div></details>
 
-    <section class="carta">
-        <h2>Simulazione</h2>
+    <details class="zona" open id="simulazione"><summary>Simulazione</summary><div class="corpo">
         <label class="campo">Misura dei pacchi
             <select id="misura" @bind="_type" disabled="@_busy">
                 <option value="*">Tutte le misure, a rotazione</option>
@@ -208,7 +216,7 @@
         {
             <div class="barra"><div class="barra-valore" style="width:@F(_progress * 100)%"></div></div>
         }
-    </section>
+    </div></details>
 
     @if (_errors.Count > 0)
     {
@@ -225,8 +233,7 @@
 
     @if (_engine != null && _res != null)
     {
-        <section class="carta" id="risultati">
-            <h2>Risultato</h2>
+        <details class="zona" open id="risultati"><summary>Risultato</summary><div class="corpo">
             <div class="numeri">
                 <div class="numero"><b>@N(_res.TonnesPerHour, "0.0")</b><span>t/h</span></div>
                 <div class="numero"><b>@N(_res.PackagesPerHour, "0.0")</b><span>pacchi/h</span></div>
@@ -275,9 +282,9 @@
                     </ul>
                 </details>
             }
-        </section>
+        </div></details>
 
-        <section class="carta">
+        <details class="zona" open id="vista"><summary>Vista della linea</summary><div class="corpo">
             <div class="schede">
                 <button id="vista2d" class="@(_view3d ? "" : "attivo")" @onclick="() => SetView(false)">Dall'alto</button>
                 <button id="vista3d" class="@(_view3d ? "attivo" : "")" @onclick="() => SetView(true)">3D</button>
@@ -378,11 +385,10 @@
                 <span><i style="background:var(--trasf)"></i>sul trasferitore</span>
                 <span><i style="background:var(--fc-on)"></i>fotocellula occupata</span>
             </div>
-        </section>
+        </div></details>
 
-        <section class="carta">
-            <details>
-                <summary>Pacchi (@_res.Packages.Count)</summary>
+        <details class="zona" open id="pacchi"><summary>Pacchi simulati (@_res.Packages.Count)</summary><div class="corpo">
+            <div>
                 <table class="pacchi">
                     <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>attesa s</th><th>legature</th></tr></thead>
                     <tbody>
@@ -399,8 +405,8 @@
                         }
                     </tbody>
                 </table>
-            </details>
-        </section>
+            </div>
+        </div></details>
     }
 </main>
 
@@ -712,6 +718,8 @@
         Js("tema.imposta", _theme);
         if (_view3d) _init3d = true;   // la scena 3D prende i colori del tema quando viene creata
     }
+
+    private void Go(string id) => Js("zone.vai", id);
 
     private void View3D(string name) => Js("scena3d.view", name);
 
