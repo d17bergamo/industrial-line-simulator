@@ -1077,11 +1077,16 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 if (s.Start < p.HeadM - OnRollersM) continue;
                 if (under.Contains(s.Zone) && !(TransferSplitM != null && !s.Valle && s.Zone.Info == Topology.StopperZone)) continue;
-                if (s.Zone.AutoStopped || s.Zone.Mode == InverterMode.Reverse) break;
+                if (s.Zone.Mode == InverterMode.Reverse) break;
+                // Zona in arresto automatico: riparte da sola all'arrivo del pacco (se è vuota la regola "ahead" la sincronizza).
+                // Se però ci sta già un altro pacco (double banking: primo pacco in battuta, metà a monte ferma) il pacco in
+                // arrivo deve comunque rallentare, altrimenti la via riparte da zero mentre lui entra veloce.
+                if (s.Zone.AutoStopped && !_active.Any(q => q != p && q.OnRollers && q.HeadM > s.Zone.Info.StartM + 1e-9 && q.TailM < s.Zone.Info.EndM - 1e-9)) break;
                 double vNow = under.Max(z => z.ActualSpeed);
-                // velocità del tratto a valle: la minore tra comando e velocità reale (se sta accelerando, il pacco lo segue
-                // man mano che la velocità sale; prudente, ma nessuno strisciamento)
-                double vDown = !s.Enabled ? 0 : s.Valle ? ValleSpeed : Math.Max(0, Math.Min(s.Zone.TargetSpeed(align), s.Zone.ActualSpeed));
+                // velocità del tratto a valle quando la testa arriverà al confine: il comando, ma non oltre la sua rampa
+                double reachS = Math.Max(0, s.Start - p.HeadM) / Math.Max(0.05, vNow);
+                double vDown = !s.Enabled ? 0 : s.Valle ? ValleSpeed
+                    : Math.Max(0, Math.Min(s.Zone.TargetSpeed(align), s.Zone.ActualSpeed + Math.Max(0.01, s.Zone.Config.Acceleration) * reachS));
                 if (vDown < vNow - 0.005)
                 {
                     double dec = 0.8 * Math.Max(0.1, under.Min(z => z.Config.Deceleration));
