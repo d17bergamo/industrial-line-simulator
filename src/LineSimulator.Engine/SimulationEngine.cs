@@ -403,6 +403,13 @@ public sealed partial class SimulationEngine : ILogicContext
         }
     }
 
+    /// <summary>
+    /// Quota (m) che la coda del pacco legato deve superare perché il successivo possa partire: la fotocellula di uscita
+    /// legatura, oppure la fine del primo rullo dello svincolo, che si muove con l'inverter di legatura (2026-11-18): finché
+    /// la coda ci sta sopra, il posizionamento del pacco nuovo la trascinerebbe.
+    /// </summary>
+    private double StrappingFreeM => Math.Max(StrappingExitM, FirstReleaseRollerEndM ?? double.NegativeInfinity);
+
     /// <summary>Posizione (m) della fotocellula di uscita della via rulli di legatura (fine della zona se manca).</summary>
     private double StrappingExitM
     {
@@ -475,14 +482,14 @@ public sealed partial class SimulationEngine : ILogicContext
             var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
             // Regola dell'utente (2026-11-13 17:55, solo le tre fotocellule della via di legatura): il pacco in attesa su FC0
             // parte quando il precedente è legato e la sua coda ha liberato la fotocellula di uscita legatura.
-            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done && prev.TailM > StrappingExitM + 1e-9;
+            bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done && prev.TailM > StrappingFreeM + 1e-9;
             bool passed = prev == null || !prev.OnRollers || prev.TailM > StrappingClearM + 1e-9;
             if (!strapped && !passed) { InfeedWaitingS += Dt; return; }
             waiting.InfeedReleased = true;
             _lastProgressTime = t;
             Emit(SimEventType.InfeedWaiting, EventSeverity.Info,
                 prev == null ? $"{waiting.Id} avanza nella via rulli di legatura"
-                : strapped && !passed ? $"{waiting.Id} avanza: {prev.Id} è legato e la sua coda ha liberato la fotocellula di uscita legatura ({StrappingExitM * 1000:0} mm)"
+                : strapped && !passed ? $"{waiting.Id} avanza: {prev.Id} è legato e la sua coda ha liberato {(StrappingFreeM > StrappingExitM + 1e-9 ? "il primo rullo dello svincolo" : "la fotocellula di uscita legatura")} ({StrappingFreeM * 1000:0} mm)"
                 : $"{waiting.Id} avanza: la coda di {prev.Id} ha liberato {(StrappingClearM > StrappingExitM + 1e-9 ? "la zona di legatura e svincolo" : "la fotocellula di uscita legatura")} ({StrappingClearM * 1000:0} mm)", null, waiting.Id);
             if (prev != null && _zones.Count > 0)
             {
@@ -652,7 +659,7 @@ public sealed partial class SimulationEngine : ILogicContext
             return true;
         }
         double exit = StrappingExitM;
-        if (exit >= z.Info.EndM - 1e-6 || res.TailM <= exit + 1e-9) return false;
+        if (exit >= z.Info.EndM - 1e-6 || res.TailM <= StrappingFreeM + 1e-9) return false;
         // svincolo lungo sotto lo stesso inverter: il pacco legato si libera solo uscendo dalla zona (vedi StrappingClearM)
         if (StrappingClearM >= z.Info.EndM - 1e-6) return false;
         _releasedFromStation.Add(res);
