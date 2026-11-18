@@ -2,10 +2,12 @@ name: Versione web
 
 # Compila la versione web (gira nel browser, anche del telefono, senza installazione), la prova con un browser da
 # telefono e pubblica il pacchetto e le schermate nella prerelease "web-anteprima".
+# Da main (2026-11-18) pubblica anche il sito pubblico: solo la pagina compilata, nel ramo gh-pages del repository
+# pubblico d17bergamo/simulatore-linea-web (GitHub Pages). Serve il segreto WEB_SITE_TOKEN: token con permesso
+# "Contents: read and write" sul solo repository pubblico. Senza segreto il passo viene saltato.
 
 on:
   push:
-    branches-ignore: [ main ]
     paths: [ 'src/**', 'tools/web-*', '.github/workflows/web.yml' ]
   workflow_dispatch:
 
@@ -19,6 +21,8 @@ env:
 jobs:
   web:
     runs-on: ubuntu-latest
+    env:
+      WEB_SITE_TOKEN: ${{ secrets.WEB_SITE_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,3 +57,16 @@ jobs:
           gh release delete web-anteprima --yes --cleanup-tag || true
           gh release create web-anteprima web/* --target "${{ github.sha }}" --prerelease \
             --title "Versione web (${{ github.ref_name }})" --notes "Pacchetto della versione web e schermate della prova, ramo ${{ github.ref_name }}, commit ${{ github.sha }}."
+
+      - name: Pubblica il sito pubblico (GitHub Pages)
+        if: github.ref == 'refs/heads/main' && env.WEB_SITE_TOKEN != ''
+        run: |
+          rm -rf sito && cp -r out/wwwroot sito && touch sito/.nojekyll
+          cd sito
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Simulatore Linea - versione web dal commit ${{ github.sha }}"
+          git push -q -f "https://x-access-token:${WEB_SITE_TOKEN}@github.com/d17bergamo/simulatore-linea-web.git" gh-pages
+          echo "Sito aggiornato: https://d17bergamo.github.io/simulatore-linea-web/"
