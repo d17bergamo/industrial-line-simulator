@@ -8,7 +8,7 @@
 @inject IJSRuntime JS
 
 <h3 class="categoria">Documenti del progetto</h3>
-<div class="comandi">
+<div class="comandi strumenti">
     <button @onclick="TopView">Vista dall'alto (PDF)</button>
     <button @onclick="PrintCyclogram">Ciclogramma da stampare (PDF)</button>
     <select value="@_cycType" @onchange="@(e => _cycType = e.Value?.ToString() ?? string.Empty)" aria-label="Pacco del ciclogramma">
@@ -18,7 +18,7 @@
     <button @onclick="ControlLogicZip">Logica di controllo (JSON + CSV)</button>
     <button @onclick="FunctionalSpec">Specifica funzionale (Word)</button>
 </div>
-<div class="comandi">
+<div class="comandi strumenti">
     <button @onclick="SaveProject">Salva il progetto (.json)</button>
     <button @onclick="SaveLayout">Salva solo il layout (.json)</button>
     <button @onclick="CopyProject">Copia il progetto negli appunti</button>
@@ -31,7 +31,7 @@
 }
 else
 {
-    <div class="comandi">
+    <div class="comandi strumenti">
         <button @onclick="GanttPdf">Gantt dei pacchi e gradini (PDF)</button>
         <button @onclick="Excel">Risultati (Excel)</button>
         <button @onclick="CsvZip">Risultati (CSV)</button>
@@ -43,7 +43,7 @@ else
     <label class="campo">Obiettivo (t/h)<input type="number" step="1" value="@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)"
                                               @onchange="SetTarget" /></label>
 </div>
-<div class="comandi">
+<div class="comandi strumenti">
     <button @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
     <button @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
 </div>
@@ -51,7 +51,7 @@ else
 @if (_report != null)
 {
     <pre class="rapporto">@_report.Summary</pre>
-    <div class="comandi">
+    <div class="comandi strumenti">
         @if (_report.BestProject != null && _report.Path.Count > 0) { <button class="primario" @onclick="@(() => Apply(_report.BestProject!, _report.Path.Count + " modifiche dell'ottimizzatore"))">Applica il percorso proposto</button> }
         @if (_report.ReleaseProject != null) { <button @onclick="@(() => Apply(_report.ReleaseProject!, _report.ReleaseLengthening?.Title ?? "svincolo allungato"))">@(_report.ReleaseLengthening?.Title ?? "Allunga lo svincolo")</button> }
         @if (_report.SavingProject != null) { <button @onclick="@(() => Apply(_report.SavingProject!, _report.Saving?.Title ?? "risparmio"))">Unisci lo svincolo all'inverter di legatura</button> }
@@ -61,7 +61,7 @@ else
 @if (_zones != null)
 {
     <pre class="rapporto">@_zones.Explanation</pre>
-    <div class="comandi">
+    <div class="comandi strumenti">
         @if (_zones.Best != null) { <button class="primario" @onclick="ApplyZones">Applica la suddivisione migliore</button> }
         <button @onclick="() => _zones = null">Chiudi</button>
     </div>

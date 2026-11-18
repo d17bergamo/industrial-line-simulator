@@ -112,3 +112,8 @@ pre.rapporto { white-space: pre-wrap; font: .8rem/1.35 ui-monospace, monospace; 
 .registro { max-height: 50vh; overflow: auto; font-size: .8rem; border: 1px solid var(--bordo); border-radius: 8px; padding: .4rem; }
 .registro div { padding: .1rem 0; border-bottom: 1px solid var(--bordo); }
 .comandi select { min-height: 40px; }
+.comandi.strumenti { flex-wrap: wrap; }
+.comandi.strumenti button, .comandi.strumenti select { flex: 1 1 45%; min-width: 9rem; padding: .6rem .5rem; }
+.comandi.strumenti button:first-child { flex: 1 1 45%; }
+.comandi select { padding: .55rem; font-size: .95rem; color: var(--testo); background: var(--sfondo); border: 1px solid var(--bordo); border-radius: 8px; }
+.comandi select option { background: var(--carta); color: var(--testo); }
