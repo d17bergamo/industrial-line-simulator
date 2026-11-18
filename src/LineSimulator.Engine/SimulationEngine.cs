@@ -1071,8 +1071,11 @@ public sealed partial class SimulationEngine : ILogicContext
                 if (s.Start < p.HeadM - OnRollersM) continue;
                 if (under.Contains(s.Zone) && !(TransferSplitM != null && !s.Valle && s.Zone.Info == Topology.StopperZone)) continue;
                 if (s.Zone.AutoStopped || s.Zone.Mode == InverterMode.Reverse) break;
-                double vDown = !s.Enabled ? 0 : s.Valle ? ValleSpeed : Math.Max(0, s.Zone.TargetSpeed(align));
                 double vNow = under.Max(z => z.ActualSpeed);
+                // velocità del tratto a valle quando la testa arriverà al confine: il comando, ma non oltre la sua rampa
+                double reachS = Math.Max(0, s.Start - p.HeadM) / Math.Max(0.05, vNow);
+                double vDown = !s.Enabled ? 0 : s.Valle ? ValleSpeed
+                    : Math.Max(0, Math.Min(s.Zone.TargetSpeed(align), s.Zone.ActualSpeed + Math.Max(0.01, s.Zone.Config.Acceleration) * reachS));
                 if (vDown < vNow - 0.005)
                 {
                     double dec = 0.8 * Math.Max(0.1, under.Min(z => z.Config.Deceleration));
