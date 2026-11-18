@@ -163,3 +163,9 @@ button.doc:hover:not(:disabled) { border-color: var(--accento); background: var(
 
 .zone-telefono { display: none; }
 @media (max-width: 640px) { .zone-telefono { display: flex; } }
+
+/* niente scorrimento orizzontale: le schede vanno a capo e i campi si restringono */
+html, body { overflow-x: hidden; }
+.schede { flex-wrap: wrap; }
+.schede button { min-width: 0; padding: .45rem .6rem; font-size: .9rem; }
+main { min-width: 0; }
