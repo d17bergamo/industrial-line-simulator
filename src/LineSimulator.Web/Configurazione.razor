@@ -1,0 +1,255 @@
+@* Configurazione completa (2026-11-18): tutti i componenti e tutte le proprietà del programma Windows, dalle stesse
+   descrizioni dei campi (UiProperty), con "Avanzate", valori ereditati dalla famiglia bloccati e le stesse regole di
+   modifica (ProjectEditing). *@
+@using System.Globalization
+@using System.Reflection
+@using LineSimulator.Core
+@using LineSimulator.Engine
+@using LineSimulator.Models
+
+<div class="riga-titolo">
+    <label class="campo largo">Componente
+        <select value="@_sel" @onchange="Select">
+            @foreach (var g in Nodes().GroupBy(n => n.Group))
+            {
+                <optgroup label="@g.Key">
+                    @foreach (var n in g)
+                    {
+                        <option value="@n.Key">@n.Label</option>
+                    }
+                </optgroup>
+            }
+        </select>
+    </label>
+</div>
+<div class="comandi">
+    <select value="" @onchange="AddComponent" aria-label="Aggiungi un componente">
+        <option value="">Aggiungi…</option>
+        @foreach (var (k, l) in ProjectEditing.Addable)
+        {
+            <option value="@k">@l</option>
+        }
+    </select>
+    <button class="piccolo" @onclick="DeleteSelected" disabled="@(!ProjectEditing.CanDelete(Model))">Elimina</button>
+</div>
+@if (Model is { } m)
+{
+    var items = Items(m);
+    foreach (var cat in items.Where(i => !i.Advanced || _advanced).GroupBy(i => i.Meta.Category))
+    {
+        <h3 class="categoria">@cat.Key</h3>
+        @foreach (var it in cat)
+        {
+            var item = it;
+            string label = string.IsNullOrEmpty(item.Meta.Unit) ? item.Meta.DisplayName : $"{item.Meta.DisplayName} [{item.Meta.Unit}]";
+            <div class="prop">
+                @if (item.Calculated)
+                {
+                    <div class="prop-calc"><span>@label</span><b>@Format(item.Prop.GetValue(m))</b></div>
+                }
+                else if (item.Prop.PropertyType == typeof(bool))
+                {
+                    <label class="spunta"><input type="checkbox" checked="@(item.Prop.GetValue(m) is true)" disabled="@item.Locked"
+                                                 @onchange="e => SetValue(item, e.Value)" /> @label@(item.Locked ? " (dalla famiglia)" : "")</label>
+                }
+                else if (item.Prop.PropertyType.IsEnum)
+                {
+                    <label class="campo">@label@(item.Locked ? " (dalla famiglia)" : "")
+                        <select value="@item.Prop.GetValue(m)?.ToString()" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)">
+                            @foreach (var n in Enum.GetNames(item.Prop.PropertyType))
+                            {
+                                <option value="@n">@EnumLabel(item.Prop.PropertyType, n)</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else if (item.Options != null)
+                {
+                    <label class="campo">@label
+                        <select value="@(item.Prop.GetValue(m)?.ToString() ?? "")" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)">
+                            <option value=""></option>
+                            @foreach (var o in item.Options)
+                            {
+                                <option value="@o">@o</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else
+                {
+                    <label class="campo">@label@(item.Locked ? " (dalla famiglia)" : "")
+                        <input type="text" value="@Format(item.Prop.GetValue(m))" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)" />
+                    </label>
+                }
+                @if (_errors.TryGetValue(item.Prop.Name, out var err))
+                {
+                    <p class="nota grave">@err</p>
+                }
+            </div>
+        }
+    }
+    int adv = items.Count(i => i.Advanced);
+    if (adv > 0)
+    {
+        <button class="piccolo" @onclick="() => _advanced = !_advanced">@(_advanced ? "Nascondi le avanzate" : $"Avanzate ({adv})")</button>
+    }
+}
+@if (_messages.Count > 0)
+{
+    <ul class="elenco">
+        @foreach (var x in _messages) { <li>@x</li> }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
+    /// <summary>Chiamato dopo ogni modifica del progetto.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string _sel = "project";
+    private bool _advanced;
+    private readonly Dictionary<string, string> _errors = new();
+    private List<string> _messages = new();
+    private LineProject? _last;
+
+    private sealed record Node(string Key, string Group, string Label, object Model);
+    private sealed record Item(PropertyInfo Prop, UiPropertyAttribute Meta, bool Advanced, bool Locked, bool Calculated, IReadOnlyList<string>? Options);
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_last, Project)) { _sel = "project"; _errors.Clear(); _messages.Clear(); _last = Project; }
+    }
+
+    /// <summary>Componenti del progetto, nello stesso ordine dell'albero del programma Windows.</summary>
+    private List<Node> Nodes()
+    {
+        var p = Project;
+        var l = new List<Node> { new("project", "Progetto", "Progetto: " + p.Name, p) };
+        l.Add(new("sec-family", "Moduli via a rulli", "Famiglia moduli (valori comuni)", p.SectionDefaults));
+        foreach (var s in p.Sections.OrderBy(s => s.StartMm)) l.Add(new("sec:" + s.Id, "Moduli via a rulli", $"{s.Id} · {s.Name}", s));
+        l.Add(new("pc-family", "Fotocellule", "Famiglia fotocellule (valori comuni)", p.PhotocellDefaults));
+        foreach (var s in p.Photocells.OrderBy(s => s.PositionMm)) l.Add(new("pc:" + s.Id, "Fotocellule", $"{s.Id} · {s.Name}", s));
+        if (p.Rejector.IsEnabled) l.Add(new("rejector", "Stazione di legatura", "Rigettatrice", p.Rejector));
+        l.Add(new("station", "Stazione di legatura", "Stazione di legatura", p.StrappingStation));
+        if (p.BundleClamp.IsEnabled) l.Add(new("clamp", "Stazione di legatura", "Stringifascio", p.BundleClamp));
+        if (p.Compactor.IsEnabled) l.Add(new("compactor", "Stazione di legatura", "Compattatore laterale", p.Compactor));
+        l.Add(new("st-family", "Stazione di legatura", "Famiglia legatrici (valori comuni)", p.StrapperDefaults));
+        foreach (var s in p.Strappers) l.Add(new("st:" + s.Id, "Stazione di legatura", $"{s.Id} · {s.Name}", s));
+        foreach (var s in p.IntermediateStops.OrderBy(s => s.PositionMm)) l.Add(new("fm:" + s.Id, "Trasferitore", $"{s.Id} · {s.Name}", s));
+        l.Add(new("stopper", "Trasferitore", "Fermo finale", p.Stopper));
+        l.Add(new("transfer", "Trasferitore", "Trasferitore sollevabile", p.Transfer));
+        l.Add(new("accum", "Trasferitore", "Trasferitore d'accumulo", p.AccumulationTransfer));
+        l.Add(new("sc-family", "Trasferitore", "Famiglia bilici (valori comuni)", p.ScaleDefaults));
+        foreach (var s in p.Scales.OrderBy(s => s.StartMm)) l.Add(new("sc:" + s.Id, "Trasferitore", $"{s.Id} · {s.Name}", s));
+        foreach (var s in p.PackageTypes) l.Add(new("pk:" + s.Id, "Pacchi e ingresso", $"Pacco {s.Id}", s));
+        l.Add(new("infeed", "Pacchi e ingresso", "Ingresso pacchi", p.Infeed));
+        foreach (var s in p.Rules) l.Add(new("rule:" + s.Id, "Regole logiche", $"{s.Id} · {s.Name}", s));
+        l.Add(new("sim", "Simulazione", "Impostazioni simulazione", p.Simulation));
+        return l;
+    }
+
+    private object? Model => Nodes().FirstOrDefault(n => n.Key == _sel)?.Model ?? Project;
+
+    private void Select(ChangeEventArgs e)
+    {
+        _sel = e.Value?.ToString() ?? "project";
+        _advanced = false;
+        _errors.Clear();
+    }
+
+    private List<Item> Items(object m)
+    {
+        var t = m.GetType();
+        string typeName = t.Name;
+        var hidden = t.GetCustomAttribute<UiHiddenPropertiesAttribute>()?.Names ?? Array.Empty<string>();
+        return t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => (p, a: p.GetCustomAttribute<UiPropertyAttribute>()))
+            .Where(x => x.a != null && !hidden.Contains(x.p.Name) && !EssentialProperties.IsHidden(typeName, x.p.Name))
+            .OrderBy(x => x.a!.Order)
+            .Select(x => new Item(x.p, x.a!, EssentialProperties.IsAdvanced(typeName, x.p.Name),
+                                  ProjectEditing.IsLocked(Project, m, x.p.Name), x.a!.ReadOnly || !x.p.CanWrite,
+                                  x.p.PropertyType == typeof(string) ? ProjectEditing.IdOptions(Project, x.p.Name) : null))
+            .ToList();
+    }
+
+    private async Task SetValue(Item item, object? raw)
+    {
+        var m = Model;
+        if (m == null || item.Locked || item.Calculated) return;
+        try
+        {
+            object? v = item.Prop.PropertyType == typeof(bool) ? raw is true || raw?.ToString() == "true"
+                      : Parse(raw?.ToString() ?? "", item.Prop.PropertyType);
+            item.Prop.SetValue(m, v);
+            _errors.Remove(item.Prop.Name);
+            ProjectEditing.AfterEdit(Project, m, item.Prop.Name);
+            _messages = ProjectEditing.Normalize(Project);
+            // nomi e Id possono cambiare: si ritrova il componente per riferimento
+            _sel = Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, m))?.Key ?? _sel;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            var inner = ex is TargetInvocationException { InnerException: { } i } ? i : ex;
+            _errors[item.Prop.Name] = inner.Message;
+        }
+    }
+
+    private async Task AddComponent(ChangeEventArgs e)
+    {
+        string key = e.Value?.ToString() ?? "";
+        if (key.Length == 0) return;
+        var added = ProjectEditing.Add(Project, key);
+        if (added == null) { _messages = new() { key == "strapper" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto." }; return; }
+        _messages = ProjectEditing.Normalize(Project);
+        _sel = Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, added))?.Key ?? "project";
+        await Changed.InvokeAsync();
+    }
+
+    private async Task DeleteSelected()
+    {
+        var m = Model;
+        if (m == null || !ProjectEditing.CanDelete(m)) return;
+        ProjectEditing.Delete(Project, new[] { m });
+        _messages = ProjectEditing.Normalize(Project);
+        _sel = "project";
+        await Changed.InvokeAsync();
+    }
+
+    private static string EnumLabel(Type t, string name) =>
+        (t.GetField(name)?.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).FirstOrDefault() as System.ComponentModel.DescriptionAttribute)?.Description ?? name;
+
+    private static string D(double d) => double.IsPositiveInfinity(d) ? "∞" : d.ToString("0.######", CultureInfo.InvariantCulture).Replace('.', ',');
+
+    private static string Format(object? v) => v switch
+    {
+        null => "",
+        double d => D(d),
+        IEnumerable<double> list => string.Join("; ", list.Select(D)),
+        IEnumerable<string> ls => string.Join("; ", ls),
+        bool b => b ? "sì" : "no",
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => v.ToString() ?? ""
+    };
+
+    private static double ParseDouble(string s)
+    {
+        s = s.Trim().Replace(',', '.');
+        if (s == "∞") return double.PositiveInfinity;
+        return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : throw new FormatException($"'{s}' non è un numero valido.");
+    }
+
+    private static object? Parse(string text, Type t)
+    {
+        if (t == typeof(string)) return text;
+        if (t == typeof(double)) return ParseDouble(text);
+        if (t == typeof(int))
+            return int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : throw new FormatException($"'{text}' non è un intero valido.");
+        if (t.IsEnum) return Enum.Parse(t, text, true);
+        if (t == typeof(List<double>))
+            return text.Split(new[] { ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).Select(ParseDouble).ToList();
+        if (t == typeof(List<string>))
+            return text.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+        throw new NotSupportedException($"Campo non modificabile qui: {t.Name}");
+    }
+}

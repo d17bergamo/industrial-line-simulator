@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   <!--
     Versione web del simulatore: gira nel browser (anche del telefono) senza installazione.
-    Usa lo stesso motore del programma Windows (Models, Core, Optimization, Engine) e, dell'infrastruttura, solo i file
-    che servono (controlli automatici e lettura dei progetti JSON): i PDF e l'Excel restano nel programma Windows.
+    Usa lo stesso motore e la stessa infrastruttura del programma Windows (Models, Core, Optimization, Engine,
+    Infrastructure): configurazione completa, PDF, logica di controllo, Excel e Word anche nel browser.
     Non fa parte delle soluzioni: la compila il workflow "Versione web".
   -->
   <PropertyGroup>
@@ -26,10 +26,7 @@
     <ProjectReference Include="..\LineSimulator.Core\LineSimulator.Core.csproj" />
     <ProjectReference Include="..\LineSimulator.Optimization\LineSimulator.Optimization.csproj" />
     <ProjectReference Include="..\LineSimulator.Engine\LineSimulator.Engine.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="..\LineSimulator.Infrastructure\ProjectAutoFix.cs" Link="Infrastructure\ProjectAutoFix.cs" />
-    <Compile Include="..\LineSimulator.Infrastructure\ProjectSerializer.cs" Link="Infrastructure\ProjectSerializer.cs" />
-    <Compile Include="..\LineSimulator.Infrastructure\ProjectUpgrade.cs" Link="Infrastructure\ProjectUpgrade.cs" />
+    <!-- 2026-11-18: tutta l'infrastruttura (PDF, logica di controllo, ottimizzatori, Excel e Word), come il programma Windows -->
+    <ProjectReference Include="..\LineSimulator.Infrastructure\LineSimulator.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

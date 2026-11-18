@@ -18,14 +18,24 @@ public static class FunctionalSpecExporter
     private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
     private static string N(double v, string f = "0.##") => v.ToString(f, It);
 
-    public static void Export(LineProject source, SimulationResults? results, string path)
+    public static void Export(LineProject source, SimulationResults? results, string path) => File.WriteAllBytes(path, Build(source, results));
+
+    /// <summary>Documento Word in memoria (usato anche dalla versione web).</summary>
+    public static byte[] Build(LineProject source, SimulationResults? results)
+    {
+        using var ms = new MemoryStream();
+        Write(source, results, ms);
+        return ms.ToArray();
+    }
+
+    private static void Write(LineProject source, SimulationResults? results, Stream stream)
     {
         var p = ProjectSerializer.Clone(source);
         ProjectNormalizer.EnsureProcessSensors(p);
         var topo = new LineTopology(p);
         var logic = ControlLogicGenerator.Generate(p);
 
-        using var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document);
+        using var doc = WordprocessingDocument.Create(stream, WordprocessingDocumentType.Document);
         var main = doc.AddMainDocumentPart();
         AddStyles(main);
         var body = new Body();

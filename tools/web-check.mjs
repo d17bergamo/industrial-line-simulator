@@ -85,6 +85,24 @@ try {
   await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
   say(`risultato layout personalizzato: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 400)}`);
   await page.screenshot({ path: `${out}/web-6-risultato.png`, fullPage: true });
+  // configurazione completa: tutte le proprietà di un componente
+  await page.click('#modifica .schede button:has-text("Tutte le proprietà")');
+  const comp = page.locator('#modifica select').first();
+  const opts = await comp.locator('option').allInnerTexts();
+  say(`componenti configurabili: ${opts.length} (${opts.slice(0, 6).join(' | ')} …)`);
+  await comp.selectOption({ index: Math.min(3, opts.length - 1) });
+  await page.waitForTimeout(300);
+  say(`proprietà mostrate: ${await page.locator('#modifica .prop').count()}`);
+  await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
+  // uscite: un PDF e il progetto vengono scaricati
+  await page.click('#uscite summary');
+  for (const label of ['Vista dall\'alto (PDF)', 'Salva il progetto (.json)', 'Gantt dei pacchi e gradini (PDF)', 'Risultati (Excel)']) {
+    const btn = page.locator(`#uscite button:has-text("${label}")`);
+    if (await btn.count() === 0) { say(`uscita non trovata: ${label}`); continue; }
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), btn.first().click()]);
+    say(`scaricato: ${dl.suggestedFilename()}`);
+  }
+  await page.screenshot({ path: `${out}/web-8-uscite.png`, fullPage: true });
   ok = true;
 } catch (e) {
   say(`[prova fallita] ${e.message}`);

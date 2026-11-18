@@ -376,10 +376,23 @@ public static class ControlLogicGenerator
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(jsonPath)) ?? ".";
         Directory.CreateDirectory(dir);
-        string stem = Path.Combine(dir, Path.GetFileNameWithoutExtension(jsonPath));
+        string stem = Path.GetFileNameWithoutExtension(jsonPath);
         var files = new List<string>();
-        void Write(string path, string text) { File.WriteAllText(path, text, new UTF8Encoding(true)); files.Add(path); }
-        Write(jsonPath, ToJson(d));
+        foreach (var (name, text) in Files(d, stem))
+        {
+            string path = Path.Combine(dir, name);
+            File.WriteAllText(path, text, new UTF8Encoding(true));
+            files.Add(path);
+        }
+        return files;
+    }
+
+    /// <summary>File della logica di controllo (nome, contenuto): il JSON e accanto i CSV. Usato anche dalla versione web.</summary>
+    public static List<(string Name, string Text)> Files(ControlLogicDocument d, string stem)
+    {
+        var files = new List<(string, string)>();
+        void Write(string name, string text) => files.Add((name, text));
+        Write(stem + ".json", ToJson(d));
         var sb = new StringBuilder("ID;Gruppo;Condizione;Azione;Destinazione;Descrizione\n");
         foreach (var r in d.Rules) sb.Append(string.Join(";", Csv(r.Id), Csv(r.Group), Csv(r.Condition), Csv(r.Action), Csv(r.Target), Csv(r.Description))).Append('\n');
         Write(stem + "_regole.csv", sb.ToString());

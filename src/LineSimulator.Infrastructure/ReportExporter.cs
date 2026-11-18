@@ -115,7 +115,10 @@ public static class ReportExporter
         return paths;
     }
 
-    public static void ExportExcel(SimulationResults r, SimulationEngine engine, string path)
+    public static void ExportExcel(SimulationResults r, SimulationEngine engine, string path) => File.WriteAllBytes(path, ExcelBytes(r, engine));
+
+    /// <summary>Cartella Excel dei risultati in memoria (usata anche dalla versione web).</summary>
+    public static byte[] ExcelBytes(SimulationResults r, SimulationEngine engine)
     {
         using var wb = new XLWorkbook();
 
@@ -235,6 +238,8 @@ public static class ReportExporter
             sheet.Row(1).Style.Font.Bold = true;
             sheet.Columns().AdjustToContents(1, 200);
         }
-        wb.SaveAs(path);
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
     }
 }

@@ -1,0 +1,270 @@
+@* Uscite e strumenti (2026-11-18): gli stessi documenti e strumenti del programma Windows, con gli stessi generatori. *@
+@using System.IO.Compression
+@using System.Text
+@using LineSimulator.Core
+@using LineSimulator.Engine
+@using LineSimulator.Infrastructure
+@using LineSimulator.Models
+@inject IJSRuntime JS
+
+<h3 class="categoria">Documenti del progetto</h3>
+<div class="comandi">
+    <button @onclick="TopView">Vista dall'alto (PDF)</button>
+    <button @onclick="PrintCyclogram">Ciclogramma da stampare (PDF)</button>
+    <select value="@_cycType" @onchange="@(e => _cycType = e.Value?.ToString() ?? string.Empty)" aria-label="Pacco del ciclogramma">
+        <option value="">tutti i pacchi</option>
+        @foreach (var t in Project.PackageTypes) { <option value="@t.Id">solo @t.Id</option> }
+    </select>
+    <button @onclick="ControlLogicZip">Logica di controllo (JSON + CSV)</button>
+    <button @onclick="FunctionalSpec">Specifica funzionale (Word)</button>
+</div>
+<div class="comandi">
+    <button @onclick="SaveProject">Salva il progetto (.json)</button>
+    <button @onclick="SaveLayout">Salva solo il layout (.json)</button>
+    <button @onclick="CopyProject">Copia il progetto negli appunti</button>
+</div>
+
+<h3 class="categoria">Dopo la simulazione</h3>
+@if (Engine == null || Results == null)
+{
+    <p class="nota">Esegui una simulazione per Gantt, Excel e CSV dei risultati.</p>
+}
+else
+{
+    <div class="comandi">
+        <button @onclick="GanttPdf">Gantt dei pacchi e gradini (PDF)</button>
+        <button @onclick="Excel">Risultati (Excel)</button>
+        <button @onclick="CsvZip">Risultati (CSV)</button>
+    </div>
+}
+
+<h3 class="categoria">Obiettivo di produttività</h3>
+<div class="griglia">
+    <label class="campo">Obiettivo (t/h)<input type="number" step="1" value="@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)"
+                                              @onchange="SetTarget" /></label>
+</div>
+<div class="comandi">
+    <button @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
+    <button @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
+</div>
+@if (_busy) { <p class="nota">@_progress</p> }
+@if (_report != null)
+{
+    <pre class="rapporto">@_report.Summary</pre>
+    <div class="comandi">
+        @if (_report.BestProject != null && _report.Path.Count > 0) { <button class="primario" @onclick="@(() => Apply(_report.BestProject!, _report.Path.Count + " modifiche dell'ottimizzatore"))">Applica il percorso proposto</button> }
+        @if (_report.ReleaseProject != null) { <button @onclick="@(() => Apply(_report.ReleaseProject!, _report.ReleaseLengthening?.Title ?? "svincolo allungato"))">@(_report.ReleaseLengthening?.Title ?? "Allunga lo svincolo")</button> }
+        @if (_report.SavingProject != null) { <button @onclick="@(() => Apply(_report.SavingProject!, _report.Saving?.Title ?? "risparmio"))">Unisci lo svincolo all'inverter di legatura</button> }
+        <button @onclick="() => _report = null">Chiudi</button>
+    </div>
+}
+@if (_zones != null)
+{
+    <pre class="rapporto">@_zones.Explanation</pre>
+    <div class="comandi">
+        @if (_zones.Best != null) { <button class="primario" @onclick="ApplyZones">Applica la suddivisione migliore</button> }
+        <button @onclick="() => _zones = null">Chiudi</button>
+    </div>
+}
+
+<h3 class="categoria">Controllo dell'equipaggiamento</h3>
+@{ var check = Check(); }
+<ul class="elenco">
+    @foreach (var c in check) { <li class="@(c.IsProblem ? "grave" : "")">@c.Message</li> }
+</ul>
+@if (check.Any(c => c.IsProblem))
+{
+    <button @onclick="FixEquipment">Correggi automaticamente</button>
+}
+
+@if (Engine != null)
+{
+    <h3 class="categoria">Registro eventi</h3>
+    <div class="griglia">
+        <label class="campo">Cerca<input type="text" value="@_filter" @onchange="@(e => _filter = e.Value?.ToString() ?? string.Empty)" placeholder="es. P003, FC2, Strisciamento" /></label>
+        <label class="campo">Mostra
+            <select value="@_level" @onchange="@(e => _level = e.Value?.ToString() ?? "info")">
+                <option value="info">informazioni e avvisi</option>
+                <option value="warning">solo avvisi e allarmi</option>
+                <option value="trace">tutto (anche i dettagli)</option>
+            </select>
+        </label>
+    </div>
+    var evs = Events().ToList();
+    <p class="nota">@evs.Count eventi@(evs.Count > 300 ? ", mostrati i primi 300" : "")</p>
+    <div class="registro">
+        @foreach (var x in evs.Take(300))
+        {
+            <div class="@(x.Severity >= EventSeverity.Warning ? "grave" : "")"><b>@x.TimeS.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',') s</b> @x.Message</div>
+        }
+    </div>
+}
+@if (_note != null) { <p class="nota">@_note</p> }
+
+@code {
+    [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
+    [Parameter] public SimulationEngine? Engine { get; set; }
+    [Parameter] public SimulationResults? Results { get; set; }
+    /// <summary>Il progetto cambia (correzioni) o va sostituito (proposte dell'ottimizzatore).</summary>
+    [Parameter] public EventCallback<LineProject> Replace { get; set; }
+
+    private string _cycType = "";
+    private bool _busy;
+    private string _progress = "";
+    private string? _note;
+    private AdvisorReport? _report;
+    private CommandZoneOptimizationReport? _zones;
+    private string _filter = "", _level = "info";
+
+    private string Stem => string.Concat((Project.Name ?? "progetto").Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_')).Trim('_') is { Length: > 0 } s ? s : "progetto";
+
+    private async Task Download(string name, byte[] data, string mime)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("salva.file", name, Convert.ToBase64String(data), mime);
+            _note = $"Scaricato: {name}";
+        }
+        catch (Exception ex) { _note = "Scaricamento non riuscito: " + ex.Message; }
+    }
+
+    private Task Text(string name, string text, string mime = "application/json") => Download(name, new UTF8Encoding(true).GetBytes(text), mime);
+
+    private async Task Run(string what, Func<Task> action)
+    {
+        try { await action(); }
+        catch (Exception ex) { _note = $"{what} non riuscito: {ex.Message}"; }
+    }
+
+    private Task TopView() => Run("PDF", () => Download(Stem + "_vista_dall_alto.pdf", LayoutTopViewPdf.Build(Project), "application/pdf"));
+
+    private Task PrintCyclogram() => Run("PDF", () => Download(Stem + (_cycType.Length > 0 ? "_" + _cycType : "") + "_ciclogramma.pdf",
+        CyclogramPrintPdf.Build(Project, null, _cycType.Length > 0 ? _cycType : null), "application/pdf"));
+
+    private Task ControlLogicZip() => Run("Esportazione", () =>
+    {
+        var logic = ControlLogicGenerator.Generate(Project);
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            foreach (var (name, text) in ControlLogicGenerator.Files(logic, Stem + "_logica"))
+            {
+                using var w = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(true));
+                w.Write(text);
+            }
+        return Download(Stem + "_logica.zip", ms.ToArray(), "application/zip");
+    });
+
+    private Task FunctionalSpec() => Run("Esportazione", () => Download(Stem + "_specifica_funzionale.docx", FunctionalSpecExporter.Build(Project, Results),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+
+    private Task SaveProject() => Run("Salvataggio", () => Text(Stem + ".json", ProjectSerializer.Serialize(Project)));
+
+    private Task SaveLayout() => Run("Salvataggio", () => Text(Stem + "_layout.json", ProjectSerializer.Serialize(SplitFiles.ExtractLayout(Project))));
+
+    private async Task CopyProject()
+    {
+        bool ok = false;
+        try { ok = await JS.InvokeAsync<bool>("salva.copia", ProjectSerializer.Serialize(Project)); } catch (Exception) { }
+        _note = ok ? "Progetto copiato negli appunti." : "Copia non disponibile in questo browser: usa \"Salva il progetto\".";
+    }
+
+    private Task GanttPdf() => Run("PDF", () =>
+    {
+        var steps = StepCyclogram.Build(Engine!.Recorder);
+        var gantt = PackageGantt.Build(Engine.Recorder);
+        return Download(Stem + "_ciclogramma-gantt.pdf", PackageGanttPdf.Build(gantt, steps, Project.Name.Length > 0 ? Project.Name : "Linea di legatura"), "application/pdf");
+    });
+
+    private Task Excel() => Run("Esportazione", () => Download(Stem + "_risultati.xlsx", ReportExporter.ExcelBytes(Results!, Engine!),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+
+    private Task CsvZip() => Run("Esportazione", () =>
+    {
+        var files = new (string, string)[]
+        {
+            ("riepilogo.csv", ReportExporter.SummaryCsv(Results!)), ("pacchi.csv", ReportExporter.PackagesCsv(Results!)),
+            ("risorse.csv", ReportExporter.ResourcesCsv(Results!)), ("eventi.csv", ReportExporter.EventsCsv(Engine!.Events)),
+            ("ciclogramma.csv", ReportExporter.CyclogramCsv(Engine.Recorder))
+        };
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            foreach (var (name, text) in files)
+            {
+                using var w = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(true));
+                w.Write(text);
+            }
+        return Download(Stem + "_risultati_csv.zip", ms.ToArray(), "application/zip");
+    });
+
+    private void SetTarget(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString()?.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+            Project.Simulation.TargetTonnesPerHour = Math.Max(0, v);
+    }
+
+    private async Task ReachTarget()
+    {
+        _busy = true; _report = null; _zones = null;
+        _progress = "Analisi in corso: il simulatore prova le modifiche una alla volta (può richiedere qualche minuto)…";
+        StateHasChanged();
+        await Task.Delay(50);
+        try { _report = ProductivityAdvisor.Analyze(ProjectSerializer.Clone(Project), Project.Simulation.TargetTonnesPerHour); }
+        catch (Exception ex) { _note = "Analisi non riuscita: " + ex.Message; }
+        _busy = false;
+    }
+
+    private async Task OptimizeZones()
+    {
+        _busy = true; _report = null; _zones = null;
+        _progress = "Ottimizzazione delle zone di comando in corso…";
+        StateHasChanged();
+        await Task.Delay(50);
+        try { _zones = CommandZoneOptimizer.Optimize(ProjectSerializer.Clone(Project)); }
+        catch (Exception ex) { _note = "Ottimizzazione non riuscita: " + ex.Message; }
+        _busy = false;
+    }
+
+    private async Task Apply(LineProject p, string what)
+    {
+        p.Simulation.TargetTonnesPerHour = Project.Simulation.TargetTonnesPerHour;
+        _report = null;
+        _note = "Applicato: " + what;
+        await Replace.InvokeAsync(p);
+    }
+
+    private async Task ApplyZones()
+    {
+        if (_zones?.Best == null) return;
+        var p = ProjectSerializer.Clone(Project);
+        CommandZoneOptimizer.Apply(p, _zones.Best);
+        string label = _zones.Best.Label;
+        _zones = null;
+        _note = "Applicata la suddivisione: " + label;
+        await Replace.InvokeAsync(p);
+    }
+
+    private List<EquipmentCheckItem> Check()
+    {
+        try { return EquipmentCheck.Run(ProjectSerializer.Clone(Project), fix: false); }
+        catch (Exception ex) { return new() { new("ERR", "Controllo non riuscito: " + ex.Message, false, true) }; }
+    }
+
+    private async Task FixEquipment()
+    {
+        var p = ProjectSerializer.Clone(Project);
+        var done = EquipmentCheck.Run(p, fix: true).Where(c => c.Fixed).Select(c => c.Message).ToList();
+        _note = done.Count > 0 ? "Corretto: " + string.Join("; ", done) : "Nessuna correzione automatica possibile.";
+        await Replace.InvokeAsync(p);
+    }
+
+    private IEnumerable<SimEvent> Events()
+    {
+        var min = _level switch { "warning" => EventSeverity.Warning, "trace" => EventSeverity.Trace, _ => EventSeverity.Info };
+        foreach (var x in Engine!.Events)
+        {
+            if (x.Severity < min) continue;
+            if (_filter.Length > 0 && !x.Message.Contains(_filter, StringComparison.OrdinalIgnoreCase)) continue;
+            yield return x;
+        }
+    }
+}

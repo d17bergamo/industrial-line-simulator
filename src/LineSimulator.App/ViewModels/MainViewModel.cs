@@ -619,20 +619,10 @@ public sealed partial class MainViewModel : ObservableObject
     private void ProjectChanged(bool structural, bool markModified = true)
     {
         if (markModified) _modified = true;
-        ProjectNormalizer.AlignEntryPhotocell(_project);
-        ProjectNormalizer.ClampPhotocellsToRollers(_project);       // le fotocellule non escono mai dalle vie a rulli
-        ProjectDescription.Refresh(_project);                    // nome e descrizione seguono legatrici e pacchi
+        // riordino comune al programma Windows e alla versione web (ProjectEditing.Normalize)
+        var normalizeMsgs = ProjectEditing.Normalize(_project);
         Raise(nameof(ProjectTitle)); Raise(nameof(ProjectSubtitle));
-        GroupInheritance.PropagateAll(_project);                // le famiglie passano le proprietà ai figli non personalizzati
-        RollerGroups.Propagate(_project, applyPitch: false);
-        ProjectNormalizer.AlignStopperToLastRoller(_project);   // il fermo sta sempre alla fine dell'ultimo modulo
-        double extraTrack = StrapperTrack.EnsureMinimumTrack(_project);
-        if (extraTrack > 0) Status = $"Via a rulli allungata di {extraTrack:0} mm: dopo l'ultima legatrice servono almeno due rulli di via.";
-        // Regole di layout (sessione B): via a rulli davanti al trasferitore lunga come il trasferitore; legatrici ad almeno 3 m dal trasferitore
-        var layoutFixes = LayoutRules.Enforce(_project);
-        if (layoutFixes.Count > 0) Status = string.Join("; ", layoutFixes);
-        // Intestatura di coda solo con un fermo scomparente (sessione B)
-        if (BankingOptions.Normalize(_project)) Status = "Intestatura di coda non disponibile senza fermo scomparente: impostata di testa";
+        if (normalizeMsgs.Count > 0) Status = string.Join("; ", normalizeMsgs);
         RefreshPackageRows();
         Raise(nameof(HeadingModes)); Raise(nameof(TailHeadingAvailable)); Raise(nameof(SimHeading)); Raise(nameof(SimTargetTph));
         RaiseSimBanking();
@@ -858,99 +848,18 @@ public sealed partial class MainViewModel : ObservableObject
     private void ApplyPropertyLocks()
     {
         var model = SelectedNode?.Model;
-        foreach (var item in Properties)
-        {
-            bool lockIt = model switch
-            {
-                RollerSection s => (!s.OverrideGroup && RollerGroups.InheritedProperties.Contains(item.Name))
-                                   || (IsLocked(s) && item.Name == nameof(RollerSection.StartMm)),
-                PhotocellConfig pc => (pc.IsEntryPhotocell && item.Name == nameof(PhotocellConfig.PositionMm))
-                                      || item.Name == nameof(PhotocellConfig.Purpose)            // l'utilità la decide il modello
-                                      || (!pc.OverrideGroup && GroupInheritance.InheritedNames(_project.PhotocellDefaults).Contains(item.Name)),
-                StrapperConfig st => !st.OverrideGroup && GroupInheritance.InheritedNames(_project.StrapperDefaults).Contains(item.Name),
-                WeighingScaleConfig sc => !sc.OverrideGroup && GroupInheritance.InheritedNames(_project.ScaleDefaults).Contains(item.Name),
-                _ => false
-            };
-            item.Locked = lockIt;
-        }
+        if (model == null) return;
+        foreach (var item in Properties) item.Locked = ProjectEditing.IsLocked(_project, model, item.Name);
     }
 
-    private IReadOnlyList<string>? IdOptions(string propertyName) => propertyName switch
-    {
-        "InverterId" or "ControlledInverterId" or "TargetInverterId" => _project.Sections.OrderBy(i => i.StartMm).Select(i => i.Id).ToList(),
-        "PackageTypeId" => _project.PackageTypes.Select(i => i.Id).ToList(),
-        _ => null
-    };
+    private IReadOnlyList<string>? IdOptions(string propertyName) => ProjectEditing.IdOptions(_project, propertyName);
 
     private void OnPropertyEdited(PropertyItemViewModel item)
     {
-        if (item.Name is not ("Id" or "Name") && SelectedNode?.Model is { } primary)
-        {
-            var others = SelectedModels().Where(o => !ReferenceEquals(o, primary) && o.GetType() == primary.GetType()).ToList();
-            var pi = primary.GetType().GetProperty(item.Name);
-            if (others.Count > 0 && pi != null) MultiEdit.Apply(others, pi, pi.GetValue(primary));
-        }
-        // vie a rulli: si impostano solo lunghezza (multipla di 50 mm) e numero rulli; il passo ne segue. Le vie restano sempre unite.
-        foreach (var rs in SelectedModels().OfType<RollerSection>().Where(_ => item.Name is "RollerCount" or "RollerPitchMm" or "LengthMm"))
-        {
-            // fine precedente: inizio della via a valle (le vie sono unite) o, per l'ultima, il fermo finale (= fine dell'ultimo modulo)
-            var nextSec = _project.Sections.Where(x => !ReferenceEquals(x, rs) && x.StartMm >= rs.StartMm + 1).OrderBy(x => x.StartMm).FirstOrDefault();
-            double oldEnd = nextSec?.StartMm ?? _project.Stopper.PositionMm;
-            rs.RollerCount = Math.Max(2, rs.RollerCount);
-            if (item.Name == "LengthMm")
-            {
-                rs.LengthMm = Math.Max(2 * LineReflow.PitchStepMm, Math.Round(rs.LengthMm / LineReflow.PitchStepMm) * LineReflow.PitchStepMm);
-                rs.RollerPitchMm = rs.LengthMm / rs.RollerCount;
-            }
-            else if (item.Name == "RollerCount") rs.RollerPitchMm = rs.LengthMm / rs.RollerCount;
-            rs.RecalculateLength();
-            LineReflow.AfterResize(_project, rs, oldEnd);                // le vie a valle si spostano: restano unite e non si sovrappongono
-            if (nextSec == null && item.Name == "LengthMm" && Math.Abs(_project.Transfer.LengthMm - rs.LengthMm) >= 1)
-            {
-                // ultimo modulo = via davanti al trasferitore: il trasferitore ne segue la lunghezza
-                _project.Transfer.Sections.Clear();
-                _project.Transfer.LengthMm = rs.LengthMm;
-                _project.Transfer.PositionMm = rs.StartMm;
-            }
-        }
-        // arrotondamenti: passo rulli a 50 mm, lunghezza delle macchine a 100 mm
-        if (item.Name == nameof(RollerSection.RollerPitchMm))
-            foreach (var m in SelectedModels().Where(x => x is RollerSection or RollerGroup))
-            {
-                if (m is RollerSection r1) r1.RollerPitchMm = LineReflow.RoundPitch(r1.RollerPitchMm);
-                else if (m is RollerGroup g1) g1.RollerPitchMm = LineReflow.RoundPitch(g1.RollerPitchMm);
-            }
-        if (item.Name is "LengthMm" or "FootprintLengthMm" && SelectedNode?.Model is TransferConfig or WeighingScaleConfig or StrapperConfig or StrapperGroup)
-            foreach (var m in SelectedModels())
-            {
-                var lp = m.GetType().GetProperty(item.Name);
-                if (lp?.GetValue(m) is double len && lp.CanWrite) lp.SetValue(m, Math.Max(100, Math.Round(len / 100) * 100));
-            }
-        // padre → figli: cambiando le proprietà del padre cambiano quelle di tutti i moduli non personalizzati
-        bool groupChanged = false;
-        if (SelectedNode?.Model is RollerGroup)
-            groupChanged = RollerGroups.Propagate(_project, applyPitch: item.Name == nameof(RollerGroup.RollerPitchMm));
-        if (SelectedNode?.Model is RollerGroup && item.Name == nameof(RollerGroup.RollerDiameterMm))
-        {
-            RollerGroups.SetDiameterForAll(_project);
-            groupChanged = true;
-        }
-        if (SelectedNode?.Model is RollerGroup && item.Name == nameof(RollerGroup.RollerTopElevationMm))
-            RollerGroups.SyncElevation(_project, fromGroup: true);
-        if (SelectedNode?.Model is PhotocellGroup or StrapperGroup or ScaleGroup)
-            groupChanged |= GroupInheritance.PropagateAll(_project);
-        else if (SelectedNode?.Model is IGroupChild && item.Name == "OverrideGroup")
-        {
-            groupChanged |= GroupInheritance.PropagateAll(_project);
-            ApplyPropertyLocks();
-        }
-        if (SelectedNode?.Model is RollerSection && item.Name == nameof(RollerSection.OverrideGroup))
-        {
-            groupChanged = RollerGroups.Propagate(_project, applyPitch: true);   // togliendo la spunta il modulo torna al padre
-            ApplyPropertyLocks();
-        }
-        bool structural = item.Name is "Id" or "StartMm" or "PositionMm" or "DistanceFromLastRollerMm" or "InverterId" or "IsEnabled" or "RollerCount" or "RollerPitchMm" or "EndOverhangMm" or "LengthMm";
-        ProjectChanged(structural || groupChanged);
+        // regole comuni al programma Windows e alla versione web (ProjectEditing.AfterEdit)
+        bool structural = SelectedNode?.Model is { } primary && ProjectEditing.AfterEdit(_project, primary, item.Name, SelectedModels());
+        if (item.Name == "OverrideGroup" && SelectedNode?.Model is IGroupChild or RollerSection) ApplyPropertyLocks();
+        ProjectChanged(structural);
         foreach (var other in Properties) if (other != item) other.Refresh();
     }
 
@@ -1241,12 +1150,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Prima fotocellula (ingresso) e inizio della via rulli di legatura sono fissi.</summary>
-    public bool IsLocked(object? m) => m switch
-    {
-        PhotocellConfig pc => pc.IsEntryPhotocell,
-        RollerSection s => _project.Sections.Count > 0 && ReferenceEquals(s, _project.Sections.OrderBy(x => x.StartMm).First()) && s.StartMm <= 0.5,
-        _ => false
-    };
+    public bool IsLocked(object? m) => ProjectEditing.IsFixed(_project, m);
 
     public static bool CanMove(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or BundleClampConfig or SideCompactorConfig
         or RejectorConfig or IntermediateStopConfig or TransferConfig or WeighingScaleConfig;

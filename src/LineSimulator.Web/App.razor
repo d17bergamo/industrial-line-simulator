@@ -44,6 +44,7 @@
             <button class="@(_tab == 0 ? "attivo" : "")" @onclick="() => _tab = 0">Pacchi</button>
             <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie</button>
             <button class="@(_tab == 2 ? "attivo" : "")" @onclick="() => _tab = 2">Componenti</button>
+            <button class="@(_tab == 3 ? "attivo" : "")" @onclick="() => _tab = 3">Tutte le proprietà</button>
         </div>
         @if (_tab == 0)
         {
@@ -98,6 +99,10 @@
                 </div>
             }
             <p class="nota">Le lunghezze vanno a rulli interi; la linea a valle si sposta di conseguenza.</p>
+        }
+        else if (_tab == 3)
+        {
+            <Configurazione Project="Work" Changed="OnConfigChanged" />
         }
         else
         {
@@ -168,6 +173,13 @@
             <p class="nota">@_jsonNote</p>
             <textarea class="json" readonly rows="6" @onfocus="SelectJson" id="json-progetto">@_json</textarea>
         }
+    </section>
+
+    <section class="carta" id="uscite">
+        <details>
+            <summary>Uscite e strumenti: PDF, logica di controllo, Excel, Word, obiettivo, controllo, registro eventi</summary>
+            <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
+        </details>
     </section>
 
     <section class="carta">
@@ -467,6 +479,21 @@
     {
         change();
         _edited = true;
+        Check();
+    }
+
+    private void OnConfigChanged()
+    {
+        _edited = true;
+        Check();
+    }
+
+    /// <summary>Progetto sostituito dagli strumenti (proposte dell'ottimizzatore, correzioni del controllo).</summary>
+    private void ReplaceWork(LineProject p)
+    {
+        _work = p;
+        _edited = true;
+        _type = "*";
         Check();
     }
 
