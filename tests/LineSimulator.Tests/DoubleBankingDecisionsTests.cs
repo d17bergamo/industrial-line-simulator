@@ -46,7 +46,21 @@ public class DoubleBankingDecisionsTests
     {
         Assert.True(e.CompletedNormally, e.FinishReason + "\n" + Dump(e));
         Assert.True(e.Collisions == 0, Dump(e));
-        Assert.True(e.SlipEvents == 0, Dump(e));
+        Assert.True(e.SlipEvents == 0, Dump(e) + "\n" + AroundFirstSlip(e));
+    }
+
+    /// <summary>Eventi e velocità delle zone attorno al primo strisciamento (per capirne la causa dalla CI).</summary>
+    private static string AroundFirstSlip(SimulationEngine e)
+    {
+        var slip = e.Events.FirstOrDefault(x => x.Type == SimEventType.Slip);
+        if (slip == null) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("zone: " + string.Join(" ", e.Zones.Select((z, i) => $"{i}={z.Id}[{z.Info.StartM:0.000}-{z.Info.EndM:0.000}]")) + $" split={e.TransferSplitM} primoRullo={e.FirstReleaseRollerEndM}");
+        foreach (var x in e.Events.Where(x => x.TimeS >= slip.TimeS - 4 && x.TimeS <= slip.TimeS + 0.1).TakeLast(40)) sb.AppendLine("  " + x);
+        foreach (var f in e.Recorder.Frames.Where(f => f.TimeS >= slip.TimeS - 2.5 && f.TimeS <= slip.TimeS + 0.1))
+            sb.AppendLine($"  t={f.TimeS:0.00} v=[{string.Join(" ", f.ZoneSpeeds.Select(v => v.ToString("0.00")))}] valle={f.ValleSpeed:0.00} stati=[{string.Join(" ", f.ZoneStates)}] " +
+                          string.Join(" ", f.Packages.Select(k => $"{k.Id}:{k.HeadM:0.000}/{k.LengthM:0}@{k.Velocity:0.00}")));
+        return sb.ToString();
     }
 
     private static int Pairs(SimulationEngine e) =>
