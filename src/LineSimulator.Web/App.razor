@@ -10,22 +10,167 @@
 
     <section class="carta">
         <h2>Linea</h2>
-        <label class="campo">Esempio
+        <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
                 @for (int i = 0; i < SampleProjects.All.Count; i++)
                 {
                     <option value="@i">@SampleProjects.All[i].Name</option>
                 }
+                <option value="-2">Layout personalizzato (da zero)</option>
                 @if (_uploaded != null)
                 {
                     <option value="-1">File: @_uploadedName</option>
                 }
             </select>
         </label>
+        @if (_model == -2)
+        {
+            <div class="griglia">
+                <label class="campo">Legatrici<input type="number" min="1" max="6" @bind="_cStrappers" /></label>
+                <label class="campo">Pacco più lungo (m)<input type="number" min="3" max="30" @bind="_cMaxM" /></label>
+                <label class="campo">Misure dei pacchi (m)<input type="text" @bind="_cLengths" placeholder="6, 9, 12" /></label>
+            </div>
+            <label class="spunta"><input type="checkbox" @bind="_cStop" /> Con fermo scomparente</label>
+            <button @onclick="CreateCustom" disabled="@_busy">Crea il layout</button>
+        }
+        <label class="campo">Oppure apri un progetto salvato (.json)
+            <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
+        </label>
+        <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
+    </section>
+
+    <section class="carta" id="modifica">
+        <div class="schede">
+            <button class="@(_tab == 0 ? "attivo" : "")" @onclick="() => _tab = 0">Pacchi</button>
+            <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie</button>
+            <button class="@(_tab == 2 ? "attivo" : "")" @onclick="() => _tab = 2">Componenti</button>
+        </div>
+        @if (_tab == 0)
+        {
+            @foreach (var t in Work.PackageTypes.ToList())
+            {
+                string? why = BankingOptions.DoubleBankingBlockReason(Work, t);
+                <div class="riga-mod">
+                    <div class="riga-titolo"><b>@t.Id</b><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina</button></div>
+                    <div class="griglia">
+                        <label class="campo">Lunghezza (mm)<input type="number" step="100" value="@F(t.LengthMm)" @onchange="e => SetLength(t, e)" /></label>
+                        <label class="campo">Peso (kg)<input type="number" step="10" value="@F(t.WeightKg)" @onchange="e => Edit(() => t.WeightKg = Num(e, t.WeightKg, 1, 100000))" /></label>
+                        <label class="campo">Legature<input type="number" min="1" max="20" value="@t.StrapCount" @onchange="e => SetStraps(t, e)" /></label>
+                        <label class="campo">Tipo
+                            <select value="@t.BindingType" @onchange="e => SetBinding(t, e)">
+                                <option value="@BindingType.Wire">Filo</option>
+                                <option value="@BindingType.SteelStrap">Reggetta</option>
+                            </select>
+                        </label>
+                        <label class="campo">Banking
+                            <select value="@BankingOptions.ChosenBanking(Work, t)" @onchange="e => Edit(() => t.Banking = Enum.Parse<AccumulationMode>(e.Value!.ToString()!))">
+                                <option value="@AccumulationMode.SingleBanking">Single</option>
+                                <option value="@AccumulationMode.DoubleBanking">Double</option>
+                            </select>
+                        </label>
+                        <label class="campo">Intestatura
+                            <select value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
+                                <option value="@StopReference.Head">Di testa</option>
+                                <option value="@StopReference.Tail">Di coda</option>
+                            </select>
+                        </label>
+                    </div>
+                    <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.Select(x => F(x)))@(BankingOptions.ChosenBanking(Work, t) == AccumulationMode.DoubleBanking && why != null ? " — double banking non possibile: " + why : "")</p>
+                </div>
+            }
+            <div class="comandi">
+                <button @onclick="AddType">Aggiungi pacco</button>
+                <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button>
+                <button @onclick="() => AllBanking(AccumulationMode.SingleBanking)">Tutti single</button>
+            </div>
+        }
+        else if (_tab == 1)
+        {
+            @foreach (var m in Work.Sections.OrderBy(x => x.StartMm).ToList())
+            {
+                <div class="riga-mod">
+                    <div class="riga-titolo"><b>@m.Id</b> <span class="nota">@m.Name · @F(m.StartMm)–@F(m.EndMm) mm · @Rollers(m) rulli da @F(m.RollerPitchMm) mm</span></div>
+                    <div class="griglia">
+                        <label class="campo">Lunghezza (mm)<input type="number" step="@F(m.RollerPitchMm)" value="@F(m.LengthMm)" @onchange="e => SetSectionLength(m, e)" /></label>
+                        <label class="campo">Velocità alta (m/s)<input type="number" step="0.05" value="@F(m.HighSpeed)" @onchange="e => Edit(() => m.HighSpeed = Num(e, m.HighSpeed, 0.05, 3))" /></label>
+                    </div>
+                    <p class="nota">Azionamento: @StrappingAreaRules.DescribeDrive(Work, m)</p>
+                </div>
+            }
+            <p class="nota">Le lunghezze vanno a rulli interi; la linea a valle si sposta di conseguenza.</p>
+        }
+        else
+        {
+            <h2>Legatrici</h2>
+            @foreach (var st in Work.Strappers.ToList())
+            {
+                <div class="griglia riga-mod">
+                    <label class="campo">@st.Id (mm)<input type="number" step="50" value="@F(st.PositionMm)" @onchange="e => Edit(() => st.PositionMm = Num(e, st.PositionMm, 0, 200000))" /></label>
+                    <label class="spunta"><input type="checkbox" checked="@st.IsEnabled" @onchange="e => Edit(() => st.IsEnabled = e.Value is true)" /> Abilitata</label>
+                    <button class="piccolo" @onclick="() => Edit(() => Work.Strappers.Remove(st))">Elimina</button>
+                </div>
+            }
+            <button @onclick="AddStrapper">Aggiungi legatrice</button>
+            <h2 class="sopra">Fotocellule</h2>
+            @foreach (var pc in Work.Photocells.OrderBy(x => x.PositionMm).ToList())
+            {
+                <div class="griglia riga-mod">
+                    <label class="campo">@pc.Id · @pc.Name (mm)<input type="number" step="50" value="@F(pc.PositionMm)" @onchange="e => Edit(() => pc.PositionMm = Num(e, pc.PositionMm, 0, 200000))" /></label>
+                    <label class="spunta"><input type="checkbox" checked="@pc.IsEnabled" @onchange="e => Edit(() => pc.IsEnabled = e.Value is true)" /> Abilitata</label>
+                </div>
+            }
+            <h2 class="sopra">Fermo scomparente</h2>
+            <label class="campo">Posizione
+                <select value="@StopChoice" @onchange="SetStopChoice">
+                    <option value="none">Nessuno</option>
+                    <option value="center">Al centro del trasferitore</option>
+                    <option value="end">All'estremità a monte (intestatura di coda)</option>
+                    <option value="manual">A mano</option>
+                </select>
+            </label>
+            @foreach (var fm in Work.IntermediateStops.ToList())
+            {
+                <label class="campo">@fm.Id (mm)<input type="number" step="50" value="@F(fm.PositionMm)" @onchange="e => Edit(() => { fm.PositionMm = Num(e, fm.PositionMm, 0, 200000); fm.ManualPosition = true; })" /></label>
+            }
+            <h2 class="sopra">Trasferitore e bilici</h2>
+            <div class="griglia">
+                <label class="campo">Trasferitore (mm)<input type="number" step="1250" value="@F(Work.Transfer.LengthMm)" @onchange="SetTransferLength" /></label>
+                <label class="campo">Bilici
+                    <select value="@Work.Scales.Count" @onchange="SetScales">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                    </select>
+                </label>
+                <label class="campo">Pesatura (s)<input type="number" step="1" value="@F(Work.Scales.FirstOrDefault()?.StabilizationTimeS ?? 0)" @onchange="SetWeighing" /></label>
+            </div>
+        }
+        @if (_check.Count > 0 || _checkErrors.Count > 0)
+        {
+            <details open class="controlli">
+                <summary>Controlli: @(_checkErrors.Count > 0 ? $"{_checkErrors.Count} errori, " : "")@_check.Count correzioni da applicare</summary>
+                <ul class="elenco">
+                    @foreach (var m in _checkErrors) { <li class="grave">@m</li> }
+                    @foreach (var m in _check) { <li>@m</li> }
+                </ul>
+                <button @onclick="ApplyFix">Applica le correzioni al layout</button>
+            </details>
+        }
+        else
+        {
+            <p class="esito ok">Controlli: nessuna correzione da fare.</p>
+        }
+        <div class="comandi">
+            <button id="scarica" @onclick="Download">Scarica il progetto (.json)</button>
+            <button @onclick="ResetWork" disabled="@(!_edited)">Annulla le modifiche</button>
+        </div>
+    </section>
+
+    <section class="carta">
+        <h2>Simulazione</h2>
         <label class="campo">Misura dei pacchi
             <select id="misura" @bind="_type" disabled="@_busy">
                 <option value="*">Tutte le misure, a rotazione</option>
-                @foreach (var t in Types)
+                @foreach (var t in Work.PackageTypes)
                 {
                     <option value="@t.Id">@N(t.LengthMm / 1000, "0.#") m (@t.Id)</option>
                 }
@@ -39,11 +184,8 @@
                 <option value="40">40</option>
             </select>
         </label>
-        <label class="spunta"><input type="checkbox" @bind="_double" disabled="@_busy" /> Double banking (dove i pacchi ci stanno)</label>
-        <label class="spunta"><input type="checkbox" @bind="_stop" disabled="@_busy" /> Fermo scomparente al centro</label>
-        <label class="campo">Oppure apri un progetto salvato (.json)
-            <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
-        </label>
+        <label class="spunta"><input type="checkbox" @bind="_double" disabled="@_busy" /> Double banking per tutti i pacchi (dove ci stanno)</label>
+        <label class="spunta"><input type="checkbox" @bind="_stop" disabled="@_busy" /> Aggiungi un fermo scomparente al centro (se manca)</label>
         <button id="simula" class="primario" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
         @if (_busy)
         {
@@ -255,28 +397,210 @@
 
     private int _model;
     private string _type = "*";
-    private List<PackageType>? _types;
+    private LineProject? _work;
+    private bool _edited;
+    private int _tab;
+    private List<string> _check = new(), _checkErrors = new();
+    private int _cStrappers = 2, _cMaxM = 12;
+    private string _cLengths = "6, 9, 12";
+    private bool _cStop;
 
     private int Model
     {
         get => _model;
-        set { _model = value; _types = null; _type = "*"; }
+        set { _model = value; _type = "*"; if (value != -2) LoadWork(); }
     }
 
-    /// <summary>Tipologie di pacco della linea scelta (per la scelta della misura).</summary>
-    private List<PackageType> Types
+    /// <summary>Progetto in modifica: parte dall'esempio, dal file o dal layout personalizzato e si cambia pezzo per pezzo.</summary>
+    private LineProject Work
     {
-        get
-        {
-            if (_types != null) return _types;
-            try { _types = Source().PackageTypes.ToList(); }
-            catch { _types = new List<PackageType>(); }
-            return _types;
-        }
+        get { if (_work == null) LoadWork(); return _work!; }
+    }
+
+    private void LoadWork()
+    {
+        try { _work = Source(); }
+        catch (Exception ex) { _errors.Add("Progetto non leggibile: " + ex.Message); _work = SampleProjects.All[0].Factory(); }
+        _edited = false;
+        Check();
+    }
+
+    private void ResetWork()
+    {
+        if (_model == -2) CreateCustom(); else LoadWork();
     }
 
     private LineProject Source() =>
-        _model < 0 && _uploaded != null ? ProjectSerializer.Deserialize(_uploaded) : SampleProjects.All[Math.Clamp(_model, 0, SampleProjects.All.Count - 1)].Factory();
+        _model == -1 && _uploaded != null ? ProjectSerializer.Deserialize(_uploaded) : SampleProjects.All[Math.Clamp(_model, 0, SampleProjects.All.Count - 1)].Factory();
+
+    private void CreateCustom()
+    {
+        var lengths = _cLengths.Split(new[] { ',', ';', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => int.TryParse(x, out int v) ? v : 0).Where(v => v >= 2 && v <= 30).ToList();
+        _work = SampleProjects.CreateCustom(_cStrappers, _cMaxM, lengths, _cStop);
+        ProjectAutoFix.Run(_work);
+        _edited = false;
+        _type = "*";
+        Check();
+    }
+
+    /// <summary>Dopo ogni modifica: controlli automatici in anteprima (le correzioni si applicano con il pulsante o alla simulazione).</summary>
+    private void Check()
+    {
+        _check = new(); _checkErrors = new();
+        if (_work == null) return;
+        try
+        {
+            var r = ProjectAutoFix.Preview(_work);
+            _check = r.Messages.Distinct().ToList();
+            _checkErrors = r.Errors.Distinct().ToList();
+        }
+        catch (Exception ex) { _checkErrors.Add("Controllo non riuscito: " + ex.Message); }
+    }
+
+    private void Edit(Action change)
+    {
+        change();
+        _edited = true;
+        Check();
+    }
+
+    private void ApplyFix()
+    {
+        ProjectAutoFix.Run(Work);
+        _edited = true;
+        Check();
+    }
+
+    private static double Num(ChangeEventArgs e, double old, double min, double max) =>
+        double.TryParse(e.Value?.ToString()?.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out double v) ? Math.Clamp(v, min, max) : old;
+
+    private void SetLength(PackageType t, ChangeEventArgs e) => Edit(() =>
+    {
+        t.LengthMm = Math.Round(Num(e, t.LengthMm, 1000, 40000) / 100) * 100;
+        t.StrapPositionsMm = PackageNaming.DefaultStraps(t.LengthMm, Math.Max(1, t.StrapCount));
+        t.Name = $"Pacco {t.LengthMm / 1000:0.#} m";
+        PackageNaming.Refresh(Work, t);
+        _type = "*";
+    });
+
+    private void SetStraps(PackageType t, ChangeEventArgs e) => Edit(() =>
+        t.StrapPositionsMm = PackageNaming.DefaultStraps(t.LengthMm, (int)Num(e, t.StrapCount, 1, 20)));
+
+    private void SetBinding(PackageType t, ChangeEventArgs e) => Edit(() =>
+    {
+        t.BindingType = Enum.Parse<BindingType>(e.Value!.ToString()!);
+        PackageNaming.Refresh(Work, t);
+        _type = "*";
+    });
+
+    private void AddType() => Edit(() =>
+    {
+        var last = Work.PackageTypes.OrderBy(x => x.LengthMm).LastOrDefault();
+        int m = last == null ? 6 : (int)Math.Min(30, Math.Round(last.LengthMm / 1000) + 3);
+        var t = SampleProjects.Package(m);
+        t.Id = PackageNaming.UniqueId(Work, t);
+        Work.PackageTypes.Add(t);
+        Work.Infeed.TypeSequence = Work.PackageTypes.Select(x => x.Id).ToList();
+    });
+
+    private void RemoveType(PackageType t) => Edit(() =>
+    {
+        Work.PackageTypes.Remove(t);
+        Work.Infeed.TypeSequence = Work.Infeed.TypeSequence.Where(x => x != t.Id).ToList();
+        _type = "*";
+    });
+
+    private void AllBanking(AccumulationMode b) => Edit(() => BankingOptions.SetBankingAll(Work, b));
+
+    private static int Rollers(RollerSection m) => m.RollerPitchMm > 0 ? (int)Math.Round(m.LengthMm / m.RollerPitchMm) : 0;
+
+    private void SetSectionLength(RollerSection m, ChangeEventArgs e) => Edit(() =>
+    {
+        double pitch = m.RollerPitchMm > 0 ? m.RollerPitchMm : RollerSection.DefaultPitchMm;
+        double len = Math.Max(2 * pitch, Math.Round(Num(e, m.LengthMm, pitch, 200000) / pitch) * pitch);
+        double oldEnd = m.EndMm;
+        LineReflow.Fit(m, m.StartMm, m.StartMm + len);
+        LineReflow.AfterResize(Work, m, oldEnd);
+        if (ReferenceEquals(m, LayoutRules.TransferModule(Work))) Work.Transfer.LengthMm = m.LengthMm;
+    });
+
+    private void SetTransferLength(ChangeEventArgs e)
+    {
+        var m = LayoutRules.TransferModule(Work);
+        if (m == null) return;
+        SetSectionLength(m, e);
+    }
+
+    private void AddStrapper() => Edit(() =>
+    {
+        var last = Work.Strappers.OrderBy(x => x.PositionMm).LastOrDefault();
+        var s = new StrapperConfig
+        {
+            Id = $"L{Work.Strappers.Count + 1}", Name = $"Legatrice {Work.Strappers.Count + 1}",
+            PositionMm = (last?.PositionMm ?? SampleProjects.FirstStrapperPositionMm(1, 12) - SampleProjects.StrapperSpacingMm) + SampleProjects.StrapperSpacingMm
+        };
+        if (last != null) { s.Model = last.Model; s.FootprintLengthMm = last.FootprintLengthMm; }
+        Work.Strappers.Add(s);
+    });
+
+    private string StopChoice => Work.IntermediateStops.FirstOrDefault() is not { } f ? "none"
+        : f.ManualPosition ? "manual" : f.Placement == DevicePlacement.End ? "end" : "center";
+
+    private void SetStopChoice(ChangeEventArgs e) => Edit(() =>
+    {
+        string v = e.Value?.ToString() ?? "none";
+        if (v == "none") { Work.IntermediateStops.Clear(); return; }
+        var place = v == "end" ? DevicePlacement.End : DevicePlacement.Center;
+        var f = Work.IntermediateStops.FirstOrDefault();
+        if (f == null)
+        {
+            f = new IntermediateStopConfig { Id = "FM1", Name = "Fermo scomparente", AlignmentTimeS = 2.0 };
+            Work.IntermediateStops.Add(f);
+        }
+        f.IsEnabled = true;
+        f.ManualPosition = v == "manual";
+        if (v != "manual") { f.Placement = place; f.PositionMm = StrappingAreaRules.StopPositionMm(Work, place); }
+        // con il fermo all'estremità a monte l'intestatura dei pacchi è di coda
+        if (v == "end") foreach (var t in Work.PackageTypes) t.Heading = StopReference.Tail;
+    });
+
+    private void SetScales(ChangeEventArgs e) => Edit(() =>
+    {
+        int n = (int)Num(e, Work.Scales.Count, 1, 2);
+        var proto = Work.Scales.FirstOrDefault() ?? new WeighingScaleConfig();
+        while (Work.Scales.Count > n) Work.Scales.RemoveAt(Work.Scales.Count - 1);
+        while (Work.Scales.Count < n)
+        {
+            var sc = ProjectSerializer.Clone(new LineProject { Scales = { proto } }).Scales[0];
+            sc.Id = $"B{Work.Scales.Count + 1}"; sc.Name = $"Bilico {Work.Scales.Count + 1}";
+            sc.Placement = Work.Scales.Count == 0 ? DevicePlacement.Center : DevicePlacement.End;
+            sc.ManualPosition = false;
+            Work.Scales.Add(sc);
+        }
+        foreach (var sc in Work.Scales) sc.ManualPosition = false;
+        StrappingAreaRules.LayoutScales(Work);
+    });
+
+    private void SetWeighing(ChangeEventArgs e) => Edit(() =>
+    {
+        foreach (var b in Work.Scales)
+        {
+            b.StabilizationTimeS = Num(e, b.StabilizationTimeS, 0, 600);
+            b.ConfirmTimeoutS = Math.Max(b.ConfirmTimeoutS, b.StabilizationTimeS + 30);
+        }
+    });
+
+    private void Download()
+    {
+        try
+        {
+            string name = string.Concat((Work.Name ?? "progetto").Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or ' ' ? c : '_')).Trim();
+            Js("salva.json", (name.Length > 0 ? name : "progetto") + ".json", ProjectSerializer.Serialize(Work));
+        }
+        catch (Exception ex) { _errors.Add("Salvataggio non riuscito: " + ex.Message); }
+    }
+
     private int _count = 10;
     private bool _double, _stop, _busy, _playing;
     private double _progress;
@@ -447,7 +771,7 @@
 
     private LineProject BuildProject()
     {
-        var p = Source();
+        var p = ProjectSerializer.Clone(Work);
         p.Infeed.TypeSequence = _type == "*" ? p.PackageTypes.Select(t => t.Id).ToList() : new List<string> { _type };
         p.Infeed.PackageCount = _count;
         p.Infeed.Continuous = false;

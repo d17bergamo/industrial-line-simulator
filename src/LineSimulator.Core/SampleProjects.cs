@@ -82,6 +82,21 @@ public static class SampleProjects
         return p;
     }
 
+    /// <summary>
+    /// Layout personalizzato (versione web, 2026-11-18): stesse regole degli esempi con il numero di legatrici, il pacco più
+    /// lungo e le misure dei pacchi scelti dall'utente; poi si modifica pezzo per pezzo.
+    /// </summary>
+    public static LineProject CreateCustom(int strappers, int maxLengthM, IEnumerable<int> packageLengthsM, bool intermediateStop)
+    {
+        strappers = Math.Clamp(strappers, 1, 6);
+        var lengths = packageLengthsM.Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+        if (lengths.Count == 0) lengths.Add(6);
+        maxLengthM = Math.Max(maxLengthM, lengths.Max());
+        var p = Build($"Layout personalizzato - {strappers} {(strappers == 1 ? "legatrice" : "legatrici")}, pacchi {string.Join("/", lengths)} m",
+            strappers, maxLengthM, lengths.ToArray(), intermediateStop);
+        return p;
+    }
+
     public static LineProject CreateOneStrapper12m() =>
         Build("1 legatrice - pacchi 6/9/12 m", strappers: 1, maxLengthM: 12, infeedLengthsM: new[] { 6, 9, 12 });
 

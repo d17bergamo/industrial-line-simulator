@@ -65,6 +65,26 @@ try {
   await page.waitForTimeout(15000);
   await page.click('#play');
   await page.screenshot({ path: `${out}/web-5-scuro-2d.png`, fullPage: true });
+  // modifica del progetto: layout personalizzato, pacchi, vie e componenti, poi simulazione
+  await page.selectOption('#esempio', '-2');
+  await page.fill('.griglia input[type=text]', '6, 8, 12');
+  await page.click('button:has-text("Crea il layout")');
+  await page.waitForTimeout(800);
+  say(`layout personalizzato: ${(await page.locator('#modifica').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
+  await page.screenshot({ path: `${out}/web-6-pacchi.png`, fullPage: true });
+  const len = page.locator('#modifica input[type=number]').first();
+  await len.fill('7000');
+  await len.dispatchEvent('change');
+  await page.waitForTimeout(500);
+  await page.click('#modifica .schede button:has-text("Vie")');
+  await page.screenshot({ path: `${out}/web-6-vie.png`, fullPage: true });
+  await page.click('#modifica .schede button:has-text("Componenti")');
+  await page.screenshot({ path: `${out}/web-6-componenti.png`, fullPage: true });
+  await page.click('#modifica .schede button:has-text("Pacchi")');
+  await page.click('#simula');
+  await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
+  say(`risultato layout personalizzato: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 400)}`);
+  await page.screenshot({ path: `${out}/web-6-risultato.png`, fullPage: true });
   ok = true;
 } catch (e) {
   say(`[prova fallita] ${e.message}`);

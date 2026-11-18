@@ -30,6 +30,17 @@
             }
         };
         window.tema.imposta(window.tema.leggi());
+        // Scarica il progetto modificato come file .json
+        window.salva = {
+            json: function (nome, testo) {
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([testo], { type: 'application/json' }));
+                a.download = nome;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+            }
+        };
         // Se il simulatore non parte, lo scrive sulla pagina (sul telefono non c'è la console).
         function erroreAvvio(m) {
             var e = document.getElementById('errore-avvio');

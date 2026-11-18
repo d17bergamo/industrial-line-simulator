@@ -1062,16 +1062,27 @@ public sealed partial class SimulationEngine : ILogicContext
                 if (!under.Contains(s.Zone)) under.Add(s.Zone);
             }
             if (under.Count == 0) continue;
-            // Zona a valle ferma per comando (non per arresto automatico: quella riparte da sola all'arrivo del pacco): le vie sotto
-            // il pacco rallentano e si fermano con la testa al confine, invece di spingerlo contro rulli fermi.
+            // Tratto a valle più lento o fermo per comando (non per arresto automatico: quello riparte da solo all'arrivo del
+            // pacco): le vie sotto il pacco rallentano in modo che la testa arrivi al confine alla velocità del tratto a valle
+            // (ferma prima del confine se il tratto è fermo), invece di spingerlo su rulli più lenti (2026-11-18: nessuno
+            // strisciamento all'uscita della legatura e all'ingresso della metà a monte della via del trasferitore).
             foreach (var s in _sections)
             {
-                if (under.Contains(s.Zone) || s.Start < p.HeadM - OnRollersM) continue;
-                if (!s.Zone.AutoStopped && s.Zone.TargetSpeed(align) <= 1e-9 && s.Zone.ActualSpeed <= 1e-6)
+                if (s.Start < p.HeadM - OnRollersM) continue;
+                if (under.Contains(s.Zone) && !(TransferSplitM != null && !s.Valle && s.Zone.Info == Topology.StopperZone)) continue;
+                if (s.Zone.AutoStopped || s.Zone.Mode == InverterMode.Reverse) break;
+                double vDown = !s.Enabled ? 0 : s.Valle ? ValleSpeed : Math.Max(0, s.Zone.TargetSpeed(align));
+                double vNow = under.Max(z => z.ActualSpeed);
+                if (vDown < vNow - 0.005)
                 {
-                    double dec = Math.Max(0.1, under.Min(z => z.Config.Deceleration));
-                    double v = Math.Sqrt(2 * dec * Math.Max(0, s.Start + 0.8 * OnRollersM - p.HeadM));
-                    foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var cb) ? cb : double.PositiveInfinity, v);
+                    double dec = 0.8 * Math.Max(0.1, under.Min(z => z.Config.Deceleration));
+                    bool stopped = vDown <= 1e-9 && (s.Valle || s.Zone.ActualSpeed <= 1e-6);
+                    double gap = stopped ? s.Start - p.HeadM : s.Start - 0.05 - p.HeadM;
+                    if (stopped || vDown > 1e-9)
+                    {
+                        double v = Math.Sqrt(vDown * vDown + 2 * dec * Math.Max(0, gap));
+                        foreach (var z in under) caps[z] = Math.Min(caps.TryGetValue(z, out var cb) ? cb : double.PositiveInfinity, v);
+                    }
                 }
                 break;
             }
