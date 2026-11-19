@@ -91,7 +91,7 @@ try {
   say(`proprietà mostrate: ${await page.locator('#linea .prop').count()}`);
   await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
   // pacchi: vista 3D del pacco e double banking nascosto se non ci sta
-  await page.locator('#linea .schede button:has-text("Pacchi")').click();
+  await page.locator('#pacchi').scrollIntoViewIfNeeded();
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
   say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);

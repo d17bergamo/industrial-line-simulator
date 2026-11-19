@@ -509,7 +509,7 @@
     }
     private LineProject? _work;
     private bool _edited;
-    private int _tab;
+    private int _tab = 1;
     private List<string> _check = new(), _checkErrors = new();
     private int _cStrappers = 2, _cMaxM = 12;
     private string _cLengths = "6, 9, 12";
@@ -832,7 +832,6 @@
     // Vista 3D del pacco scelto (pacco3d.js): si ridisegna solo se cambiano misure, legature o tema
     private void ShowPack3D()
     {
-        if (_tab != 0) { _packKey = null; return; }
         var t = SelectedPack;
         if (t == null) return;
         bool dark = _theme == "scuro";   // con "auto" la pagina decide da sola (pacco3d.js legge il tema del sistema)
