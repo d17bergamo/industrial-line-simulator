@@ -64,10 +64,28 @@
         </div>
         @if (_tab == 0)
         {
+            <div class="pacco-vista">
+                <div class="schede">
+                    @foreach (var pt in Work.PackageTypes)
+                    {
+                        string pid = pt.Id;
+                        <button class="@(SelectedPack?.Id == pid ? "attivo" : "")" @onclick="() => _selPack = pid">@pid</button>
+                    }
+                </div>
+                <div class="vista3d pacco3d"><canvas id="cpack"></canvas></div>
+                <div class="comandi">
+                    <button class="piccolo" @onclick='() => Js("pacco3d.view", "3d")'>3D</button>
+                    <button class="piccolo" @onclick='() => Js("pacco3d.view", "lato")'>Di lato</button>
+                    <button class="piccolo" @onclick='() => Js("pacco3d.view", "alto")'>Dall'alto</button>
+                    <span class="nota">Trascina per ruotare, rotellina per ingrandire. Quote in mm tra le legature.</span>
+                </div>
+            </div>
             @foreach (var t in Work.PackageTypes.ToList())
             {
                 string? why = BankingOptions.DoubleBankingBlockReason(Work, t);
-                <div class="riga-mod">
+                bool dbl = why == null;
+                var chosenBanking = BankingOptions.Banking(Work, t);
+                <div class="riga-mod @(SelectedPack?.Id == t.Id ? "scelto" : "")" @onclick="() => _selPack = t.Id">
                     <div class="riga-titolo"><b>@t.Id</b><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina</button></div>
                     <div class="griglia">
                         <label class="campo">Lunghezza (mm)<input type="number" step="100" value="@F(t.LengthMm)" @onchange="e => SetLength(t, e)" /></label>
@@ -80,24 +98,24 @@
                             </select>
                         </label>
                         <label class="campo">Banking
-                            <select value="@BankingOptions.ChosenBanking(Work, t)" @onchange="e => Edit(() => t.Banking = Enum.Parse<AccumulationMode>(e.Value!.ToString()!))">
+                            <select value="@chosenBanking" @onchange="e => Edit(() => t.Banking = Enum.Parse<AccumulationMode>(e.Value!.ToString()!))">
                                 <option value="@AccumulationMode.SingleBanking">Single</option>
-                                <option value="@AccumulationMode.DoubleBanking">Double</option>
+                                @if (dbl) { <option value="@AccumulationMode.DoubleBanking">Double</option> }
                             </select>
                         </label>
                         <label class="campo">Intestatura
                             <select value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
-                                <option value="@StopReference.Head">Di testa</option>
-                                <option value="@StopReference.Tail">Di coda</option>
+                                @if (BankingOptions.HeadingAvailable(Work, t, chosenBanking, StopReference.Head)) { <option value="@StopReference.Head">Di testa</option> }
+                                @if (BankingOptions.HeadingAvailable(Work, t, chosenBanking, StopReference.Tail)) { <option value="@StopReference.Tail">Di coda</option> }
                             </select>
                         </label>
                     </div>
-                    <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.Select(x => F(x)))@(BankingOptions.ChosenBanking(Work, t) == AccumulationMode.DoubleBanking && why != null ? " — double banking non possibile: " + why : "")</p>
+                    <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.OrderBy(x => x).Select(x => F(x))) mm · distanze: @Gaps(t)</p>
                 </div>
             }
             <div class="comandi">
                 <button @onclick="AddType">Aggiungi pacco</button>
-                <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button>
+                @if (Work.PackageTypes.Any(x => BankingOptions.DoubleBankingAvailable(Work, x))) { <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button> }
                 <button @onclick="() => AllBanking(AccumulationMode.SingleBanking)">Tutti single</button>
             </div>
         }
@@ -733,8 +751,41 @@
         try { ((IJSInProcessRuntime)JS).InvokeVoid(fn, args); } catch (Exception) { }
     }
 
+    private string? _selPack, _packKey;
+    private PackageType? SelectedPack => Work.PackageTypes.FirstOrDefault(x => x.Id == _selPack) ?? Work.PackageTypes.FirstOrDefault();
+
+    private string Gaps(PackageType t)
+    {
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        if (pos.Count == 0) return "-";
+        var marks = new List<double> { 0 }; marks.AddRange(pos); marks.Add(t.LengthMm);
+        return string.Join(" · ", Enumerable.Range(1, marks.Count - 1).Select(i => F(marks[i] - marks[i - 1])));
+    }
+
+    // Vista 3D del pacco scelto (pacco3d.js): si ridisegna solo se cambiano misure, legature o tema
+    private void ShowPack3D()
+    {
+        if (_tab != 0) { _packKey = null; return; }
+        var t = SelectedPack;
+        if (t == null) return;
+        bool dark = _theme == "scuro";   // con "auto" la pagina decide da sola (pacco3d.js legge il tema del sistema)
+        string key = $"{t.Id}|{t.LengthMm}|{t.GraphicWidthMm}|{t.GraphicHeightMm}|{string.Join(",", t.StrapPositionsMm)}|{dark}";
+        if (key == _packKey) return;
+        _packKey = key;
+        try
+        {
+            ((IJSInProcessRuntime)JS).Invoke<bool>("pacco3d.show", "cpack", new
+            {
+                lengthM = t.LengthMm / 1000.0, widthM = t.GraphicWidthMm / 1000.0, heightM = t.GraphicHeightMm / 1000.0,
+                straps = t.StrapPositionsMm.Select(x => x / 1000.0).ToArray(), dark
+            });
+        }
+        catch (Exception) { }
+    }
+
     protected override void OnAfterRender(bool firstRender)
     {
+        ShowPack3D();
         if (!_init3d || !_view3d || _engine == null) return;
         _init3d = false;
         var e = _engine;

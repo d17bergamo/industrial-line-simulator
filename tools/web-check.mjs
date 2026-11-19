@@ -94,6 +94,15 @@ try {
   await page.waitForTimeout(300);
   say(`proprietà mostrate: ${await page.locator('#modifica .prop').count()}`);
   await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
+  // pacchi: vista 3D del pacco e double banking nascosto se non ci sta
+  await page.locator('#modifica .schede button:has-text("Pacchi")').click();
+  await page.waitForTimeout(800);
+  say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
+  const dbl = await page.locator('#modifica .riga-mod select option[value="DoubleBanking"]').count();
+  const sing = await page.locator('#modifica .riga-mod select option[value="SingleBanking"]').count();
+  say(`opzioni banking: single ${sing}, double ${dbl}`);
+  await page.locator('#cpack').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/web-6-pacchi3d.png`, fullPage: false });
   // zone comprimibili: Comprimi tutto / Espandi tutto
   await page.locator('button:has-text("Comprimi tutto"):visible').first().click();
   say(`zone aperte dopo "Comprimi tutto": ${await page.locator('details.zona[open]').count()}`);
