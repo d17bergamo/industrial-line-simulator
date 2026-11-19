@@ -7,7 +7,7 @@
         <div class="titolo"><h1>Simulatore Linea</h1><small>@Work.Name@(_edited ? " (modificato)" : "")</small></div>
         <nav class="passi" aria-label="Vai alla zona">
             <button class="passo" @onclick='() => Go("linea")'>Linea</button>
-            <button class="passo" @onclick='() => Go("modifica")'>Modifica</button>
+            <button class="passo" @onclick='() => Go("pacchi")'>Pacchi</button>
             <button class="passo" @onclick='() => Go("simulazione")'>Simulazione</button>
             <button class="passo" @onclick='() => Go("risultati")'>Risultati</button>
             <button class="passo" @onclick='() => Go("uscite")'>Documenti</button>
@@ -25,7 +25,7 @@
         <button class="piccolo primario-p" @onclick='() => Go("uscite")'>⬇ Documenti</button>
     </div>
 
-    <details class="zona" open id="linea"><summary>Linea</summary><div class="corpo">
+    <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
                 @for (int i = 0; i < SampleProjects.All.Count; i++)
@@ -53,55 +53,19 @@
             <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
         </label>
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
-    </div></details>
+        <div class="config-vista">
+            <h3 class="categoria">Vista della configurazione</h3>
+            @((MarkupString)ConfigSvg())
+            <p class="nota">Si aggiorna a ogni modifica. Quote in mm tra i componenti lungo la linea.</p>
+        </div>
+        <h3 class="categoria">Configurazione dei componenti</h3>
 
-    <details class="zona" open id="modifica"><summary>Modifica del progetto</summary><div class="corpo">
         <div class="schede">
-            <button class="@(_tab == 0 ? "attivo" : "")" @onclick="() => _tab = 0">Pacchi</button>
             <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie</button>
             <button class="@(_tab == 2 ? "attivo" : "")" @onclick="() => _tab = 2">Componenti</button>
             <button class="@(_tab == 3 ? "attivo" : "")" @onclick="() => _tab = 3">Tutte le proprietà</button>
         </div>
-        @if (_tab == 0)
-        {
-            @foreach (var t in Work.PackageTypes.ToList())
-            {
-                string? why = BankingOptions.DoubleBankingBlockReason(Work, t);
-                <div class="riga-mod">
-                    <div class="riga-titolo"><b>@t.Id</b><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina</button></div>
-                    <div class="griglia">
-                        <label class="campo">Lunghezza (mm)<input type="number" step="100" value="@F(t.LengthMm)" @onchange="e => SetLength(t, e)" /></label>
-                        <label class="campo">Peso (kg)<input type="number" step="10" value="@F(t.WeightKg)" @onchange="e => Edit(() => t.WeightKg = Num(e, t.WeightKg, 1, 100000))" /></label>
-                        <label class="campo">Legature<input type="number" min="1" max="20" value="@t.StrapCount" @onchange="e => SetStraps(t, e)" /></label>
-                        <label class="campo">Tipo
-                            <select value="@t.BindingType" @onchange="e => SetBinding(t, e)">
-                                <option value="@BindingType.Wire">Filo</option>
-                                <option value="@BindingType.SteelStrap">Reggetta</option>
-                            </select>
-                        </label>
-                        <label class="campo">Banking
-                            <select value="@BankingOptions.ChosenBanking(Work, t)" @onchange="e => Edit(() => t.Banking = Enum.Parse<AccumulationMode>(e.Value!.ToString()!))">
-                                <option value="@AccumulationMode.SingleBanking">Single</option>
-                                <option value="@AccumulationMode.DoubleBanking">Double</option>
-                            </select>
-                        </label>
-                        <label class="campo">Intestatura
-                            <select value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
-                                <option value="@StopReference.Head">Di testa</option>
-                                <option value="@StopReference.Tail">Di coda</option>
-                            </select>
-                        </label>
-                    </div>
-                    <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.Select(x => F(x)))@(BankingOptions.ChosenBanking(Work, t) == AccumulationMode.DoubleBanking && why != null ? " — double banking non possibile: " + why : "")</p>
-                </div>
-            }
-            <div class="comandi">
-                <button @onclick="AddType">Aggiungi pacco</button>
-                <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button>
-                <button @onclick="() => AllBanking(AccumulationMode.SingleBanking)">Tutti single</button>
-            </div>
-        }
-        else if (_tab == 1)
+        @if (_tab == 1)
         {
             @foreach (var m in Work.Sections.OrderBy(x => x.StartMm).ToList())
             {
@@ -191,31 +155,73 @@
         }
     </div></details>
 
-    <details class="zona" open id="uscite"><summary>Documenti ed esportazione</summary><div class="corpo">
-        <p class="nota">Altri strumenti qui sotto: obiettivo di produttività, ottimizzazione delle zone, controllo dell'equipaggiamento, registro eventi.</p>
-        <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
+    <details class="zona" open id="pacchi"><summary>Pacchi</summary><div class="corpo">
+        <div class="pacco-vista">
+            <div class="schede">
+                @foreach (var pt in Work.PackageTypes)
+                {
+                    string pid = pt.Id;
+                    <button class="@(SelectedPack?.Id == pid ? "attivo" : "")" @onclick="() => _selPack = pid">@pid</button>
+                }
+            </div>
+            <div class="pacco3d"><canvas id="cpack"></canvas></div>
+            <div class="comandi">
+                <button class="piccolo" @onclick='() => Js("pacco3d.view", "3d")'>3D</button>
+                <button class="piccolo" @onclick='() => Js("pacco3d.view", "lato")'>Di lato</button>
+                <button class="piccolo" @onclick='() => Js("pacco3d.view", "alto")'>Dall'alto</button>
+                <span class="nota">Trascina per ruotare, rotellina per ingrandire. Quote in mm tra le legature.</span>
+            </div>
+        </div>
+        @foreach (var t in Work.PackageTypes.ToList())
+        {
+            string? why = BankingOptions.DoubleBankingBlockReason(Work, t);
+            bool dbl = why == null;
+            var chosenBanking = BankingOptions.Banking(Work, t);
+            <div class="riga-mod @(SelectedPack?.Id == t.Id ? "scelto" : "")" @onclick="() => _selPack = t.Id">
+                <div class="riga-titolo"><b>@t.Id</b><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina</button></div>
+                <div class="griglia">
+                    <label class="campo">Lunghezza (mm)<input type="number" step="100" value="@F(t.LengthMm)" @onchange="e => SetLength(t, e)" /></label>
+                    <label class="campo">Peso (kg)<input type="number" step="10" value="@F(t.WeightKg)" @onchange="e => Edit(() => t.WeightKg = Num(e, t.WeightKg, 1, 100000))" /></label>
+                    <label class="campo">Legature<input type="number" min="1" max="20" value="@t.StrapCount" @onchange="e => SetStraps(t, e)" /></label>
+                    <label class="campo">Tipo
+                        <select value="@t.BindingType" @onchange="e => SetBinding(t, e)">
+                            <option value="@BindingType.Wire">Filo</option>
+                            <option value="@BindingType.SteelStrap">Reggetta</option>
+                        </select>
+                    </label>
+                    <label class="campo">Banking
+                        <select value="@chosenBanking" @onchange="e => Edit(() => t.Banking = Enum.Parse<AccumulationMode>(e.Value!.ToString()!))">
+                            <option value="@AccumulationMode.SingleBanking">Single</option>
+                            @if (dbl) { <option value="@AccumulationMode.DoubleBanking">Double</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Intestatura
+                        <select value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
+                            @if (BankingOptions.HeadingAvailable(Work, t, chosenBanking, StopReference.Head)) { <option value="@StopReference.Head">Di testa</option> }
+                            @if (BankingOptions.HeadingAvailable(Work, t, chosenBanking, StopReference.Tail)) { <option value="@StopReference.Tail">Di coda</option> }
+                        </select>
+                    </label>
+                </div>
+                <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.OrderBy(x => x).Select(x => F(x))) mm · distanze: @Gaps(t)</p>
+            </div>
+        }
+        <div class="comandi">
+            <button @onclick="AddType">Aggiungi pacco</button>
+            @if (Work.PackageTypes.Any(x => BankingOptions.DoubleBankingAvailable(Work, x))) { <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button> }
+            <button @onclick="() => AllBanking(AccumulationMode.SingleBanking)">Tutti single</button>
+        </div>
     </div></details>
 
     <details class="zona" open id="simulazione"><summary>Simulazione</summary><div class="corpo">
-        <label class="campo">Misura dei pacchi
-            <select id="misura" @bind="_type" disabled="@_busy">
-                <option value="*">Tutte le misure, a rotazione</option>
+        <label class="campo">Misura dei pacchi (una alla volta)
+            <select id="misura" @bind="SimType" disabled="@_busy">
                 @foreach (var t in Work.PackageTypes)
                 {
                     <option value="@t.Id">@N(t.LengthMm / 1000, "0.#") m (@t.Id)</option>
                 }
             </select>
         </label>
-        <label class="campo">Pacchi da simulare
-            <select @bind="_count" disabled="@_busy">
-                <option value="6">6</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="40">40</option>
-            </select>
-        </label>
-        <label class="spunta"><input type="checkbox" @bind="_double" disabled="@_busy" /> Double banking per tutti i pacchi (dove ci stanno)</label>
-        <label class="spunta"><input type="checkbox" @bind="_stop" disabled="@_busy" /> Aggiungi un fermo scomparente al centro (se manca)</label>
+        <p class="nota">I pacchi entrano senza fine finché non fermi la simulazione. Banking, intestatura e fermi si impostano nelle zone Pacchi e Linea.</p>
         <button id="simula" class="primario" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
         @if (_busy)
         {
@@ -373,8 +379,8 @@
                     <button class="@(v == _speed ? "attivo" : "")" @onclick="() => _speed = v">×@(v)</button>
                 }
             </div>
-            <div class="tempo">@N(_t, "0.0") / @N(_end, "0") s</div>
-            <input type="range" min="0" max="@F(_end)" step="0.5" value="@F(_t)" @oninput="OnSeek" aria-label="Tempo della simulazione" />
+            <div class="tempo">@N(_t, "0.0") s · in diretta @N(_end, "0") s</div>
+            <input type="range" min="@F(_winStart)" max="@F(_end)" step="0.5" value="@F(_t)" @oninput="OnSeek" aria-label="Tempo della simulazione" />
 
             <div class="eventi">
                 @foreach (var x in RecentEvents())
@@ -392,12 +398,12 @@
             </div>
         </div></details>
 
-        <details class="zona" open id="pacchi"><summary>Pacchi simulati (@_res.Packages.Count)</summary><div class="corpo">
+        <details class="zona" open id="pacchisim"><summary>Ultimi pacchi simulati (di @_res.Packages.Count)</summary><div class="corpo">
             <div>
                 <table class="pacchi">
                     <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>attesa s</th><th>legature</th></tr></thead>
                     <tbody>
-                        @foreach (var k in _res.Packages)
+                        @foreach (var k in _res.Packages.TakeLast(30))
                         {
                             <tr>
                                 <td>@k.Id</td>
@@ -413,9 +419,79 @@
             </div>
         </div></details>
     }
+
+    <details class="zona" open id="uscite"><summary>Documenti ed esportazione</summary><div class="corpo">
+        <p class="nota">Altri strumenti qui sotto: obiettivo di produttività, ottimizzazione delle zone, controllo dell'equipaggiamento, registro eventi.</p>
+        <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
+    </div></details>
 </main>
 
 @code {
+    // Vista 2D della configurazione (orizzontale, da monte a valle): si ridisegna dal progetto a ogni modifica.
+    private string ConfigSvg()
+    {
+        var w = Work;
+        var secs = w.Sections.Where(x => x.IsEnabled).OrderBy(x => x.StartMm).ToList();
+        double x0 = secs.Count > 0 ? secs.Min(x => x.StartMm) : 0;
+        double x1 = new[] { secs.Count > 0 ? secs.Max(x => x.EndMm) : 0, w.Transfer.PositionMm + w.Transfer.LengthMm, w.Stopper.PositionMm }.Max();
+        if (x1 - x0 < 1000) x1 = x0 + 1000;
+        const double W = 1000, M = 20, base0 = 70;
+        double k = (W - 2 * M) / (x1 - x0);
+        string X(double mm) => ((mm - x0) * k + M).ToString("0.#", CultureInfo.InvariantCulture);
+        string Wd(double mm) => Math.Max(2, mm * k).ToString("0.#", CultureInfo.InvariantCulture);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<svg class=\"vista-config\" viewBox=\"0 0 {W} 230\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-label=\"Configurazione della linea\">");
+        // vie a rulli
+        foreach (var s in secs)
+        {
+            sb.Append($"<rect x=\"{X(s.StartMm)}\" y=\"{base0}\" width=\"{Wd(s.LengthMm)}\" height=\"28\" rx=\"3\" fill=\"var(--bordo)\" stroke=\"var(--tenue)\"/>");
+            sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text>");
+        }
+        // trasferitore e fermo finale
+        sb.Append($"<rect x=\"{X(w.Transfer.PositionMm)}\" y=\"{base0 - 8}\" width=\"{Wd(w.Transfer.LengthMm)}\" height=\"44\" rx=\"4\" fill=\"none\" stroke=\"var(--accento)\" stroke-dasharray=\"6 4\" stroke-width=\"2\"/>");
+        sb.Append($"<text x=\"{X(w.Transfer.PositionMm + w.Transfer.LengthMm / 2)}\" y=\"{base0 - 13}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--accento)\">Trasferitore</text>");
+        sb.Append($"<rect x=\"{X(w.Stopper.PositionMm)}\" y=\"{base0 - 6}\" width=\"5\" height=\"40\" fill=\"var(--testo)\"/>");
+        // legatrici
+        var marks = new List<(double Mm, string Name)>();
+        foreach (var st in w.Strappers.Where(x => x.IsEnabled))
+        {
+            sb.Append($"<rect x=\"{X(st.PositionMm - 250)}\" y=\"{base0 - 26}\" width=\"{Wd(500)}\" height=\"80\" rx=\"3\" fill=\"var(--lega)\" opacity=\".85\"/>");
+            sb.Append($"<text x=\"{X(st.PositionMm)}\" y=\"{base0 + 66}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(st.Id)}</text>");
+            marks.Add((st.PositionMm, st.Id));
+        }
+        // fermi scomparenti
+        foreach (var fs in w.IntermediateStops.Where(x => x.IsEnabled))
+        {
+            sb.Append($"<polygon points=\"{X(fs.PositionMm)},{base0 - 4} {X(fs.PositionMm - 150)},{base0 - 22} {X(fs.PositionMm + 150)},{base0 - 22}\" fill=\"var(--intesta)\"/>");
+            marks.Add((fs.PositionMm, "fermo"));
+        }
+        // bilici
+        foreach (var sc in w.Scales.Where(x => x.IsEnabled))
+            sb.Append($"<rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 34}\" width=\"{Wd(sc.LengthMm)}\" height=\"6\" fill=\"var(--trasf)\"/>");
+        // fotocellule: numero FC sopra la via
+        foreach (var pc in w.Photocells.Where(x => x.IsEnabled))
+        {
+            string fc = (pc.Name ?? "").Split(' ')[0];
+            sb.Append($"<line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
+            sb.Append($"<text x=\"{X(pc.PositionMm)}\" y=\"{base0 - 40}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{System.Net.WebUtility.HtmlEncode(fc)}</text>");
+        }
+        // catena di quote: inizio via → legatrici e fermi → inizio trasferitore → fermo finale
+        marks.Add((x0, "")); marks.Add((w.Transfer.PositionMm, "")); marks.Add((w.Stopper.PositionMm, ""));
+        var xs = marks.Select(m => m.Mm).Distinct().OrderBy(v => v).ToList();
+        double yq = 175;
+        sb.Append($"<line x1=\"{X(xs[0])}\" y1=\"{yq}\" x2=\"{X(xs[^1])}\" y2=\"{yq}\" stroke=\"var(--tenue)\"/>");
+        for (int i = 0; i < xs.Count; i++)
+        {
+            sb.Append($"<line x1=\"{X(xs[i])}\" y1=\"{base0 + 30}\" x2=\"{X(xs[i])}\" y2=\"{yq + 6}\" stroke=\"var(--bordo)\" stroke-dasharray=\"2 3\"/><line x1=\"{X(xs[i])}\" y1=\"{yq - 6}\" x2=\"{X(xs[i])}\" y2=\"{yq + 6}\" stroke=\"var(--tenue)\"/>");
+            if (i == 0) continue;
+            double d = xs[i] - xs[i - 1];
+            if (d < 1) continue;
+            sb.Append($"<text x=\"{X((xs[i] + xs[i - 1]) / 2)}\" y=\"{yq + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{d:0}</text>");
+        }
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
     private static readonly int[] Speeds = { 1, 4, 10, 30 };
 
     // Disegno: la linea scorre dall'alto verso il basso (sul telefono c'è più spazio in altezza), il trasferitore porta a destra.
@@ -425,9 +501,15 @@
 
     private int _model;
     private string _type = "*";
+    /// <summary>Misura simulata (una alla volta): la scelta se valida, altrimenti la prima.</summary>
+    private string SimType
+    {
+        get => Work.PackageTypes.Any(t => t.Id == _type) ? _type : (Work.PackageTypes.FirstOrDefault()?.Id ?? "");
+        set => _type = value;
+    }
     private LineProject? _work;
     private bool _edited;
-    private int _tab;
+    private int _tab = 1;
     private List<string> _check = new(), _checkErrors = new();
     private int _cStrappers = 2, _cMaxM = 12;
     private string _cLengths = "6, 9, 12";
@@ -655,8 +737,11 @@
 
     private void SelectJson() => Js("salva.seleziona", "json-progetto");
 
-    private int _count = 10;
-    private bool _double, _stop, _busy, _playing;
+    private bool _busy, _playing;
+    private double _winStart;
+    private int _evIdx;
+    private DateTime _lastRes = DateTime.MinValue;
+    private const double WarmupS = 180, RecordWindowS = 300;
     private double _progress;
     private string? _uploaded, _uploadedName;
     private readonly List<string> _errors = new();
@@ -733,8 +818,40 @@
         try { ((IJSInProcessRuntime)JS).InvokeVoid(fn, args); } catch (Exception) { }
     }
 
+    private string? _selPack, _packKey;
+    private PackageType? SelectedPack => Work.PackageTypes.FirstOrDefault(x => x.Id == _selPack) ?? Work.PackageTypes.FirstOrDefault();
+
+    private string Gaps(PackageType t)
+    {
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        if (pos.Count == 0) return "-";
+        var marks = new List<double> { 0 }; marks.AddRange(pos); marks.Add(t.LengthMm);
+        return string.Join(" · ", Enumerable.Range(1, marks.Count - 1).Select(i => F(marks[i] - marks[i - 1])));
+    }
+
+    // Vista 3D del pacco scelto (pacco3d.js): si ridisegna solo se cambiano misure, legature o tema
+    private void ShowPack3D()
+    {
+        var t = SelectedPack;
+        if (t == null) return;
+        bool dark = _theme == "scuro";   // con "auto" la pagina decide da sola (pacco3d.js legge il tema del sistema)
+        string key = $"{t.Id}|{t.LengthMm}|{t.GraphicWidthMm}|{t.GraphicHeightMm}|{string.Join(",", t.StrapPositionsMm)}|{dark}";
+        if (key == _packKey) return;
+        _packKey = key;
+        try
+        {
+            ((IJSInProcessRuntime)JS).Invoke<bool>("pacco3d.show", "cpack", new
+            {
+                lengthM = t.LengthMm / 1000.0, widthM = t.GraphicWidthMm / 1000.0, heightM = t.GraphicHeightMm / 1000.0,
+                straps = t.StrapPositionsMm.Select(x => x / 1000.0).ToArray(), dark
+            });
+        }
+        catch (Exception) { }
+    }
+
     protected override void OnAfterRender(bool firstRender)
     {
+        ShowPack3D();
         if (!_init3d || !_view3d || _engine == null) return;
         _init3d = false;
         var e = _engine;
@@ -828,17 +945,12 @@
     private LineProject BuildProject()
     {
         var p = ProjectSerializer.Clone(Work);
-        p.Infeed.TypeSequence = _type == "*" ? p.PackageTypes.Select(t => t.Id).ToList() : new List<string> { _type };
-        p.Infeed.PackageCount = _count;
-        p.Infeed.Continuous = false;
-        p.Simulation.RecordWindowS = 0;
-        if (_stop && !p.IntermediateStops.Any(s => s.IsEnabled))
-            p.IntermediateStops.Add(new IntermediateStopConfig
-            {
-                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
-                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
-            });
-        if (_double) BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        p.Infeed.TypeSequence = new List<string> { SimType };
+        // simulazione continua: i pacchi entrano senza fine; il ciclogramma tiene gli ultimi 5 minuti
+        p.Infeed.PackageCount = 1_000_000;
+        p.Infeed.Continuous = true;
+        p.Simulation.MaxSimulationTimeS = 1e9;
+        p.Simulation.RecordWindowS = RecordWindowS;
         return p;
     }
 
@@ -867,15 +979,17 @@
                 return;
             }
             int n = 0;
-            while (e.Step())
+            while (e.Time < WarmupS && e.Step())
             {
                 if (++n % 2000 != 0) continue;
-                _progress = Math.Min(0.98, e.Packages.Count(k => k.ExitTimeS.HasValue) / (double)Math.Max(1, _count));
+                _progress = Math.Min(0.98, e.Time / WarmupS);
                 StateHasChanged();
                 await Task.Delay(1);
             }
             _res = e.ComputeResults();
             _events = e.Events.Where(x => x.Severity != EventSeverity.Trace).ToList();
+            _evIdx = e.Events.Count;
+            _lastRes = DateTime.UtcNow;
             _lineStart = e.Topology.LineStartM;
             _ky = (VH - Top - 16) / Math.Max(1, e.Topology.LineEndM - e.Topology.LineStartM);
             _strokeM = p.Transfer.TranslationStrokeMm / 1000.0;
@@ -894,8 +1008,9 @@
                 else _bands.Add(new Band(z.Id, i, z.Info.StartM, z.Info.EndM, false));
             }
             _end = e.Recorder.Frames.Count > 0 ? e.Recorder.Frames[^1].TimeS : e.Time;
-            _t = 0;
-            _frame = e.Recorder.FrameAt(0);
+            _winStart = e.Recorder.Frames.Count > 0 ? e.Recorder.Frames[0].TimeS : 0;
+            _t = _winStart;
+            _frame = e.Recorder.FrameAt(_t);
             _engine = e;
             _init3d = _view3d;
             _no3d = false;
@@ -914,7 +1029,6 @@
     {
         if (_playing) { StopPlay(); return; }
         if (_engine == null) return;
-        if (_t >= _end - 0.05) _t = 0;
         _playing = true;
         _playCts = new CancellationTokenSource();
         _ = PlayLoop(_playCts.Token);
@@ -937,11 +1051,36 @@
             var now = DateTime.UtcNow;
             double dt = Math.Min(0.5, (now - last).TotalSeconds);
             last = now;
-            _t = Math.Min(_end, _t + dt * _speed);
+            double target = _t + dt * _speed;
+            if (target > _end) AdvanceEngine(target);
+            _t = Math.Min(_end, target);
             _frame = _engine.Recorder.FrameAt(_t);
             Push3D();
-            if (_t >= _end - 1e-6) { _playing = false; _playCts = null; StateHasChanged(); return; }
+            if (_engine.IsFinished && _t >= _end - 1e-6) { _playing = false; _playCts = null; StateHasChanged(); return; }
             StateHasChanged();
+        }
+    }
+
+    /// <summary>Simulazione continua: fa avanzare il motore fino all'istante richiesto (al più ~30 ms per giro) e aggiorna eventi e risultati.</summary>
+    private void AdvanceEngine(double target)
+    {
+        var e = _engine!;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int n = 0;
+        while (e.Time < target && !e.IsFinished)
+        {
+            if (!e.Step()) break;
+            if ((++n & 63) == 0 && sw.ElapsedMilliseconds > 30) break;
+        }
+        for (; _evIdx < e.Events.Count; _evIdx++)
+            if (e.Events[_evIdx].Severity != EventSeverity.Trace) _events.Add(e.Events[_evIdx]);
+        if (_events.Count > 6000) _events.RemoveRange(0, 2000);
+        _end = e.Recorder.Frames.Count > 0 ? e.Recorder.Frames[^1].TimeS : e.Time;
+        _winStart = e.Recorder.Frames.Count > 0 ? e.Recorder.Frames[0].TimeS : 0;
+        if ((DateTime.UtcNow - _lastRes).TotalSeconds > 8 || e.IsFinished)
+        {
+            _res = e.ComputeResults();
+            _lastRes = DateTime.UtcNow;
         }
     }
 
@@ -950,7 +1089,7 @@
         if (_engine == null) return;
         if (double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
         {
-            _t = Math.Clamp(v, 0, _end);
+            _t = Math.Clamp(v, _winStart, _end);
             _frame = _engine.Recorder.FrameAt(_t);
             Push3D();
         }
