@@ -20,10 +20,7 @@ try {
   await page.waitForSelector('#pronto', { timeout: 120000 });
   say(`avvio: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   await page.screenshot({ path: `${out}/web-1-avvio.png` });
-  for (const [name, setup] of [['base', async () => {}], ['double', async () => {
-    await page.locator('label.spunta input').nth(0).check();
-    await page.locator('label.spunta input').nth(1).check();
-  }]]) {
+  for (const [name, setup] of [['base', async () => {}]]) {
     await setup();
     t0 = Date.now();
     await page.click('#simula');
@@ -33,7 +30,7 @@ try {
     await page.screenshot({ path: `${out}/web-2-${name}-risultato.png`, fullPage: true });
     if (await page.locator('#play').count()) {
       await page.click('#play');
-      await page.waitForTimeout(name === 'base' ? 9000 : 20000);
+      await page.waitForTimeout(9000);
       await page.locator('svg.vista').scrollIntoViewIfNeeded();
       await page.screenshot({ path: `${out}/web-3-${name}-animazione.png` });
       await page.click('#play');
@@ -70,36 +67,36 @@ try {
   await page.fill('.griglia input[type=text]', '6, 8, 12');
   await page.click('button:has-text("Crea il layout")');
   await page.waitForTimeout(800);
-  say(`layout personalizzato: ${(await page.locator('#modifica').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
+  say(`layout personalizzato: ${(await page.locator('#pacchi').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   await page.screenshot({ path: `${out}/web-6-pacchi.png`, fullPage: true });
-  const len = page.locator('#modifica input[type=number]').first();
+  const len = page.locator('#pacchi input[type=number]').first();
   await len.fill('7000');
   await len.dispatchEvent('change');
   await page.waitForTimeout(500);
-  await page.click('#modifica .schede button:has-text("Vie")');
+  await page.click('#linea .schede button:has-text("Vie")');
   await page.screenshot({ path: `${out}/web-6-vie.png`, fullPage: true });
-  await page.click('#modifica .schede button:has-text("Componenti")');
+  await page.click('#linea .schede button:has-text("Componenti")');
   await page.screenshot({ path: `${out}/web-6-componenti.png`, fullPage: true });
-  await page.click('#modifica .schede button:has-text("Pacchi")');
   await page.click('#simula');
   await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
   say(`risultato layout personalizzato: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 400)}`);
   await page.screenshot({ path: `${out}/web-6-risultato.png`, fullPage: true });
   // configurazione completa: tutte le proprietà di un componente
-  await page.click('#modifica .schede button:has-text("Tutte le proprietà")');
-  const comp = page.locator('#modifica select').first();
+  await page.click('#linea .schede button:has-text("Tutte le proprietà")');
+  const comp = page.locator('#linea select:not(#esempio)').first();
   const opts = await comp.locator('option').allInnerTexts();
   say(`componenti configurabili: ${opts.length} (${opts.slice(0, 6).join(' | ')} …)`);
   await comp.selectOption({ index: Math.min(3, opts.length - 1) });
   await page.waitForTimeout(300);
-  say(`proprietà mostrate: ${await page.locator('#modifica .prop').count()}`);
+  say(`proprietà mostrate: ${await page.locator('#linea .prop').count()}`);
   await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
   // pacchi: vista 3D del pacco e double banking nascosto se non ci sta
-  await page.locator('#modifica .schede button:has-text("Pacchi")').click();
+  await page.locator('#linea .schede button:has-text("Pacchi")').click();
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
-  const dbl = await page.locator('#modifica .riga-mod select option[value="DoubleBanking"]').count();
-  const sing = await page.locator('#modifica .riga-mod select option[value="SingleBanking"]').count();
+  say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
+  const dbl = await page.locator('#pacchi .riga-mod select option[value="DoubleBanking"]').count();
+  const sing = await page.locator('#pacchi .riga-mod select option[value="SingleBanking"]').count();
   say(`opzioni banking: single ${sing}, double ${dbl}`);
   await page.locator('#cpack').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/web-6-pacchi3d.png`, fullPage: false });
