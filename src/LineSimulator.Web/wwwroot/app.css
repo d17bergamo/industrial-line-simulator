@@ -192,3 +192,4 @@ details.pacco-scheda > summary { cursor: pointer; padding: .5rem 0; font-size: 1
 .vista-config .trascina { cursor: ew-resize; touch-action: none; }
 .vista-config .trascina:hover { filter: brightness(1.15); }
 .vista-config .trascina.afferrato { opacity: .7; }
+.vista-config .trascina.sel { filter: drop-shadow(0 0 3px var(--accento)) drop-shadow(0 0 1px var(--accento)); }

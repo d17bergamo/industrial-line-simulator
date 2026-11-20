@@ -21,7 +21,7 @@
         var d = drag; drag = null;
         d.g.classList.remove('afferrato');
         var mm = d.dx / d.k;
-        if (Math.abs(mm) < 5) { d.g.removeAttribute('transform'); return; }
+        if (Math.abs(mm) < 5) { d.g.removeAttribute('transform'); dotnet.invokeMethodAsync('SelectComponent', d.g.getAttribute('data-k'), d.g.getAttribute('data-id')); return; }
         dotnet.invokeMethodAsync('MoveComponent', d.g.getAttribute('data-k'), d.g.getAttribute('data-id'), mm);
         // se il valore non cambia (limite raggiunto) il disegno non viene rifatto: si rimette a posto la figura
         setTimeout(function () { if (d.g.isConnected) d.g.removeAttribute('transform'); }, 400);

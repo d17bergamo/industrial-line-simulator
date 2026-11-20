@@ -57,6 +57,18 @@
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
         <div class="config-vista">
             <h3 class="categoria">Vista della configurazione</h3>
+            <div class="comandi strumenti">
+                <select value="" @onchange="AddFromView" aria-label="Aggiungi un componente alla linea">
+                    <option value="">Aggiungi alla linea…</option>
+                    @foreach (var (k, l) in ProjectEditing.Addable.Where(x => ViewAddable.Contains(x.Key)))
+                    {
+                        <option value="@k">@l</option>
+                    }
+                </select>
+                <button class="piccolo" @onclick="DeleteFromView" disabled="@(SelectedComp == null || !ProjectEditing.CanDelete(SelectedComp))">Elimina @(SelectedComp == null ? "selezionato" : _selId)</button>
+                <span class="nota">@(SelectedComp == null ? "Tocca un componente nel disegno per selezionarlo." : $"Selezionato: {_selId}")</span>
+            </div>
+            @if (_viewMsg.Length > 0) { <p class="nota">@_viewMsg</p> }
             @((MarkupString)ConfigSvg())
             <p class="nota">Si aggiorna a ogni modifica. Quote in mm tra i componenti; sotto, la lunghezza di ciascun modulo in metri. Trascina legatrici, fermi, fotocellule, trasferitore e fermo finale per spostarli (passi di 50 mm, fotocellule 10 mm); trascina la maniglia blu a fine modulo per allungarlo o accorciarlo.</p>
         </div>
@@ -486,16 +498,16 @@
             sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text>");
         }
         // trasferitore e fermo finale
-        sb.Append("<g class=\"trascina\" data-k=\"transfer\" data-id=\"\">");
+        sb.Append($"<g class=\"trascina{Sel("transfer", "")}\" data-k=\"transfer\" data-id=\"\">");
         sb.Append($"<rect x=\"{X(w.Transfer.PositionMm)}\" y=\"{base0 - 8}\" width=\"{Wd(w.Transfer.LengthMm)}\" height=\"44\" rx=\"4\" fill=\"none\" stroke=\"var(--accento)\" stroke-dasharray=\"6 4\" stroke-width=\"2\"/>");
         sb.Append($"<text x=\"{X(w.Transfer.PositionMm + w.Transfer.LengthMm / 2)}\" y=\"{base0 - 13}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--accento)\">Trasferitore</text>");
         sb.Append("</g>");
-        sb.Append($"<g class=\"trascina\" data-k=\"stopper\" data-id=\"\"><rect x=\"{X(w.Stopper.PositionMm) }\" y=\"{base0 - 6}\" width=\"5\" height=\"40\" fill=\"var(--testo)\"/><rect x=\"{X(w.Stopper.PositionMm - 60)}\" y=\"{base0 - 10}\" width=\"{Wd(120)}\" height=\"48\" fill=\"transparent\"/></g>");
+        sb.Append($"<g class=\"trascina{Sel("stopper", "")}\" data-k=\"stopper\" data-id=\"\"><rect x=\"{X(w.Stopper.PositionMm) }\" y=\"{base0 - 6}\" width=\"5\" height=\"40\" fill=\"var(--testo)\"/><rect x=\"{X(w.Stopper.PositionMm - 60)}\" y=\"{base0 - 10}\" width=\"{Wd(120)}\" height=\"48\" fill=\"transparent\"/></g>");
         // legatrici
         var marks = new List<(double Mm, string Name)>();
         foreach (var st in w.Strappers.Where(x => x.IsEnabled))
         {
-            sb.Append($"<g class=\"trascina\" data-k=\"strapper\" data-id=\"{System.Net.WebUtility.HtmlEncode(st.Id)}\">");
+            sb.Append($"<g class=\"trascina{Sel("strapper", st.Id)}\" data-k=\"strapper\" data-id=\"{System.Net.WebUtility.HtmlEncode(st.Id)}\">");
             sb.Append($"<rect x=\"{X(st.PositionMm - 250)}\" y=\"{base0 - 26}\" width=\"{Wd(500)}\" height=\"80\" rx=\"3\" fill=\"var(--lega)\" opacity=\".85\"/>");
             sb.Append($"<text x=\"{X(st.PositionMm)}\" y=\"{base0 + 66}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(st.Id)}</text>");
             sb.Append("</g>");
@@ -504,7 +516,7 @@
         // fermi scomparenti
         foreach (var fs in w.IntermediateStops.Where(x => x.IsEnabled))
         {
-            sb.Append($"<g class=\"trascina\" data-k=\"stop\" data-id=\"{System.Net.WebUtility.HtmlEncode(fs.Id)}\"><polygon points=\"{X(fs.PositionMm)},{base0 - 4} {X(fs.PositionMm - 150)},{base0 - 22} {X(fs.PositionMm + 150)},{base0 - 22}\" fill=\"var(--intesta)\"/></g>");
+            sb.Append($"<g class=\"trascina{Sel("stop", fs.Id)}\" data-k=\"stop\" data-id=\"{System.Net.WebUtility.HtmlEncode(fs.Id)}\"><polygon points=\"{X(fs.PositionMm)},{base0 - 4} {X(fs.PositionMm - 150)},{base0 - 22} {X(fs.PositionMm + 150)},{base0 - 22}\" fill=\"var(--intesta)\"/></g>");
             marks.Add((fs.PositionMm, "fermo"));
         }
         // bilici
@@ -514,12 +526,12 @@
         foreach (var pc in w.Photocells.Where(x => x.IsEnabled))
         {
             string fc = (pc.Name ?? "").Split(' ')[0];
-            sb.Append($"<g class=\"trascina\" data-k=\"photocell\" data-id=\"{System.Net.WebUtility.HtmlEncode(pc.Id)}\"><rect x=\"{X(pc.PositionMm - 60)}\" y=\"{base0 - 46}\" width=\"{Wd(120)}\" height=\"46\" fill=\"transparent\"/><line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
+            sb.Append($"<g class=\"trascina{Sel("photocell", pc.Id)}\" data-k=\"photocell\" data-id=\"{System.Net.WebUtility.HtmlEncode(pc.Id)}\"><rect x=\"{X(pc.PositionMm - 60)}\" y=\"{base0 - 46}\" width=\"{Wd(120)}\" height=\"46\" fill=\"transparent\"/><line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
             sb.Append($"<text x=\"{X(pc.PositionMm)}\" y=\"{base0 - 40}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{System.Net.WebUtility.HtmlEncode(fc)}</text></g>");
         }
         // maniglia di fine modulo: trascinandola si allunga o accorcia il modulo (a rulli interi)
         foreach (var s in secs)
-            sb.Append($"<g class=\"trascina\" data-k=\"sezione\" data-id=\"{System.Net.WebUtility.HtmlEncode(s.Id)}\"><rect x=\"{((s.EndMm - x0) * k + M - 6).ToString("0.#", CultureInfo.InvariantCulture)}\" y=\"{base0 + 4}\" width=\"12\" height=\"20\" rx=\"3\" fill=\"var(--accento)\" opacity=\".85\"/></g>");
+            sb.Append($"<g class=\"trascina{Sel("sezione", s.Id)}\" data-k=\"sezione\" data-id=\"{System.Net.WebUtility.HtmlEncode(s.Id)}\"><rect x=\"{((s.EndMm - x0) * k + M - 6).ToString("0.#", CultureInfo.InvariantCulture)}\" y=\"{base0 + 4}\" width=\"12\" height=\"20\" rx=\"3\" fill=\"var(--accento)\" opacity=\".85\"/></g>");
         // catena di quote: inizio via → legatrici e fermi → inizio trasferitore → fermo finale
         marks.Add((x0, "")); marks.Add((w.Transfer.PositionMm, "")); marks.Add((w.Stopper.PositionMm, ""));
         var xs = marks.Select(m => m.Mm).Distinct().OrderBy(v => v).ToList();
@@ -722,6 +734,67 @@
         LineReflow.Fit(m, m.StartMm, m.StartMm + len);
         LineReflow.AfterResize(Work, m, oldEnd);
         if (ReferenceEquals(m, LayoutRules.TransferModule(Work))) Work.Transfer.LengthMm = m.LengthMm;
+    }
+
+    // Selezione, aggiunta ed eliminazione dalla vista 2D
+    private static readonly string[] ViewAddable = { "section", "photocell", "strapper", "stop-center", "stop-end", "scale-center", "scale-end", "clamp", "compactor", "rejector" };
+    private string _selK = "", _selId = "", _viewMsg = "";
+
+    private string Sel(string kind, string id) => _selK == kind && _selId == id ? " sel" : "";
+
+    private object? SelectedComp => _selK switch
+    {
+        "strapper" => Work.Strappers.FirstOrDefault(x => x.Id == _selId),
+        "stop" => Work.IntermediateStops.FirstOrDefault(x => x.Id == _selId),
+        "photocell" => Work.Photocells.FirstOrDefault(x => x.Id == _selId),
+        "sezione" => Work.Sections.FirstOrDefault(x => x.Id == _selId),
+        _ => null
+    };
+
+    private bool SelectKind(object m)
+    {
+        (string k, string id)? r = m switch
+        {
+            StrapperConfig c => ("strapper", c.Id),
+            IntermediateStopConfig c => ("stop", c.Id),
+            PhotocellConfig c => ("photocell", c.Id),
+            RollerSection c => ("sezione", c.Id),
+            _ => null
+        };
+        if (r == null) return false;
+        (_selK, _selId) = r.Value;
+        return true;
+    }
+
+    private void AddFromView(ChangeEventArgs e)
+    {
+        string key = e.Value?.ToString() ?? "";
+        if (key.Length == 0) return;
+        _viewMsg = "";
+        object? added = null;
+        Edit(() =>
+        {
+            added = ProjectEditing.Add(Work, key);
+            if (added != null) ProjectEditing.Normalize(Work);
+        });
+        if (added == null) { _viewMsg = key == "strapper" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto."; return; }
+        if (!SelectKind(added)) { _selK = ""; _selId = ""; _viewMsg = "Componente aggiunto: si configura in Configurazione dei componenti."; }
+    }
+
+    private void DeleteFromView()
+    {
+        var m = SelectedComp;
+        if (m == null || !ProjectEditing.CanDelete(m)) return;
+        Edit(() => { ProjectEditing.Delete(Work, new[] { m }); ProjectEditing.Normalize(Work); });
+        _selK = ""; _selId = ""; _viewMsg = "";
+    }
+
+    /// <summary>Chiamato da configvista.js quando si tocca un componente senza trascinarlo.</summary>
+    [JSInvokable]
+    public void SelectComponent(string kind, string id)
+    {
+        _selK = kind; _selId = id; _viewMsg = "";
+        StateHasChanged();
     }
 
     /// <summary>Chiamato da configvista.js al rilascio di un componente trascinato nella vista 2D (spostamento in mm).</summary>
