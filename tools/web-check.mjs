@@ -69,8 +69,7 @@ try {
   await page.waitForTimeout(800);
   say(`layout personalizzato: ${(await page.locator('#pacchi').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   await page.screenshot({ path: `${out}/web-6-pacchi.png`, fullPage: true });
-  await page.locator('#pacchi details.pacco-scheda > summary').first().click();
-  const len = page.locator('#pacchi details.pacco-scheda input[type=number]').first();
+  const len = page.locator('#pacchi table.configurazioni input[type=number]').first();
   await len.fill('7000');
   await len.dispatchEvent('change');
   await page.waitForTimeout(500);
@@ -95,7 +94,7 @@ try {
   await page.locator('#pacchi').scrollIntoViewIfNeeded();
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
-  say(`dati area: ${await page.locator('#linea h4.sotto').count()} sezioni, famiglie ${await page.locator('#linea details.famiglia').count()}, righello ${await page.locator('#rpack svg').count()}, schede pacco ${await page.locator('details.pacco-scheda').count()}`);
+  say(`dati area: ${await page.locator('#linea h4.sotto').count()} sezioni, famiglie ${await page.locator('#linea details.famiglia').count()}, righello ${await page.locator('#rpack svg').count()}, righe pacchi ${await page.locator('#pacchi table.configurazioni tbody tr').count()}`);
   {
     const g = page.locator('.vista-config .trascina[data-k=strapper]').first();
     await g.scrollIntoViewIfNeeded();
@@ -114,18 +113,20 @@ try {
   {
     const fc = () => page.locator('.vista-config .trascina[data-k=photocell]').count();
     const n0 = await fc();
-    await page.locator('select[aria-label="Aggiungi un componente alla linea"]').selectOption('photocell');
+    const gest = page.locator('#linea .gestione').first();
+    await gest.locator('button.chip:has-text("Fotocellula")').click();
+    await gest.locator('button.grande:has-text("Aggiungi")').click();
     await page.waitForTimeout(600);
     const n1 = await fc();
-    await page.locator('button:has-text("Elimina FC")').click();
+    await gest.locator('button.grande.secondario').click();
     await page.waitForTimeout(600);
     const n2 = await fc();
     say(`vista 2D, fotocellule: ${n0} → aggiunta ${n1} → eliminata ${n2}`);
     if (!(n1 === n0 + 1 && n2 === n0)) throw new Error('aggiunta/eliminazione dalla vista 2D non riuscita');
   }
   say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
-  const dbl = await page.locator('#pacchi .riga-mod select option[value="DoubleBanking"]').count();
-  const sing = await page.locator('#pacchi .riga-mod select option[value="SingleBanking"]').count();
+  const dbl = await page.locator('#pacchi table.configurazioni select option[value="DoubleBanking"]').count();
+  const sing = await page.locator('#pacchi table.configurazioni select option[value="SingleBanking"]').count();
   say(`opzioni banking: single ${sing}, double ${dbl}`);
   await page.locator('#cpack').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/web-6-pacchi3d.png`, fullPage: false });

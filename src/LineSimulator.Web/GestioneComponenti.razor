@@ -1,0 +1,133 @@
+@* Pannello "Aggiungi / Rimuovi": a sinistra si sceglie il tipo di componente, a destra i due tasti agiscono su quel tipo.
+   Rimuovi toglie il componente selezionato (se è di quel tipo), altrimenti l'ultimo del tipo. *@
+@using LineSimulator.Engine
+@using LineSimulator.Models
+
+<div class="gestione @(Fixed != null ? "fisso" : "")">
+    @if (Fixed == null)
+    {
+        <div class="tipi" role="group" aria-label="Tipo di componente">
+            @foreach (var t in Types)
+            {
+                string k = t.Key;
+                <button type="button" class="chip @(_type == k ? "attivo" : "")" @onclick="() => _type = k">@t.Label</button>
+            }
+        </div>
+    }
+    <div class="azioni">
+        <button type="button" class="grande" @onclick="Add">Aggiungi@(Fixed != null ? "" : " " + Label(_type).ToLowerInvariant())</button>
+        <button type="button" class="grande secondario" @onclick="Remove" disabled="@(Target() == null)">Rimuovi@(Target() is { } tg && Fixed == null ? " " + NameOf(tg) : "")</button>
+    </div>
+</div>
+@if (_msg.Length > 0) { <p class="nota">@_msg</p> }
+
+@code {
+    [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
+    /// <summary>Componente selezionato dal genitore (disegno o elenco): sceglie il tipo e viene tolto da Rimuovi.</summary>
+    [Parameter] public object? SelectedModel { get; set; }
+    /// <summary>Blocca il tipo (nessuna scelta): usato accanto alle singole famiglie di componenti.</summary>
+    [Parameter] public string? Fixed { get; set; }
+    /// <summary>Aggiunge anche tipologie di pacco e regole logiche.</summary>
+    [Parameter] public bool ShowExtra { get; set; }
+    /// <summary>Dopo ogni modifica: il componente aggiunto, oppure null se si è tolto qualcosa.</summary>
+    [Parameter] public EventCallback<object?> Changed { get; set; }
+
+    private string _type = "strapper";
+    private string _msg = "";
+    private object? _lastSel;
+
+    private static readonly (string Key, string Label, string AddKey)[] Base =
+    {
+        ("strapper", "Legatrice", "strapper"), ("section", "Via a rulli", "section"), ("photocell", "Fotocellula", "photocell"),
+        ("stop", "Fermo scomparente", "stop-center"), ("scale", "Bilico", "scale-center"), ("clamp", "Stringifascio", "clamp"),
+        ("compactor", "Compattatore", "compactor"), ("rejector", "Rigettatrice", "rejector")
+    };
+    private static readonly (string Key, string Label, string AddKey)[] Extra =
+    {
+        ("package", "Tipologia di pacco", "package"), ("rule", "Regola logica", "rule")
+    };
+
+    private IEnumerable<(string Key, string Label, string AddKey)> Types => ShowExtra ? Base.Concat(Extra) : Base;
+
+    protected override void OnParametersSet()
+    {
+        if (Fixed != null) { _type = Fixed; return; }
+        if (!ReferenceEquals(_lastSel, SelectedModel))
+        {
+            _lastSel = SelectedModel;
+            var k = TypeOf(SelectedModel);
+            if (k != null && Types.Any(t => t.Key == k)) _type = k;
+        }
+    }
+
+    private string Label(string key) => Types.Concat(Base).Concat(Extra).FirstOrDefault(t => t.Key == key).Label ?? key;
+
+    private static string? TypeOf(object? m) => m switch
+    {
+        StrapperConfig => "strapper", RollerSection => "section", PhotocellConfig => "photocell", IntermediateStopConfig => "stop",
+        WeighingScaleConfig => "scale", BundleClampConfig => "clamp", SideCompactorConfig => "compactor", RejectorConfig => "rejector",
+        PackageType => "package", LogicRule => "rule", _ => null
+    };
+
+    private static string NameOf(object m) => m switch
+    {
+        LineSimulator.Models.ComponentBase c => c.Id,
+        PackageType p => p.Id,
+        LogicRule r => r.Id,
+        BundleClampConfig => "stringifascio",
+        SideCompactorConfig => "compattatore",
+        RejectorConfig => "rigettatrice",
+        _ => ""
+    };
+
+    /// <summary>I componenti del tipo scelto, da monte a valle.</summary>
+    private List<object> Candidates() => _type switch
+    {
+        "strapper" => Project.Strappers.OrderBy(x => x.PositionMm).Cast<object>().ToList(),
+        "section" => Project.Sections.OrderBy(x => x.StartMm).Cast<object>().ToList(),
+        "photocell" => Project.Photocells.OrderBy(x => x.PositionMm).Cast<object>().ToList(),
+        "stop" => Project.IntermediateStops.OrderBy(x => x.PositionMm).Cast<object>().ToList(),
+        "scale" => Project.Scales.OrderBy(x => x.StartMm).Cast<object>().ToList(),
+        "clamp" => Project.BundleClamp.IsEnabled ? new List<object> { Project.BundleClamp } : new(),
+        "compactor" => Project.Compactor.IsEnabled ? new List<object> { Project.Compactor } : new(),
+        "rejector" => Project.Rejector.IsEnabled ? new List<object> { Project.Rejector } : new(),
+        "package" => Project.PackageTypes.Cast<object>().ToList(),
+        "rule" => Project.Rules.Cast<object>().ToList(),
+        _ => new()
+    };
+
+    private object? Target()
+    {
+        var list = Candidates();
+        if (list.Count == 0) return null;
+        if (SelectedModel != null && list.Any(x => ReferenceEquals(x, SelectedModel))) return SelectedModel;
+        var last = list[^1];
+        // l'ultimo pacco non si toglie
+        if (last is PackageType && list.Count < 2) return null;
+        return last;
+    }
+
+    private async Task Add()
+    {
+        string addKey = Types.Concat(Base).FirstOrDefault(t => t.Key == _type).AddKey ?? _type;
+        var added = ProjectEditing.Add(Project, addKey);
+        if (added == null)
+        {
+            _msg = _type == "strapper" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto.";
+            return;
+        }
+        ProjectEditing.Normalize(Project);
+        _msg = "";
+        await Changed.InvokeAsync(added);
+    }
+
+    private async Task Remove()
+    {
+        var t = Target();
+        if (t == null) return;
+        ProjectEditing.Delete(Project, new[] { t });
+        ProjectEditing.Normalize(Project);
+        _msg = "";
+        await Changed.InvokeAsync(null);
+    }
+}

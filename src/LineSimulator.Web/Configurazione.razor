@@ -22,16 +22,7 @@
         </select>
     </label>
 </div>
-<div class="comandi strumenti">
-    <select value="" @onchange="AddComponent" aria-label="Aggiungi un componente">
-        <option value="">Aggiungi…</option>
-        @foreach (var (k, l) in ProjectEditing.Addable)
-        {
-            <option value="@k">@l</option>
-        }
-    </select>
-    <button class="piccolo" @onclick="DeleteSelected" disabled="@(!ProjectEditing.CanDelete(Model))">Elimina</button>
-</div>
+<GestioneComponenti Project="Project" SelectedModel="Model" ShowExtra="true" Changed="OnManaged" />
 <Proprieta Project="Project" Model="Model" Changed="OnPropChanged" @key="Model" />
 @if (_messages.Count > 0)
 {
@@ -100,24 +91,10 @@
         await Changed.InvokeAsync();
     }
 
-    private async Task AddComponent(ChangeEventArgs e)
+    private async Task OnManaged(object? added)
     {
-        string key = e.Value?.ToString() ?? "";
-        if (key.Length == 0) return;
-        var added = ProjectEditing.Add(Project, key);
-        if (added == null) { _messages = new() { key == "strapper" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto." }; return; }
         _messages = ProjectEditing.Normalize(Project);
-        _sel = Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, added))?.Key ?? "project";
-        await Changed.InvokeAsync();
-    }
-
-    private async Task DeleteSelected()
-    {
-        var m = Model;
-        if (m == null || !ProjectEditing.CanDelete(m)) return;
-        ProjectEditing.Delete(Project, new[] { m });
-        _messages = ProjectEditing.Normalize(Project);
-        _sel = "project";
+        _sel = added == null ? "project" : Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, added))?.Key ?? "project";
         await Changed.InvokeAsync();
     }
 

@@ -193,3 +193,20 @@ details.pacco-scheda > summary { cursor: pointer; padding: .5rem 0; font-size: 1
 .vista-config .trascina:hover { filter: brightness(1.15); }
 .vista-config .trascina.afferrato { opacity: .7; }
 .vista-config .trascina.sel { filter: drop-shadow(0 0 3px var(--accento)) drop-shadow(0 0 1px var(--accento)); }
+
+.gestione { display: grid; grid-template-columns: 1fr auto; gap: .8rem 1.2rem; align-items: center; margin: .6rem 0; padding: .6rem; border: 1px solid var(--bordo); border-radius: 12px; background: var(--carta); }
+.gestione.fisso { grid-template-columns: auto; justify-content: start; padding: .3rem 0; border: 0; background: none; }
+.gestione .tipi { display: flex; flex-wrap: wrap; gap: .4rem; }
+.gestione .chip { border: 1px solid var(--bordo); background: var(--campo, var(--sfondo)); color: var(--testo); border-radius: 999px; padding: .45rem .9rem; cursor: pointer; font: inherit; }
+.gestione .chip.attivo { background: var(--accento); color: #fff; border-color: var(--accento); }
+.gestione .azioni { display: flex; gap: .6rem; }
+.gestione .grande { min-width: 7.5rem; padding: .8rem 1.1rem; font-size: 1rem; border-radius: 999px; cursor: pointer; border: 1px solid var(--accento); background: var(--accento); color: #fff; font-weight: 600; }
+.gestione .grande.secondario { background: transparent; color: var(--accento); }
+.gestione .grande:disabled { opacity: .45; cursor: default; }
+@media (max-width: 700px) { .gestione { grid-template-columns: 1fr; } }
+.tabella-scroll { overflow-x: auto; margin: .5rem 0; }
+.tabella-scroll table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+.tabella-scroll th, .tabella-scroll td { padding: .3rem .5rem; border-bottom: 1px solid var(--bordo); text-align: left; white-space: nowrap; }
+.tabella-scroll tr.scelto td { background: var(--morbido); }
+input.cella, select.cella { width: 100%; min-width: 5.2rem; box-sizing: border-box; padding: .3rem .4rem; }
+input.cella.stretta { min-width: 3.6rem; width: 4.2rem; }

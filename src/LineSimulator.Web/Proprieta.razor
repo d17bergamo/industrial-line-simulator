@@ -8,7 +8,7 @@
 @if (Model is { } m)
 {
     var items = Items(m);
-    if (EssentialsOnly) items = items.Where(i => !i.Advanced && i.Prop.Name != "OverrideGroup" && i.Prop.Name != "Name").ToList();
+    if (EssentialsOnly) items = items.Where(i => !i.Advanced && i.Prop.Name is not ("OverrideGroup" or "Name" or "RollerTopElevationMm" or "RollerDiameterMm" or "WidthMm")).ToList();
     foreach (var cat in items.Where(i => !i.Advanced || _advanced).GroupBy(i => i.Meta.Category))
     {
         <h3 class="categoria">@cat.Key</h3>
