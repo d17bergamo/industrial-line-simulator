@@ -188,3 +188,7 @@ details.pacco-scheda { border: 1px solid var(--bordo); border-radius: 10px; padd
 details.pacco-scheda > summary { cursor: pointer; padding: .5rem 0; font-size: 1rem; }
 .righello { margin: .4rem 0 .2rem; touch-action: none; user-select: none; }
 .righello svg { width: 100%; height: 74px; display: block; }
+
+.vista-config .trascina { cursor: ew-resize; touch-action: none; }
+.vista-config .trascina:hover { filter: brightness(1.15); }
+.vista-config .trascina.afferrato { opacity: .7; }
