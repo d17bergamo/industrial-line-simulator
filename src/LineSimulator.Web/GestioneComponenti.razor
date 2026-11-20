@@ -71,12 +71,12 @@
 
     private static string NameOf(object m) => m switch
     {
-        LineSimulator.Models.ComponentBase c => c.Id,
-        PackageType p => p.Id,
-        LogicRule r => r.Id,
         BundleClampConfig => "stringifascio",
         SideCompactorConfig => "compattatore",
         RejectorConfig => "rigettatrice",
+        PackageType p => p.Id,
+        LogicRule r => r.Id,
+        LineSimulator.Models.ComponentBase c => c.Id,
         _ => ""
     };
 

@@ -75,7 +75,8 @@
         @if (_tab == 1)
         {
             <GestioneComponenti Project="Work" Fixed="section" SelectedModel="SelectedComp" Changed="OnViewManaged" />
-            @{ var vie = Work.Sections.OrderBy(x => x.StartMm).ToList(); var trfMod = LayoutRules.TransferModule(Work); }
+            var vie = Work.Sections.OrderBy(x => x.StartMm).ToList();
+            var trfMod = LayoutRules.TransferModule(Work);
             <div class="tabella-scroll">
                 <table class="pacchi">
                     <thead><tr><th>Modulo</th><th>Ruolo</th><th>Inizio (m)</th><th>Fine (m)</th><th>Lunghezza (m)</th><th>Rulli</th></tr></thead>
