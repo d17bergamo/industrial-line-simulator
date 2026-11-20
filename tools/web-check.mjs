@@ -96,6 +96,21 @@ try {
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
   say(`dati area: ${await page.locator('#linea h4.sotto').count()} sezioni, famiglie ${await page.locator('#linea details.famiglia').count()}, righello ${await page.locator('#rpack svg').count()}, schede pacco ${await page.locator('details.pacco-scheda').count()}`);
+  {
+    const g = page.locator('.vista-config .trascina[data-k=strapper]').first();
+    await g.scrollIntoViewIfNeeded();
+    const before = await page.locator('svg.vista-config').innerHTML();
+    const b = await g.boundingBox();
+    if (b) {
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2 + 60, b.y + b.height / 2, { steps: 6 });
+      await page.mouse.up();
+      await page.waitForTimeout(800);
+    }
+    const after = await page.locator('svg.vista-config').innerHTML();
+    say(`trascinamento legatrice nella vista 2D: ${before !== after ? 'ok (vista cambiata)' : 'NESSUN CAMBIAMENTO'}`);
+  }
   say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
   const dbl = await page.locator('#pacchi .riga-mod select option[value="DoubleBanking"]').count();
   const sing = await page.locator('#pacchi .riga-mod select option[value="SingleBanking"]').count();
