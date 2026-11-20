@@ -26,6 +26,7 @@
     </div>
 
     <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
+        <div class="affiancati">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
                 @for (int i = 0; i < SampleProjects.All.Count; i++)
@@ -39,6 +40,10 @@
                 }
             </select>
         </label>
+        <label class="campo">Oppure apri un progetto salvato (.json)
+            <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
+        </label>
+        </div>
         @if (_model == -2)
         {
             <div class="griglia">
@@ -49,19 +54,16 @@
             <label class="spunta"><input type="checkbox" @bind="_cStop" /> Con fermo scomparente</label>
             <button @onclick="CreateCustom" disabled="@_busy">Crea il layout</button>
         }
-        <label class="campo">Oppure apri un progetto salvato (.json)
-            <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
-        </label>
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
         <div class="config-vista">
             <h3 class="categoria">Vista della configurazione</h3>
             @((MarkupString)ConfigSvg())
-            <p class="nota">Si aggiorna a ogni modifica. Quote in mm tra i componenti lungo la linea.</p>
+            <p class="nota">Si aggiorna a ogni modifica. Quote in mm tra i componenti; sotto, la lunghezza di ciascun modulo in metri.</p>
         </div>
         <h3 class="categoria">Configurazione dei componenti</h3>
 
         <div class="schede">
-            <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie</button>
+            <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie a rulli</button>
             <button class="@(_tab == 2 ? "attivo" : "")" @onclick="() => _tab = 2">Componenti</button>
             <button class="@(_tab == 3 ? "attivo" : "")" @onclick="() => _tab = 3">Tutte le proprietà</button>
         </div>
@@ -72,10 +74,8 @@
                 <div class="riga-mod">
                     <div class="riga-titolo"><b>@m.Id</b> <span class="nota">@m.Name · @F(m.StartMm)–@F(m.EndMm) mm · @Rollers(m) rulli da @F(m.RollerPitchMm) mm</span></div>
                     <div class="griglia">
-                        <label class="campo">Lunghezza (mm)<input type="number" step="@F(m.RollerPitchMm)" value="@F(m.LengthMm)" @onchange="e => SetSectionLength(m, e)" /></label>
-                        <label class="campo">Velocità alta (m/s)<input type="number" step="0.05" value="@F(m.HighSpeed)" @onchange="e => Edit(() => m.HighSpeed = Num(e, m.HighSpeed, 0.05, 3))" /></label>
+                        <label class="campo">Lunghezza modulo (m)<input type="number" step="@Mt(m.RollerPitchMm)" value="@Mt(m.LengthMm)" @onchange="e => SetSectionLength(m, e)" /></label>
                     </div>
-                    <p class="nota">Azionamento: @StrappingAreaRules.DescribeDrive(Work, m)</p>
                 </div>
             }
             <p class="nota">Le lunghezze vanno a rulli interi; la linea a valle si sposta di conseguenza.</p>
@@ -153,6 +153,33 @@
             <p class="nota">@_jsonNote</p>
             <textarea class="json" readonly rows="6" @onfocus="SelectJson" id="json-progetto">@_json</textarea>
         }
+
+        <h3 class="categoria">Dati area</h3>
+        <h4 class="sotto">1 · Obiettivo di produttività</h4>
+        <div class="griglia">
+            <label class="campo">Obiettivo (t/h)<input type="number" step="1" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /></label>
+        </div>
+        <h4 class="sotto">2 · Velocità e azionamenti delle vie a rulli</h4>
+        @{ var ordinate = Work.Sections.OrderBy(x => x.StartMm).ToList(); var trfMod = LayoutRules.TransferModule(Work); }
+        @for (int i = 0; i < ordinate.Count; i++)
+        {
+            var m = ordinate[i];
+            string ruolo = i == 0 ? "via di legatura" : ReferenceEquals(m, trfMod) ? "fronte accumulo" : "svincolo";
+            <div class="riga-mod">
+                <div class="griglia">
+                    <label class="campo">@m.Id · @ruolo: velocità alta (m/s)<input type="number" step="0.05" value="@F(m.HighSpeed)" @onchange="e => Edit(() => m.HighSpeed = Num(e, m.HighSpeed, 0.05, 3))" /></label>
+                </div>
+                <p class="nota">Azionamento (deciso dal software): @StrappingAreaRules.DescribeDrive(Work, m)</p>
+            </div>
+        }
+        <h4 class="sotto">3 · Tempi delle macchine, per famiglia</h4>
+        <p class="nota">Valgono per tutte le macchine della famiglia; le eccezioni si impostano dalla singola macchina (Tutte le proprietà).</p>
+        @foreach (var (titolo, modello) in Families())
+        {
+            <details class="famiglia"><summary>@titolo</summary>
+                <Proprieta Project="Work" Model="modello" EssentialsOnly="true" Changed="OnFamilyChanged" />
+            </details>
+        }
     </div></details>
 
     <details class="zona" open id="pacchi"><summary>Pacchi</summary><div class="corpo">
@@ -165,11 +192,12 @@
                 }
             </div>
             <div class="pacco3d"><canvas id="cpack"></canvas></div>
+            <div id="rpack" class="righello"></div>
             <div class="comandi">
                 <button class="piccolo" @onclick='() => Js("pacco3d.view", "3d")'>3D</button>
                 <button class="piccolo" @onclick='() => Js("pacco3d.view", "lato")'>Di lato</button>
                 <button class="piccolo" @onclick='() => Js("pacco3d.view", "alto")'>Dall'alto</button>
-                <span class="nota">Trascina per ruotare, rotellina per ingrandire. Quote in mm tra le legature.</span>
+                <span class="nota">Trascina il pacco per ruotare, rotellina per ingrandire; trascina una legatura (sul pacco o sul righello) per spostarla a passi di 50 mm. Quote in mm tra le legature.</span>
             </div>
         </div>
         @foreach (var t in Work.PackageTypes.ToList())
@@ -177,8 +205,8 @@
             string? why = BankingOptions.DoubleBankingBlockReason(Work, t);
             bool dbl = why == null;
             var chosenBanking = BankingOptions.Banking(Work, t);
-            <div class="riga-mod @(SelectedPack?.Id == t.Id ? "scelto" : "")" @onclick="() => _selPack = t.Id">
-                <div class="riga-titolo"><b>@t.Id</b><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina</button></div>
+            <details class="riga-mod pacco-scheda @(SelectedPack?.Id == t.Id ? "scelto" : "")">
+                <summary @onclick="() => _selPack = t.Id"><b>@t.Id</b> <span class="nota">@N(t.LengthMm / 1000, "0.#") m · @t.StrapPositionsMm.Count legature</span></summary>
                 <div class="griglia">
                     <label class="campo">Lunghezza (mm)<input type="number" step="100" value="@F(t.LengthMm)" @onchange="e => SetLength(t, e)" /></label>
                     <label class="campo">Peso (kg)<input type="number" step="10" value="@F(t.WeightKg)" @onchange="e => Edit(() => t.WeightKg = Num(e, t.WeightKg, 1, 100000))" /></label>
@@ -202,8 +230,18 @@
                         </select>
                     </label>
                 </div>
-                <p class="nota">Legature dalla testa: @string.Join(" · ", t.StrapPositionsMm.OrderBy(x => x).Select(x => F(x))) mm · distanze: @Gaps(t)</p>
-            </div>
+                <h4 class="sotto">Posizione delle legature (mm dalla testa)</h4>
+                <div class="griglia">
+                    @{ var ord = t.StrapPositionsMm.OrderBy(x => x).ToList(); }
+                    @for (int k = 0; k < ord.Count; k++)
+                    {
+                        int idx = k;
+                        <label class="campo">Legatura @(k + 1)<input type="number" step="50" value="@F(ord[k])" @onchange="e => Edit(() => MoveStrapTo(t, idx, Num(e, ord[idx], 0, t.LengthMm)))" /></label>
+                    }
+                </div>
+                <p class="nota">Distanze: @Gaps(t) mm</p>
+                <button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)">Elimina questo pacco</button>
+            </details>
         }
         <div class="comandi">
             <button @onclick="AddType">Aggiungi pacco</button>
@@ -440,7 +478,7 @@
         string X(double mm) => ((mm - x0) * k + M).ToString("0.#", CultureInfo.InvariantCulture);
         string Wd(double mm) => Math.Max(2, mm * k).ToString("0.#", CultureInfo.InvariantCulture);
         var sb = new System.Text.StringBuilder();
-        sb.Append($"<svg class=\"vista-config\" viewBox=\"0 0 {W} 230\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-label=\"Configurazione della linea\">");
+        sb.Append($"<svg class=\"vista-config\" viewBox=\"0 0 {W} 255\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-label=\"Configurazione della linea\">");
         // vie a rulli
         foreach (var s in secs)
         {
@@ -487,6 +525,14 @@
             double d = xs[i] - xs[i - 1];
             if (d < 1) continue;
             sb.Append($"<text x=\"{X((xs[i] + xs[i - 1]) / 2)}\" y=\"{yq + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{d:0}</text>");
+        }
+        // lunghezza di ciascun modulo della via a rulli, in metri
+        double y2 = 218;
+        sb.Append($"<line x1=\"{X(x0)}\" y1=\"{y2}\" x2=\"{X(secs.Count > 0 ? secs.Max(x => x.EndMm) : x1)}\" y2=\"{y2}\" stroke=\"var(--tenue)\"/>");
+        foreach (var s in secs)
+        {
+            sb.Append($"<line x1=\"{X(s.StartMm)}\" y1=\"{y2 - 6}\" x2=\"{X(s.StartMm)}\" y2=\"{y2 + 6}\" stroke=\"var(--tenue)\"/><line x1=\"{X(s.EndMm)}\" y1=\"{y2 - 6}\" x2=\"{X(s.EndMm)}\" y2=\"{y2 + 6}\" stroke=\"var(--tenue)\"/>");
+            sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{y2 + 20}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)} · {N(s.LengthMm / 1000, "0.##")} m</text>");
         }
         sb.Append("</svg>");
         return sb.ToString();
@@ -575,6 +621,24 @@
         Check();
     }
 
+    private void OnFamilyChanged()
+    {
+        ProjectEditing.Normalize(Work);
+        OnConfigChanged();
+    }
+
+    private IEnumerable<(string, object)> Families()
+    {
+        var st = Work.Strappers.Where(x => x.IsEnabled).ToList();
+        if (st.Count > 0) yield return ($"Legatrici e reggettatrici ({st.Count})", Work.StrapperDefaults);
+        yield return ($"Vie a rulli ({Work.Sections.Count})", Work.SectionDefaults);
+        if (Work.Scales.Any(x => x.IsEnabled)) yield return ($"Bilici ({Work.Scales.Count})", Work.ScaleDefaults);
+        yield return ("Trasferitore sollevabile a catene", Work.Transfer);
+        yield return ("Trasferitore d'accumulo", Work.AccumulationTransfer);
+        if (Work.BundleClamp.IsEnabled && st.Count > 0) yield return ("Stringifascio", Work.BundleClamp);
+        if (Work.Compactor.IsEnabled) yield return ("Compattatore laterale", Work.Compactor);
+    }
+
     private void OnConfigChanged()
     {
         _edited = true;
@@ -643,7 +707,7 @@
     private void SetSectionLength(RollerSection m, ChangeEventArgs e) => Edit(() =>
     {
         double pitch = m.RollerPitchMm > 0 ? m.RollerPitchMm : RollerSection.DefaultPitchMm;
-        double len = Math.Max(2 * pitch, Math.Round(Num(e, m.LengthMm, pitch, 200000) / pitch) * pitch);
+        double len = Math.Max(2 * pitch, Math.Round(Num(e, m.LengthMm / 1000.0, pitch / 1000.0, 200) * 1000.0 / pitch) * pitch);
         double oldEnd = m.EndMm;
         LineReflow.Fit(m, m.StartMm, m.StartMm + len);
         LineReflow.AfterResize(Work, m, oldEnd);
@@ -821,6 +885,28 @@
     private string? _selPack, _packKey;
     private PackageType? SelectedPack => Work.PackageTypes.FirstOrDefault(x => x.Id == _selPack) ?? Work.PackageTypes.FirstOrDefault();
 
+    private void MoveStrapTo(PackageType t, int idx, double mm)
+    {
+        var pos = t.StrapPositionsMm.OrderBy(v => v).ToList();
+        if (idx < 0 || idx >= pos.Count) return;
+        double lo = idx > 0 ? pos[idx - 1] + StrapEditing.StepMm : StrapEditing.StepMm;
+        double hi = idx < pos.Count - 1 ? pos[idx + 1] - StrapEditing.StepMm : t.LengthMm - StrapEditing.StepMm;
+        pos[idx] = Math.Clamp(StrapEditing.Snap(mm), lo, Math.Max(lo, hi));
+        t.StrapPositionsMm = pos;
+    }
+
+    /// <summary>Chiamato da pacco3d.js al rilascio di una legatura trascinata (sul pacco 3D o sul righello).</summary>
+    [JSInvokable]
+    public void MoveStrap(string id, int index, double mm)
+    {
+        var t = Work.PackageTypes.FirstOrDefault(x => x.Id == id);
+        if (t != null) Edit(() => MoveStrapTo(t, index, mm));
+        _packKey = null;
+        StateHasChanged();
+    }
+
+    private DotNetObjectReference<App>? _self;
+
     private string Gaps(PackageType t)
     {
         var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
@@ -843,7 +929,8 @@
             ((IJSInProcessRuntime)JS).Invoke<bool>("pacco3d.show", "cpack", new
             {
                 lengthM = t.LengthMm / 1000.0, widthM = t.GraphicWidthMm / 1000.0, heightM = t.GraphicHeightMm / 1000.0,
-                straps = t.StrapPositionsMm.Select(x => x / 1000.0).ToArray(), dark
+                straps = t.StrapPositionsMm.OrderBy(x => x).Select(x => x / 1000.0).ToArray(), dark,
+                id = t.Id, lengthMm = t.LengthMm, rulerId = "rpack", dotnet = _self ??= DotNetObjectReference.Create(this)
             });
         }
         catch (Exception) { }
@@ -906,6 +993,7 @@
         });
     }
 
+    private static string Mt(double mm) => (mm / 1000.0).ToString("0.###", CultureInfo.InvariantCulture);
     private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
     private static string N(double? v, string format) => v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v.Value.ToString(format, CultureInfo.InvariantCulture).Replace('.', ',') : "–";
 
@@ -1111,5 +1199,6 @@
     {
         StopPlay();
         Js("scena3d.dispose");
+        _self?.Dispose();
     }
 }

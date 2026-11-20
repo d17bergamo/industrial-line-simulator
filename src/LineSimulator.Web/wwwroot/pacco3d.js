@@ -101,9 +101,17 @@
         var dimColor = dark ? 0xaab6c2 : 0x34465c;
         var dimMat = new THREE.MeshBasicMaterial({ color: dimColor });
         var pos = d.straps.slice().sort(function (a, b) { return a - b; });
+        var meshes = [];
         pos.forEach(function (m) {
-            scene.add(box(0.05, H + 0.03, W + 0.03, L / 2 - m, H / 2, 0, strapMat));
+            var sm = box(0.05, H + 0.03, W + 0.03, L / 2 - m, H / 2, 0, strapMat);
+            // zona di presa più larga della legatura (invisibile), per trascinarla con il dito
+            var hit = box(0.22, H + 0.03, W + 0.03, 0, 0, 0, new THREE.MeshBasicMaterial({ visible: false }));
+            sm.add(hit);
+            sm.userData.hit = hit;
+            scene.add(sm);
+            meshes.push(sm);
         });
+        scene.userData.straps = meshes;
 
         // catena di quote sopra il pacco: testa → legature → coda, richiami verticali
         if (pos.length) {
@@ -127,6 +135,58 @@
         return scene;
     }
 
+    // posizione ammessa per la legatura idx: a passi di 50 mm, tra le vicine (almeno un passo) e dentro il pacco
+    function clampStrap(d, idx, mm) {
+        var pos = d.straps.map(function (v) { return Math.round(v * 1000); });
+        var step = 50, L = d.lengthMm;
+        var lo = idx > 0 ? pos[idx - 1] + step : step;
+        var hi = idx < pos.length - 1 ? pos[idx + 1] - step : L - step;
+        var v = Math.round(mm / step) * step;
+        return Math.min(Math.max(v, lo), Math.max(lo, hi));
+    }
+
+    // Righello sotto il pacco: testa a destra come nel 3D; le legature si trascinano a passi di 50 mm
+    function makeRuler(d) {
+        var host = d.rulerId ? document.getElementById(d.rulerId) : null;
+        if (!host) return { set: function () {} };
+        var NS = 'http://www.w3.org/2000/svg', W = 1000, M = 24, L = d.lengthMm;
+        var txt = css('--testo', '#1b2430'), mute = css('--tenue', '#5b6775'), acc = css('--lega', '#d97706');
+        function X(mm) { return M + (1 - mm / L) * (W - 2 * M); }
+        function el(n, a) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+        host.innerHTML = '';
+        var svg = el('svg', { viewBox: '0 0 ' + W + ' 74', preserveAspectRatio: 'none' });
+        svg.appendChild(el('line', { x1: M, y1: 40, x2: W - M, y2: 40, stroke: mute, 'stroke-width': 2 }));
+        for (var t = 0; t <= L; t += 500) {
+            var big = t % 1000 === 0;
+            svg.appendChild(el('line', { x1: X(t), y1: big ? 32 : 36, x2: X(t), y2: 44, stroke: mute }));
+            if (big) { var tt = el('text', { x: X(t), y: 62, 'text-anchor': 'middle', 'font-size': 14, fill: mute }); tt.textContent = (t / 1000) + ' m'; svg.appendChild(tt); }
+        }
+        var hs = [], ts = [];
+        var cur = d.straps.map(function (v) { return Math.round(v * 1000); });
+        cur.forEach(function (mm, i) {
+            var g = el('g', { style: 'cursor:ew-resize' });
+            var c = el('rect', { x: X(mm) - 9, y: 12, width: 18, height: 36, rx: 4, fill: acc, stroke: txt, 'stroke-width': 1 });
+            var tx = el('text', { x: X(mm), y: 9, 'text-anchor': 'middle', 'font-size': 14, fill: txt }); tx.textContent = mm;
+            g.appendChild(c); g.appendChild(tx); svg.appendChild(g);
+            hs.push(c); ts.push(tx);
+            var drag = null;
+            g.addEventListener('pointerdown', function (e) { e.stopPropagation(); g.setPointerCapture(e.pointerId); drag = { mm: cur[i], moved: false }; });
+            g.addEventListener('pointermove', function (e) {
+                if (!drag) return;
+                var r = svg.getBoundingClientRect();
+                var px = (e.clientX - r.left) / r.width * W;
+                var mm2 = clampStrap({ straps: cur.map(function (v) { return v / 1000; }), lengthMm: L }, i, (1 - (px - M) / (W - 2 * M)) * L);
+                if (mm2 !== drag.mm) { drag.mm = mm2; drag.moved = true; api.set(i, mm2); if (P && P.scene) { P.scene.userData.straps[i].position.x = d.lengthM / 2 - mm2 / 1000; P.need = true; } }
+            });
+            g.addEventListener('pointerup', function () { if (drag && drag.moved && d.dotnet) d.dotnet.invokeMethodAsync('MoveStrap', d.id, i, drag.mm); drag = null; });
+        });
+        var api = {
+            set: function (i, mm) { cur[i] = mm; hs[i].setAttribute('x', X(mm) - 9); ts[i].setAttribute('x', X(mm)); ts[i].textContent = mm; }
+        };
+        host.appendChild(svg);
+        return api;
+    }
+
     window.pacco3d = {
         // d = { lengthM, widthM, heightM, straps: [m dalla testa], dark }
         show: function (canvasId, d) {
@@ -146,9 +206,45 @@
                 var t = document.documentElement.getAttribute('data-tema');
                 var dark = t === 'scuro' || (t !== 'chiaro' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
                 P.scene = build(d, dark);
-                var down = null;
-                P.onDown = function (e) { down = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); };
+                var ruler = makeRuler(d);
+                var down = null, drag = null;
+                var ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+                function setRay(e) {
+                    var r = canvas.getBoundingClientRect();
+                    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+                    ray.setFromCamera(ndc, P.cam);
+                }
+                function mmAt(e) {
+                    setRay(e);
+                    var pt = new THREE.Vector3();
+                    var plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -d.heightM);
+                    if (!ray.ray.intersectPlane(plane, pt)) return null;
+                    return (d.lengthM / 2 - pt.x) * 1000;
+                }
+                P.onDown = function (e) {
+                    canvas.setPointerCapture(e.pointerId);
+                    setRay(e);
+                    var hits = ray.intersectObjects(P.scene.userData.straps.map(function (m) { return m.userData.hit; }), false);
+                    if (hits.length && d.dotnet) {
+                        var idx = P.scene.userData.straps.indexOf(hits[0].object.parent);
+                        drag = { idx: idx, mm: d.straps[idx] * 1000, moved: false };
+                        return;
+                    }
+                    down = { x: e.clientX, y: e.clientY };
+                };
                 P.onMove = function (e) {
+                    if (drag) {
+                        var mm = mmAt(e);
+                        if (mm == null) return;
+                        mm = clampStrap(d, drag.idx, mm);
+                        if (mm !== drag.mm) {
+                            drag.mm = mm; drag.moved = true;
+                            P.scene.userData.straps[drag.idx].position.x = d.lengthM / 2 - mm / 1000;
+                            ruler.set(drag.idx, mm);
+                            P.need = true;
+                        }
+                        return;
+                    }
                     if (!down) return;
                     P.orbit.theta -= (e.clientX - down.x) * 0.008;
                     P.orbit.phi -= (e.clientY - down.y) * 0.008;
@@ -156,7 +252,10 @@
                     P.user = true;
                     place();
                 };
-                P.onUp = function () { down = null; };
+                P.onUp = function () {
+                    down = null;
+                    if (drag) { var g = drag; drag = null; if (g.moved) d.dotnet.invokeMethodAsync('MoveStrap', d.id, g.idx, g.mm); }
+                };
                 P.onWheel = function (e) { e.preventDefault(); P.orbit.radius *= e.deltaY > 0 ? 1.1 : 0.9; place(); };
                 canvas.addEventListener('pointerdown', P.onDown);
                 canvas.addEventListener('pointermove', P.onMove);

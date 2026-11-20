@@ -69,11 +69,12 @@ try {
   await page.waitForTimeout(800);
   say(`layout personalizzato: ${(await page.locator('#pacchi').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   await page.screenshot({ path: `${out}/web-6-pacchi.png`, fullPage: true });
-  const len = page.locator('#pacchi input[type=number]').first();
+  await page.locator('#pacchi details.pacco-scheda > summary').first().click();
+  const len = page.locator('#pacchi details.pacco-scheda input[type=number]').first();
   await len.fill('7000');
   await len.dispatchEvent('change');
   await page.waitForTimeout(500);
-  await page.click('#linea .schede button:has-text("Vie")');
+  await page.click('#linea .schede button:has-text("Vie a rulli")');
   await page.screenshot({ path: `${out}/web-6-vie.png`, fullPage: true });
   await page.click('#linea .schede button:has-text("Componenti")');
   await page.screenshot({ path: `${out}/web-6-componenti.png`, fullPage: true });
@@ -94,6 +95,7 @@ try {
   await page.locator('#pacchi').scrollIntoViewIfNeeded();
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
+  say(`dati area: ${await page.locator('#linea h4.sotto').count()} sezioni, famiglie ${await page.locator('#linea details.famiglia').count()}, righello ${await page.locator('#rpack svg').count()}, schede pacco ${await page.locator('details.pacco-scheda').count()}`);
   say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
   const dbl = await page.locator('#pacchi .riga-mod select option[value="DoubleBanking"]').count();
   const sing = await page.locator('#pacchi .riga-mod select option[value="SingleBanking"]').count();
