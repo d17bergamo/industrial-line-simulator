@@ -178,3 +178,13 @@ main { min-width: 0; }
 
 .vista-config { width: 100%; height: auto; max-height: 260px; background: var(--campo, var(--sfondo)); border: 1px solid var(--bordo); border-radius: 10px; }
 .config-vista { margin: .75rem 0; }
+
+.affiancati { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 1rem; align-items: end; }
+.affiancati label.campo { margin-bottom: .7rem; }
+h4.sotto { margin: 1rem 0 .4rem; font-size: .95rem; color: var(--accento); }
+details.famiglia { border: 1px solid var(--bordo); border-radius: 10px; margin: .4rem 0; padding: .2rem .7rem; }
+details.famiglia > summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
+details.pacco-scheda { border: 1px solid var(--bordo); border-radius: 10px; padding: .2rem .8rem .6rem; margin-bottom: .5rem; }
+details.pacco-scheda > summary { cursor: pointer; padding: .5rem 0; font-size: 1rem; }
+.righello { margin: .4rem 0 .2rem; touch-action: none; user-select: none; }
+.righello svg { width: 100%; height: 74px; display: block; }

@@ -42,10 +42,7 @@
 </div>
 
 <h3 class="categoria">Obiettivo di produttività</h3>
-<div class="griglia">
-    <label class="campo">Obiettivo (t/h)<input type="number" step="1" value="@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)"
-                                              @onchange="SetTarget" /></label>
-</div>
+<p class="nota">Obiettivo: <b>@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> (si imposta in Linea e configurazione → Dati area).</p>
 <div class="comandi strumenti">
     <button @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
     <button @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>

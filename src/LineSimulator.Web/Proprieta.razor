@@ -1,0 +1,157 @@
+@* Proprietà di un componente (stesse descrizioni dei campi del programma Windows). Usato da Configurazione e da Dati area. *@
+@using System.Globalization
+@using System.Reflection
+@using LineSimulator.Core
+@using LineSimulator.Engine
+@using LineSimulator.Models
+
+@if (Model is { } m)
+{
+    var items = Items(m);
+    if (EssentialsOnly) items = items.Where(i => !i.Advanced && i.Prop.Name != "OverrideGroup" && i.Prop.Name != "Name").ToList();
+    foreach (var cat in items.Where(i => !i.Advanced || _advanced).GroupBy(i => i.Meta.Category))
+    {
+        <h3 class="categoria">@cat.Key</h3>
+        @foreach (var it in cat)
+        {
+            var item = it;
+            string label = string.IsNullOrEmpty(item.Meta.Unit) ? item.Meta.DisplayName : $"{item.Meta.DisplayName} [{item.Meta.Unit}]";
+            <div class="prop">
+                @if (item.Calculated)
+                {
+                    <div class="prop-calc"><span>@label</span><b>@Format(item.Prop.GetValue(m))</b></div>
+                }
+                else if (item.Prop.PropertyType == typeof(bool))
+                {
+                    <label class="spunta"><input type="checkbox" checked="@(item.Prop.GetValue(m) is true)" disabled="@item.Locked"
+                                                 @onchange="e => SetValue(item, e.Value)" /> @label@(item.Locked ? " (dalla famiglia)" : "")</label>
+                }
+                else if (item.Prop.PropertyType.IsEnum)
+                {
+                    <label class="campo">@label@(item.Locked ? " (dalla famiglia)" : "")
+                        <select value="@item.Prop.GetValue(m)?.ToString()" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)">
+                            @foreach (var n in Enum.GetNames(item.Prop.PropertyType))
+                            {
+                                <option value="@n">@EnumLabel(item.Prop.PropertyType, n)</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else if (item.Options != null)
+                {
+                    <label class="campo">@label
+                        <select value="@(item.Prop.GetValue(m)?.ToString() ?? "")" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)">
+                            <option value=""></option>
+                            @foreach (var o in item.Options)
+                            {
+                                <option value="@o">@o</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else
+                {
+                    <label class="campo">@label@(item.Locked ? " (dalla famiglia)" : "")
+                        <input type="text" value="@Format(item.Prop.GetValue(m))" disabled="@item.Locked" @onchange="e => SetValue(item, e.Value)" />
+                    </label>
+                }
+                @if (_errors.TryGetValue(item.Prop.Name, out var err))
+                {
+                    <p class="nota grave">@err</p>
+                }
+            </div>
+        }
+    }
+    int adv = EssentialsOnly ? 0 : items.Count(i => i.Advanced);
+    if (adv > 0)
+    {
+        <button class="piccolo" @onclick="() => _advanced = !_advanced">@(_advanced ? "Nascondi le avanzate" : $"Avanzate ({adv})")</button>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
+    [Parameter, EditorRequired] public object? Model { get; set; }
+    /// <summary>Solo i campi essenziali (come "Dati area" del programma Windows).</summary>
+    [Parameter] public bool EssentialsOnly { get; set; }
+    /// <summary>Chiamato dopo ogni modifica valida; il genitore normalizza il progetto.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool _advanced;
+    private readonly Dictionary<string, string> _errors = new();
+    private sealed record Item(PropertyInfo Prop, UiPropertyAttribute Meta, bool Advanced, bool Locked, bool Calculated, IReadOnlyList<string>? Options);
+
+    protected override void OnParametersSet() { }
+
+    private List<Item> Items(object m)
+    {
+        var t = m.GetType();
+        string typeName = t.Name;
+        var hidden = t.GetCustomAttribute<UiHiddenPropertiesAttribute>()?.Names ?? Array.Empty<string>();
+        return t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => (p, a: p.GetCustomAttribute<UiPropertyAttribute>()))
+            .Where(x => x.a != null && !hidden.Contains(x.p.Name) && !EssentialProperties.IsHidden(typeName, x.p.Name))
+            .OrderBy(x => x.a!.Order)
+            .Select(x => new Item(x.p, x.a!, EssentialProperties.IsAdvanced(typeName, x.p.Name),
+                                  ProjectEditing.IsLocked(Project, m, x.p.Name), x.a!.ReadOnly || !x.p.CanWrite,
+                                  x.p.PropertyType == typeof(string) ? ProjectEditing.IdOptions(Project, x.p.Name) : null))
+            .ToList();
+    }
+
+    private async Task SetValue(Item item, object? raw)
+    {
+        var m = Model;
+        if (m == null || item.Locked || item.Calculated) return;
+        try
+        {
+            object? v = item.Prop.PropertyType == typeof(bool) ? raw is true || raw?.ToString() == "true"
+                      : Parse(raw?.ToString() ?? "", item.Prop.PropertyType);
+            item.Prop.SetValue(m, v);
+            _errors.Remove(item.Prop.Name);
+            ProjectEditing.AfterEdit(Project, m, item.Prop.Name);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            var inner = ex is TargetInvocationException { InnerException: { } i } ? i : ex;
+            _errors[item.Prop.Name] = inner.Message;
+        }
+    }
+
+    private static string EnumLabel(Type t, string name) =>
+        (t.GetField(name)?.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).FirstOrDefault() as System.ComponentModel.DescriptionAttribute)?.Description ?? name;
+
+    private static string D(double d) => double.IsPositiveInfinity(d) ? "∞" : d.ToString("0.######", CultureInfo.InvariantCulture).Replace('.', ',');
+
+    private static string Format(object? v) => v switch
+    {
+        null => "",
+        double d => D(d),
+        IEnumerable<double> list => string.Join("; ", list.Select(D)),
+        IEnumerable<string> ls => string.Join("; ", ls),
+        bool b => b ? "sì" : "no",
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => v.ToString() ?? ""
+    };
+
+    private static double ParseDouble(string s)
+    {
+        s = s.Trim().Replace(',', '.');
+        if (s == "∞") return double.PositiveInfinity;
+        return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : throw new FormatException($"'{s}' non è un numero valido.");
+    }
+
+    private static object? Parse(string text, Type t)
+    {
+        if (t == typeof(string)) return text;
+        if (t == typeof(double)) return ParseDouble(text);
+        if (t == typeof(int))
+            return int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : throw new FormatException($"'{text}' non è un intero valido.");
+        if (t.IsEnum) return Enum.Parse(t, text, true);
+        if (t == typeof(List<double>))
+            return text.Split(new[] { ';', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).Select(ParseDouble).ToList();
+        if (t == typeof(List<string>))
+            return text.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+        throw new NotSupportedException($"Campo non modificabile qui: {t.Name}");
+    }
+}
