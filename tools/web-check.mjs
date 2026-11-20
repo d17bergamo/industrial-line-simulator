@@ -111,6 +111,18 @@ try {
     const after = await page.locator('svg.vista-config').innerHTML();
     say(`trascinamento legatrice nella vista 2D: ${before !== after ? 'ok (vista cambiata)' : 'NESSUN CAMBIAMENTO'}`);
   }
+  {
+    const fc = () => page.locator('.vista-config .trascina[data-k=photocell]').count();
+    const n0 = await fc();
+    await page.locator('select[aria-label="Aggiungi un componente alla linea"]').selectOption('photocell');
+    await page.waitForTimeout(600);
+    const n1 = await fc();
+    await page.locator('button:has-text("Elimina FC")').click();
+    await page.waitForTimeout(600);
+    const n2 = await fc();
+    say(`vista 2D, fotocellule: ${n0} → aggiunta ${n1} → eliminata ${n2}`);
+    if (!(n1 === n0 + 1 && n2 === n0)) throw new Error('aggiunta/eliminazione dalla vista 2D non riuscita');
+  }
   say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
   const dbl = await page.locator('#pacchi .riga-mod select option[value="DoubleBanking"]').count();
   const sing = await page.locator('#pacchi .riga-mod select option[value="SingleBanking"]').count();
