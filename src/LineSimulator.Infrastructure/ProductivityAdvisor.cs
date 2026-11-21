@@ -164,6 +164,9 @@ public static class ProductivityAdvisor
         if (!e.CompletedNormally) problem = e.FinishReason;
         else if (!strapped) problem = "non tutti i pacchi sono stati legati";
         else if (e.Collisions > 0) problem = $"{e.Collisions} collisioni";
+        // Regola dell'utente: nessuno strisciamento. Una proposta che ne produce non è ammessa (revisore B4, 2026-11-21).
+        else if (e.SlipEvents > 0) problem = $"{e.SlipEvents} strisciamenti";
+        else if (e.ExcessiveImpacts > 0) problem = $"{e.ExcessiveImpacts} urti eccessivi sul fermo";
         bool ok = problem == null;
         string b = r.BottleneckId;
         var topo = new LineTopology(p);

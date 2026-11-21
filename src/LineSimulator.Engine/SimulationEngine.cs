@@ -194,6 +194,13 @@ public sealed partial class SimulationEngine : ILogicContext
     public IReadOnlyList<PhotocellRuntime> Photocells => _photocells;
     public IReadOnlyList<StrapperRuntime> Strappers => _strappers;
     public IReadOnlyList<PackageRuntime> Packages => _packages;
+
+    /// <summary>
+    /// Pacco con quel numero d'ordine (1, 2, …) o null. I pacchi entrano in ordine con Sequence = indice + 1, quindi la ricerca è
+    /// diretta: in simulazione continua non cresce con i pacchi già passati (revisore C3).
+    /// </summary>
+    private PackageRuntime? PackageBySequence(int sequence)
+        => sequence >= 1 && sequence <= _packages.Count && _packages[sequence - 1].Sequence == sequence ? _packages[sequence - 1] : null;
     public StopperRuntime Stopper { get; }
     public TransferRuntime Transfer { get; }
     public StationRuntime? Station { get; }
@@ -480,7 +487,7 @@ public sealed partial class SimulationEngine : ILogicContext
         var waiting = _active.FirstOrDefault(p => !p.InfeedReleased);
         if (waiting != null)
         {
-            var prev = _packages.FirstOrDefault(p => p.Sequence == waiting.Sequence - 1);
+            var prev = PackageBySequence(waiting.Sequence - 1);
             // Regola dell'utente (2026-11-13 17:55, solo le tre fotocellule della via di legatura): il pacco in attesa su FC0
             // parte quando il precedente è legato e la sua coda ha liberato la fotocellula di uscita legatura.
             bool strapped = Station != null && prev != null && prev.StrapStatus == StrapStatus.Done && prev.TailM > StrappingFreeM + 1e-9;
@@ -655,7 +662,7 @@ public sealed partial class SimulationEngine : ILogicContext
     {
         if (Station == null || z != Station.Zone || Station.Package != res || Station.State != StationState.Releasing) return false;
         if (Project.Infeed.Mode == InfeedMode.AfterStrapping && res.StrapStatus == StrapStatus.Done
-            && _packages.Any(n => n.Sequence == res.Sequence + 1 && n.InfeedReleased && n.OnRollers))
+            && PackageBySequence(res.Sequence + 1) is { InfeedReleased: true, OnRollers: true })
         {
             _releasedFromStation.Add(res);
             return true;
@@ -1854,7 +1861,9 @@ public sealed partial class SimulationEngine : ILogicContext
                     || (Rejector != null && Rejector.Busy && Rejector.State != RejectorState.Enabled) || _scales.Any(s => s.Busy)
                     || (BundleClamp != null && !BundleClamp.IsOpen && !BundleClamp.IsClosed)
                     || (Compactor != null && !Compactor.IsOpen && !Compactor.IsClosed)
-                    || (Station != null && Station.State is StationState.Compacting or StationState.Clamping or StationState.Unclamping or StationState.WaitingStrappers)
+                    // Gli stati di sola attesa della stazione (compattazione, chiusura, apertura, attesa legatrici) non contano: i movimenti
+                    // veri sono già coperti da compattatore, stringifascio e legatrici. Se un consenso non arriva mai, dopo
+                    // DeadlockTimeoutS la simulazione si ferma con "BLOCCO LINEA" e il nome di chi aspetta (revisore A1, 2026-11-21).
                     || _strappers.Any(s => s.ArmState == StrapperArmState.Arming)
                     || _stops.Any(s => s.State is StopState.Aligning or StopState.Returning) || _batchWaitSince != null;
         if (busy) _lastProgressTime = t;
@@ -1862,8 +1871,14 @@ public sealed partial class SimulationEngine : ILogicContext
         {
             Deadlocked = true;
             var stopped = string.Join("; ", _zones.Where(z => !z.Running).Select(z => $"{z.Id}: {z.Reason}"));
+            // Chi aspetta: i dispositivi non a riposo (stazione di legatura, trasferitore, rigettatrice), così si vede quale consenso manca
+            var waiting = new List<string>();
+            if (Station != null && Station.State != StationState.Idle) waiting.Add($"stazione di legatura {Station.Zone.Id} ({Station.State}{(Station.Package != null ? ", " + Station.Package.Id : "")})");
+            if (Transfer.State != TransferState.Home) waiting.Add($"trasferitore ({Transfer.State})");
+            if (Rejector != null && Rejector.Busy && Rejector.State != RejectorState.Enabled) waiting.Add($"rigettatrice ({Rejector.State})");
+            string who = waiting.Count > 0 ? $" In attesa: {string.Join(", ", waiting)}." : string.Empty;
             Emit(SimEventType.Deadlock, EventSeverity.Error,
-                $"BLOCCO LINEA (deadlock): nessun movimento da {Project.Simulation.DeadlockTimeoutS:0} s. Zone ferme: {stopped}");
+                $"BLOCCO LINEA (deadlock): nessun movimento da {Project.Simulation.DeadlockTimeoutS:0} s.{who} Zone ferme: {stopped}");
             Finish("Blocco linea (deadlock)", false);
             return;
         }
