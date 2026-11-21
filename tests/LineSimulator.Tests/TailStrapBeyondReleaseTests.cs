@@ -153,4 +153,57 @@ public class LongReleaseSectionsTests
         Assert.DoesNotContain(e.Preparation.Changes, c => c.Contains("diviso in", StringComparison.Ordinal));
         Assert.Single(StrappingAreaRules.ReleaseModules(p));
     }
+
+    /// <summary>3 legatrici, svincolo di 75 m (60 rulli), tutti i pacchi fino a 24 m (B12).</summary>
+    private static LineProject Release75mProject(int lengthMm, int packages = 4)
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        var rel = StrappingAreaRules.ReleaseModules(p).Single();
+        double oldEnd = rel.EndMm;
+        LineReflow.Fit(rel, rel.StartMm, rel.StartMm + 60 * rel.RollerPitchMm);
+        LineReflow.AfterResize(p, rel, oldEnd);
+        p.Infeed.TypeSequence = new List<string> { p.PackageTypes.Single(t => Math.Abs(t.LengthMm - lengthMm) < 1).Id };
+        p.Infeed.PackageCount = packages;
+        return p;
+    }
+
+    [Fact]
+    public void Release75m_SectionsAreSizedOn12m_EvenWhenTheLongestIs24m()
+    {
+        var p = Release75mProject(24000);
+        var e = new SimulationEngine(p);
+        var sections = StrappingAreaRules.ReleaseModules(p);
+        Assert.Equal(5, sections.Count);
+        Assert.All(sections, s => Assert.Equal(12, s.RollerCount));                       // mai sotto i 12 m di riferimento
+        Assert.All(sections.Take(4), s => Assert.Contains(p.Photocells, pc => pc.ControlledInverterId == s.Id && pc.Action == PhotocellAction.Accumulation));
+        Assert.Contains(e.Preparation.Changes, c => c.Contains("diviso in 5 sezioni", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(6000)]
+    [InlineData(24000)]
+    public void Release75m_LongOrShortPackages_SimulateWithoutCollisionsOrSlip(int lengthMm)
+    {
+        var p = Release75mProject(lengthMm);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(0, e.Collisions);
+        Assert.Equal(0, e.SlipEvents);
+        Assert.Equal(p.Infeed.PackageCount, e.Packages.Count(k => k.State == PackageState.Exited));
+    }
+
+    [Fact]
+    public void Release_ShorterThanTheLongestPackagePlusMargin_StaysOneSection()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        var rel = StrappingAreaRules.ReleaseModules(p).Single();
+        double oldEnd = rel.EndMm;
+        double longest = p.PackageTypes.Max(t => t.LengthMm);
+        int rollers = (int)Math.Floor((longest + StrappingAreaRules.ParkingMarginMm) / rel.RollerPitchMm) - 1;
+        LineReflow.Fit(rel, rel.StartMm, rel.StartMm + rollers * rel.RollerPitchMm);
+        LineReflow.AfterResize(p, rel, oldEnd);
+        var e = new SimulationEngine(p);
+        Assert.DoesNotContain(e.Preparation.Changes, c => c.Contains("diviso in", StringComparison.Ordinal));
+    }
 }

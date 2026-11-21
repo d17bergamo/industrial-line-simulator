@@ -245,7 +245,7 @@ public static class StrappingAreaRules
 
     /// <summary>
     /// Regola dell'utente (2026-11-20): se lo svincolo è lungo, il programma lo divide da solo in sezioni di inverter calcolate
-    /// sul pacco più lungo, il massimo numero possibile (minimo 1), per avere più parcheggi: un parcheggio è una sezione di
+    /// sul pacco di riferimento da 12 m (B12), il massimo numero possibile (minimo 1), per avere più parcheggi: un parcheggio è una sezione di
     /// inverter. Le sezioni sono fatte di rulli interi, il più possibile uguali tra loro (differenza di un rullo); ognuna ha il
     /// suo inverter dedicato e la sua fotocellula (di accumulo, a 2 m dalla fine). Agisce solo se lo svincolo è una via sola:
     /// se l'utente ha già diviso lo svincolo a mano non lo tocca. Restituisce le modifiche.
@@ -263,7 +263,10 @@ public static class StrappingAreaRules
         double pitch = m.RollerPitchMm;
         int rollers = (int)Math.Round(m.LengthMm / pitch);
         if (rollers < 2 || Math.Abs(rollers * pitch - m.LengthMm) > 1) return done;          // via non a rulli interi: non si divide
-        int rMin = (int)Math.Ceiling((longest + ParkingMarginMm) / pitch - 1e-9);            // rulli minimi di una sezione
+        // Regola dell'utente (2026-11-21, B12): le sezioni si calcolano su un pacco di riferimento da 12 m (mai più corte), per avere
+        // più parcheggi; un pacco più lungo si parcheggia su più sezioni consecutive, purché lo svincolo lo contenga con il margine
+        if (rollers * pitch < longest + ParkingMarginMm - 1e-6) return done;
+        int rMin = (int)Math.Ceiling((ParkingReferenceMm + ParkingMarginMm) / pitch - 1e-9);   // rulli minimi di una sezione
         int n = rMin > 0 ? rollers / rMin : 1;
         if (n < 2) return done;
 
@@ -305,7 +308,7 @@ public static class StrappingAreaRules
         }
         string rl = string.Join(", ", sections.Select(s => s.RollerCount));
         done.Add($"{m.Id} (svincolo, {rollers} rulli = {rollers * pitch / 1000:0.##} m): diviso in {n} sezioni di inverter ({rl} rulli), una per parcheggio: " +
-                 $"il pacco più lungo ({longest:0} mm) con frenata e margine ({ParkingMarginMm:0} mm) ci sta in ogni sezione (minimo {rMin} rulli); ogni sezione ha il suo inverter e la sua fotocellula");
+                 $"sezioni calcolate su un pacco di {ParkingReferenceMm:0} mm con frenata e margine ({ParkingMarginMm:0} mm), minimo {rMin} rulli; il pacco più lungo ({longest:0} mm) si parcheggia su più sezioni consecutive; ogni sezione ha il suo inverter e la sua fotocellula");
         return done;
     }
 
@@ -381,6 +384,9 @@ public static class StrappingAreaRules
 
     /// <summary>Margini del parcheggio sullo svincolo: frenata prima del punto di arresto (2 m) + sicurezza di manovra (500 mm).</summary>
     public const double ParkingSafetyMm = 500;
+    /// <summary>Pacco di riferimento per dimensionare le sezioni-parcheggio dello svincolo lungo (decisione dell'utente, 2026-11-21).</summary>
+    public const double ParkingReferenceMm = 12000;
+
     public static double ParkingMarginMm => PhotocellRules.MinDistanceToTargetMm + ParkingSafetyMm;
 
     /// <summary>Pacco più corto fra le tipologie del progetto (come la decisione sulla legatura, si guardano tutte).</summary>
