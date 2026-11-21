@@ -210,3 +210,8 @@ details.pacco-scheda > summary { cursor: pointer; padding: .5rem 0; font-size: 1
 .tabella-scroll tr.scelto td { background: var(--morbido); }
 input.cella, select.cella { width: 100%; min-width: 5.2rem; box-sizing: border-box; padding: .3rem .4rem; }
 input.cella.stretta { min-width: 3.6rem; width: 4.2rem; }
+
+.riga-sim { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: flex-end; }
+.riga-sim .campo { margin-bottom: .7rem; }
+.riga-sim .primario { margin-bottom: .7rem; }
+.schede button.aggiungi { border-style: dashed; color: var(--accento); }
