@@ -22,7 +22,6 @@
         </select>
     </label>
 </div>
-<GestioneComponenti Project="Project" SelectedModel="Model" ShowExtra="true" Changed="OnManaged" />
 <Proprieta Project="Project" Model="Model" Changed="OnPropChanged" @key="Model" />
 @if (_messages.Count > 0)
 {
@@ -35,6 +34,9 @@
     [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
     /// <summary>Chiamato dopo ogni modifica del progetto.</summary>
     [Parameter] public EventCallback Changed { get; set; }
+    /// <summary>Componente selezionato altrove (vista 2D): il menu si posiziona su di lui.</summary>
+    [Parameter] public object? Focus { get; set; }
+    private object? _lastFocus;
 
     private string _sel = "project";
     private List<string> _messages = new();
@@ -45,6 +47,12 @@
     protected override void OnParametersSet()
     {
         if (!ReferenceEquals(_last, Project)) { _sel = "project"; _messages.Clear(); _last = Project; }
+        if (Focus != null && !ReferenceEquals(Focus, _lastFocus))
+        {
+            _lastFocus = Focus;
+            var key = Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, Focus))?.Key;
+            if (key != null) _sel = key;
+        }
     }
 
     /// <summary>Componenti del progetto, nello stesso ordine dell'albero del programma Windows.</summary>
@@ -91,11 +99,5 @@
         await Changed.InvokeAsync();
     }
 
-    private async Task OnManaged(object? added)
-    {
-        _messages = ProjectEditing.Normalize(Project);
-        _sel = added == null ? "project" : Nodes().FirstOrDefault(n => ReferenceEquals(n.Model, added))?.Key ?? "project";
-        await Changed.InvokeAsync();
-    }
 
 }

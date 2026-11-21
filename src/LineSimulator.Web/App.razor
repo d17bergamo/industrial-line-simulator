@@ -63,18 +63,12 @@
             <GestioneComponenti Project="Work" SelectedModel="SelectedComp" Changed="OnViewManaged" />
             <p class="nota">@(SelectedComp == null ? "Tocca un componente nel disegno per selezionarlo: Rimuovi toglie quello selezionato." : $"Selezionato: {_selId}")</p>
             @((MarkupString)ConfigSvg())
-            <p class="nota">Si aggiorna a ogni modifica. Quote in mm tra i componenti; sotto, la lunghezza di ciascun modulo in metri, la lunghezza totale e le distanze delle fotocellule (dai fermi, dalle fine moduli, dalle legatrici). Trascina legatrici, fermi, fotocellule, trasferitore e fermo finale per spostarli (passi di 50 mm, fotocellule 10 mm); trascina la maniglia blu a fine modulo per allungarlo o accorciarlo.</p>
         </div>
         <h3 class="categoria">Configurazione dei componenti</h3>
 
-        <div class="schede">
-            <button class="@(_tab == 1 ? "attivo" : "")" @onclick="() => _tab = 1">Vie a rulli</button>
-            <button class="@(_tab == 2 ? "attivo" : "")" @onclick="() => _tab = 2">Componenti</button>
-            <button class="@(_tab == 3 ? "attivo" : "")" @onclick="() => _tab = 3">Tutte le proprietà</button>
-        </div>
-        @if (_tab == 1)
-        {
-            <GestioneComponenti Project="Work" Fixed="section" SelectedModel="SelectedComp" Changed="OnViewManaged" />
+        <Configurazione Project="Work" Focus="SelectedComp" Changed="OnConfigChanged" />
+        <details class="famiglia"><summary>Vie a rulli: tabella riassuntiva</summary>
+            @{
             var vie = Work.Sections.OrderBy(x => x.StartMm).ToList();
             var trfMod = LayoutRules.TransferModule(Work);
             <div class="tabella-scroll">
@@ -97,60 +91,9 @@
                     </tbody>
                 </table>
             </div>
+            }
             <p class="nota">Le lunghezze vanno a rulli interi; la linea a valle si sposta di conseguenza.</p>
-        }
-        else if (_tab == 3)
-        {
-            <Configurazione Project="Work" Changed="OnConfigChanged" />
-        }
-        else
-        {
-            <h2>Legatrici</h2>
-            <GestioneComponenti Project="Work" Fixed="strapper" SelectedModel="SelectedComp" Changed="OnViewManaged" />
-            @foreach (var st in Work.Strappers.ToList())
-            {
-                <div class="griglia riga-mod">
-                    <label class="campo">@st.Id (mm)<input type="number" step="50" value="@F(st.PositionMm)" @onchange="e => Edit(() => st.PositionMm = Num(e, st.PositionMm, 0, 200000))" /></label>
-                    <label class="spunta"><input type="checkbox" checked="@st.IsEnabled" @onchange="e => Edit(() => st.IsEnabled = e.Value is true)" /> Abilitata</label>
-                    <button class="piccolo" @onclick="() => Edit(() => Work.Strappers.Remove(st))">Elimina</button>
-                </div>
-            }
-            <h2 class="sopra">Fotocellule</h2>
-            <GestioneComponenti Project="Work" Fixed="photocell" SelectedModel="SelectedComp" Changed="OnViewManaged" />
-            @foreach (var pc in Work.Photocells.OrderBy(x => x.PositionMm).ToList())
-            {
-                <div class="griglia riga-mod">
-                    <label class="campo">@pc.Id · @pc.Name (mm)<input type="number" step="50" value="@F(pc.PositionMm)" @onchange="e => Edit(() => pc.PositionMm = Num(e, pc.PositionMm, 0, 200000))" /></label>
-                    <label class="spunta"><input type="checkbox" checked="@pc.IsEnabled" @onchange="e => Edit(() => pc.IsEnabled = e.Value is true)" /> Abilitata</label>
-                </div>
-            }
-            <h2 class="sopra">Fermo scomparente</h2>
-            <GestioneComponenti Project="Work" Fixed="stop" SelectedModel="SelectedComp" Changed="OnViewManaged" />
-            <label class="campo">Posizione
-                <select value="@StopChoice" @onchange="SetStopChoice">
-                    <option value="none">Nessuno</option>
-                    <option value="center">Al centro del trasferitore</option>
-                    <option value="end">All'estremità a monte (intestatura di coda)</option>
-                    <option value="manual">A mano</option>
-                </select>
-            </label>
-            @foreach (var fm in Work.IntermediateStops.ToList())
-            {
-                <label class="campo">@fm.Id (mm)<input type="number" step="50" value="@F(fm.PositionMm)" @onchange="e => Edit(() => { fm.PositionMm = Num(e, fm.PositionMm, 0, 200000); fm.ManualPosition = true; })" /></label>
-            }
-            <h2 class="sopra">Trasferitore e bilici</h2>
-            <GestioneComponenti Project="Work" Fixed="scale" SelectedModel="SelectedComp" Changed="OnViewManaged" />
-            <div class="griglia">
-                <label class="campo">Trasferitore (mm)<input type="number" step="1250" value="@F(Work.Transfer.LengthMm)" @onchange="SetTransferLength" /></label>
-                <label class="campo">Bilici
-                    <select value="@Work.Scales.Count" @onchange="SetScales">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                    </select>
-                </label>
-                <label class="campo">Pesatura (s)<input type="number" step="1" value="@F(Work.Scales.FirstOrDefault()?.StabilizationTimeS ?? 0)" @onchange="SetWeighing" /></label>
-            </div>
-        }
+        </details>
         @if (_check.Count > 0 || _checkErrors.Count > 0)
         {
             <details open class="controlli">
@@ -243,18 +186,6 @@
                 </tbody>
             </table>
         </div>
-        @if (SelectedPack is { } sp)
-        {
-            <h4 class="sotto">Posizione delle legature di @sp.Id (mm dalla testa)</h4>
-            <div class="griglia">
-                @{ var ord = sp.StrapPositionsMm.OrderBy(x => x).ToList(); }
-                @for (int k = 0; k < ord.Count; k++)
-                {
-                    int idx = k;
-                    <label class="campo">Legatura @(k + 1)<input type="number" step="50" value="@F(ord[k])" @onchange="e => Edit(() => MoveStrapTo(sp, idx, Num(e, ord[idx], 0, sp.LengthMm)))" /></label>
-                }
-            </div>
-        }
         <div class="comandi">
             <button @onclick="AddType">Aggiungi pacco</button>
             @if (Work.PackageTypes.Any(x => BankingOptions.DoubleBankingAvailable(Work, x))) { <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button> }
@@ -564,7 +495,7 @@
         refs.Add((w.Stopper.PositionMm, "fermo finale"));
         foreach (var s in secs) refs.Add((s.EndMm, "fine " + s.Id));
         double yr = 292; int row = 0;
-        foreach (var pc in w.Photocells.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm))
+        foreach (var pc in w.Photocells.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).Skip(1))
         {
             (double Mm, string Name)? rf = null;
             if (pc.Purpose == PhotocellPurpose.StrappingReference && strs.Count > 0) rf = (strs[0].PositionMm, strs[0].Id);
