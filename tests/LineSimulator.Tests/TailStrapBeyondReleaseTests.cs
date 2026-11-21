@@ -60,8 +60,9 @@ public class TailStrapBeyondReleaseTests
         var trf = LayoutRules.TransferModule(p)!;
         Assert.True(trf.FollowsStrapping, "la via del trasferitore deve essere commutabile sulla legatura");
         Assert.Contains(e.Preparation.Changes, c => c.Contains("via del trasferitore", StringComparison.OrdinalIgnoreCase) || c.Contains(trf.Id));
-        // con pacchi da 9 m la legatura di coda non esce dallo svincolo: niente commutazione della via del trasferitore
+        // senza i pacchi lunghi la legatura di coda non esce dallo svincolo: niente commutazione della via del trasferitore
         var q = ShortReleaseProject(9, 2);
+        q.PackageTypes.RemoveAll(t => t.LengthMm > 12000);
         _ = new SimulationEngine(q);
         Assert.False(LayoutRules.TransferModule(q)!.FollowsStrapping);
     }
@@ -86,5 +87,70 @@ public class TailStrapBeyondReleaseTests
         }
         Assert.True(e.CompletedNormally, Diag(e));
         Assert.True(checkedScans > 0, "nessun pacco ha superato l'uscita dello svincolo durante la legatura");
+    }
+}
+
+/// <summary>
+/// Svincolo lungo diviso in sezioni-parcheggio (regola dell'utente, 2026-11-20): il massimo numero di sezioni sul pacco più
+/// lungo, rulli interi il più possibile uguali, ognuna con il suo inverter e la sua fotocellula.
+/// </summary>
+public class LongReleaseSectionsTests
+{
+    private static string Diag(SimulationEngine e) =>
+        $"{e.FinishReason} t={e.Time:0.0} collisioni={e.Collisions} strisciamenti={e.SlipEvents}\n"
+        + string.Join("\n", e.Events.Where(x => x.Severity >= EventSeverity.Warning).Take(20).Select(x => $"[{x.TimeS:0.0}] {x.Message}"));
+
+    /// <summary>3 legatrici, svincolo di 100 m (80 rulli), pacchi fino a 12 m, una sola misura di pacco.</summary>
+    private static LineProject LongReleaseProject(int packages = 6)
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        p.PackageTypes.RemoveAll(t => t.LengthMm > 12000);
+        var rel = StrappingAreaRules.ReleaseModules(p).Single();
+        double oldEnd = rel.EndMm;
+        LineReflow.Fit(rel, rel.StartMm, rel.StartMm + 80 * rel.RollerPitchMm);
+        LineReflow.AfterResize(p, rel, oldEnd);
+        p.Infeed.TypeSequence = new List<string> { p.PackageTypes.Single(t => Math.Abs(t.LengthMm - 12000) < 1).Id };
+        p.Infeed.PackageCount = packages;
+        return p;
+    }
+
+    [Fact]
+    public void Release100m_IsSplitInSixSectionsOfWholeRollers_EachWithItsOwnInverterAndPhotocell()
+    {
+        var p = LongReleaseProject();
+        var e = new SimulationEngine(p);
+        Assert.Contains(e.Preparation.Changes, c => c.Contains("diviso in 6 sezioni", StringComparison.Ordinal));
+        var sections = StrappingAreaRules.ReleaseModules(p);
+        Assert.Equal(6, sections.Count);
+        Assert.Equal(new[] { 14, 14, 13, 13, 13, 13 }, sections.Select(s => s.RollerCount).ToArray());
+        Assert.Equal(80, sections.Sum(s => s.RollerCount));
+        for (int i = 1; i < sections.Count; i++) Assert.Equal(sections[i - 1].EndMm, sections[i].StartMm, 6);
+        Assert.All(sections, s => Assert.Equal(s.Id, s.EffectiveZoneId));                 // un inverter per sezione
+        Assert.Equal(sections.Count, sections.Select(s => s.Id).Distinct().Count());
+        // ogni sezione ha una fotocellula che la comanda: le prime cinque di accumulo, l'ultima quella di arresto davanti al trasferitore
+        foreach (var s in sections)
+            Assert.Contains(p.Photocells, pc => pc.ControlledInverterId == s.Id);
+        Assert.Equal(sections[^1].Id, p.Photocells.Single(pc => pc.ActsAsTransferStop).ControlledInverterId);
+    }
+
+    [Fact]
+    public void Release100m_Simulates_WithoutCollisionsOrSlip()
+    {
+        var p = LongReleaseProject();
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.Equal(0, e.Collisions);
+        Assert.Equal(0, e.SlipEvents);
+        Assert.Equal(p.Infeed.PackageCount, e.Packages.Count(k => k.State == PackageState.Exited));
+    }
+
+    [Fact]
+    public void ShortRelease_IsNotSplit()
+    {
+        var p = SampleProjects.CreateThreeStrappers24m();
+        var e = new SimulationEngine(p);
+        Assert.DoesNotContain(e.Preparation.Changes, c => c.Contains("diviso in", StringComparison.Ordinal));
+        Assert.Single(StrappingAreaRules.ReleaseModules(p));
     }
 }

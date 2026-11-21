@@ -241,6 +241,83 @@ public static class StrappingAreaRules
         return done;
     }
 
+    // ------------------------------------------------------------------ Svincolo lungo: sezioni-parcheggio
+
+    /// <summary>
+    /// Regola dell'utente (2026-11-20): se lo svincolo è lungo, il programma lo divide da solo in sezioni di inverter calcolate
+    /// sul pacco più lungo, il massimo numero possibile (minimo 1), per avere più parcheggi: un parcheggio è una sezione di
+    /// inverter. Le sezioni sono fatte di rulli interi, il più possibile uguali tra loro (differenza di un rullo); ognuna ha il
+    /// suo inverter dedicato e la sua fotocellula (di accumulo, a 2 m dalla fine). Agisce solo se lo svincolo è una via sola:
+    /// se l'utente ha già diviso lo svincolo a mano non lo tocca. Restituisce le modifiche.
+    /// </summary>
+    public static List<string> SplitReleaseIntoSections(LineProject p)
+    {
+        var done = new List<string>();
+        if (!p.Simulation.AutoReleaseInverters || !p.Strappers.Any(s => s.IsEnabled)) return done;
+        var mods = ReleaseModules(p);
+        if (mods.Count != 1) return done;
+        var m = mods[0];
+        if (m.JoinStrappingInverter || m.RollerPitchMm <= 0) return done;
+        double longest = p.PackageTypes.Count == 0 ? 0 : p.PackageTypes.Max(t => t.LengthMm);
+        if (longest <= 0) return done;
+        double pitch = m.RollerPitchMm;
+        int rollers = (int)Math.Round(m.LengthMm / pitch);
+        if (rollers < 2 || Math.Abs(rollers * pitch - m.LengthMm) > 1) return done;          // via non a rulli interi: non si divide
+        int rMin = (int)Math.Ceiling((longest + ParkingMarginMm) / pitch - 1e-9);            // rulli minimi di una sezione
+        int n = rMin > 0 ? rollers / rMin : 1;
+        if (n < 2) return done;
+
+        int baseRollers = rollers / n, extra = rollers % n;                                  // il resto, un rullo per sezione, alle prime (a monte)
+        var sections = new List<RollerSection>();
+        double start = m.StartMm;
+        for (int j = 0; j < n; j++)
+        {
+            int r = baseRollers + (j < extra ? 1 : 0);
+            var s = j == 0 ? m : CloneSection(m);
+            if (j > 0)
+            {
+                s.Id = $"{m.Id}.{j + 1}";
+                s.Name = $"{m.Name} - sezione {j + 1}";
+                s.CommandZoneId = string.Empty;
+                s.FollowsStrapping = false;
+                s.JoinStrappingInverter = false;
+                s.SplitAtMm = 0;
+                p.Sections.Add(s);
+            }
+            s.StartMm = start;
+            s.RollerCount = r;
+            s.LengthMm = r * pitch;
+            start += s.LengthMm;
+            sections.Add(s);
+        }
+        // una fotocellula di accumulo a 2 m dalla fine di ogni sezione tranne l'ultima (che ha quella di arresto davanti al trasferitore)
+        for (int j = 0; j < n - 1; j++)
+        {
+            p.Photocells.Add(new PhotocellConfig
+            {
+                Id = $"FCS{m.Id}.{j + 1}",
+                Name = $"Fotocellula parcheggio {m.Id} sezione {j + 1}",
+                PositionMm = sections[j].EndMm - PhotocellRules.MinDistanceToTargetMm,
+                ControlledInverterId = sections[j].Id,
+                Action = PhotocellAction.Accumulation,
+                ResponseTimeMs = 20
+            });
+        }
+        string rl = string.Join(", ", sections.Select(s => s.RollerCount));
+        done.Add($"{m.Id} (svincolo, {rollers} rulli = {rollers * pitch / 1000:0.##} m): diviso in {n} sezioni di inverter ({rl} rulli), una per parcheggio: " +
+                 $"il pacco più lungo ({longest:0} mm) con frenata e margine ({ParkingMarginMm:0} mm) ci sta in ogni sezione (minimo {rMin} rulli); ogni sezione ha il suo inverter e la sua fotocellula");
+        return done;
+    }
+
+    /// <summary>Copia di una via a rulli (stessi parametri di azionamento e geometria): Id e posizione si impostano dopo.</summary>
+    private static RollerSection CloneSection(RollerSection src)
+    {
+        var n = new RollerSection();
+        foreach (var pi in typeof(RollerSection).GetProperties())
+            if (pi.CanRead && pi.CanWrite && pi.GetIndexParameters().Length == 0) pi.SetValue(n, pi.GetValue(src));
+        return n;
+    }
+
     // ------------------------------------------------------------------ Primo rullo dello svincolo
 
     /// <summary>

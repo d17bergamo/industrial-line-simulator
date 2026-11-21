@@ -38,6 +38,8 @@ public static class SimulationPreparation
     {
         var r = new PreparationReport();
         if (p.Sections.Count == 0) return r;
+        // Svincolo lungo: diviso in sezioni-parcheggio (Id provvisori, poi rinumerati lungo la linea da FixIds)
+        r.Changes.AddRange(StrappingAreaRules.SplitReleaseIntoSections(p));
         FixIds(p, r);
         FixStation(p, r);
         // Svincolo: stesso inverter della via di legatura solo se durante la legatura la testa del pacco deve entrarci

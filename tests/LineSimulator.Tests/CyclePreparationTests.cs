@@ -108,9 +108,16 @@ public class CyclePreparationTests
     [Fact]
     public void StrappersEnabled_UnstrappablePackage_DoesNotStart()
     {
+        // Con la commutazione automatica attiva la legatura di coda può proseguire sulla via del trasferitore (B10, 2026-11-21):
+        // il caso è "non legabile" solo con la commutazione automatica disattivata
         var p = LegacySamples.CreateStandardLine();
+        p.Simulation.AutoReleaseInverters = false;
         foreach (var s in p.Strappers) s.PositionMm += 2000;   // il pacco da 12 m non è più legabile nella zona M3
-        var r = SimulationPreparation.Prepare(LegacySamples.CreateStandardLine().Also(q => { foreach (var s in q.Strappers) s.PositionMm += 2000; }));
+        var r = SimulationPreparation.Prepare(LegacySamples.CreateStandardLine().Also(q =>
+        {
+            q.Simulation.AutoReleaseInverters = false;
+            foreach (var s in q.Strappers) s.PositionMm += 2000;
+        }));
         Assert.Contains(r.Errors, x => x.Contains("deve essere legato", StringComparison.Ordinal) && x.Contains("P12", StringComparison.Ordinal));
         var e = new SimulationEngine(p);
         Assert.True(e.IsFinished);
