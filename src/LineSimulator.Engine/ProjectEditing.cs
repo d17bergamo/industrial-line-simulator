@@ -237,8 +237,13 @@ public static class ProjectEditing
             }
             case "package":
             {
-                var t = new PackageType { Id = NextId(p, "T"), Name = "Nuova tipologia" };
+                // stessa regola per Windows e web: 3 m più lunga dell'ultima tipologia, Id dalla regola dei nomi, in sequenza d'ingresso
+                var last = p.PackageTypes.OrderBy(x => x.LengthMm).LastOrDefault();
+                int m = last == null ? 6 : (int)Math.Min(30, Math.Round(last.LengthMm / 1000) + 3);
+                var t = SampleProjects.Package(m);
+                t.Id = PackageNaming.UniqueId(p, t);
                 p.PackageTypes.Add(t);
+                p.Infeed.TypeSequence = p.PackageTypes.Select(x => x.Id).ToList();
                 added = t;
                 break;
             }

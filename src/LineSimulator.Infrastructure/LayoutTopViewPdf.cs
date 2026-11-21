@@ -65,13 +65,22 @@ public static class LayoutTopViewPdf
         // Via del trasferitore su due inverter (double banking): due zone di comando nello stesso modulo
         double split = TransferSplitRule.SplitMm(p);
         var trf = LayoutRules.TransferModule(p);
-        int i = split > 0 && trf != null ? list.FindIndex(z => z.Sections.Count == 1 && z.Sections[0] == trf) : -1;
+        int i = split > 0 && trf != null ? list.FindIndex(z => z.Sections.Contains(trf)) : -1;
         if (i >= 0)
         {
+            // anche se l'inverter comanda più moduli: la divisione cade dentro il modulo del trasferitore
             var z = list[i];
             string up = TransferSplitRule.MonteId(z.Id), down = TransferSplitRule.ValleId(z.Id);
-            list[i] = z with { Id = up, EndMm = split, Label = $"Inverter {up}: {Nm(trf!)} monte (secondo pacco)", Color = Palette[list.Count % Palette.Length] };
-            list.Insert(i + 1, z with { StartMm = split, Label = $"Inverter {down}: {Nm(trf!)} valle (primo pacco)" });
+            list[i] = z with
+            {
+                Id = up, Sections = z.Sections.Where(s => s.StartMm < split).ToList(), EndMm = split,
+                Label = $"Inverter {up}: {Nm(trf!)} monte (secondo pacco, doppio comando)", Color = Palette[list.Count % Palette.Length]
+            };
+            list.Insert(i + 1, z with
+            {
+                Id = down, Sections = z.Sections.Where(s => s.EndMm > split).ToList(), StartMm = split,
+                Label = $"Inverter {down}: {Nm(trf!)} valle (primo pacco, doppio comando)"
+            });
         }
         return list;
     }
@@ -330,6 +339,9 @@ public static class LayoutTopViewPdf
         var zones = Zones(p);
         var strapModule = StrappingAreaRules.StrappingModule(p);
         var strapZone = strapModule == null ? null : zones.FirstOrDefault(z => z.Sections.Contains(strapModule));
+        double divMm = TransferSplitRule.SplitMm(p);
+        var trfMod = LayoutRules.TransferModule(p);
+        bool divided = divMm > 0 && trfMod != null && zones.Count(z => z.Sections.Contains(trfMod)) > 1;
 
         t.Table("Sezioni inverter", new[] { ("Inverter", 60.0), ("Moduli", 150.0), ("Da [mm]", 55.0), ("A [mm]", 55.0), ("Lunghezza [mm]", 65.0),
             ("V min/nom/max [m/s]", 85.0), ("Acc/Dec [m/s²]", 65.0), ("Note", 235.0) },
@@ -340,11 +352,18 @@ public static class LayoutTopViewPdf
                 if (z == strapZone) notes.Add("via di legatura");
                 foreach (var f in z.Sections.Where(s => s.FollowsStrapping))
                     notes.Add($"{Nm(f)}: motori commutabili sull'inverter di legatura{(strapZone != null ? " (" + Nm(strapZone.Sections[0]) + ")" : "")}");
+                if (divided && trfMod != null && z.Sections.Contains(trfMod))
+                {
+                    bool up = z.Id == TransferSplitRule.MonteId(z.Id[..^TransferSplitRule.UpstreamSuffix.Length]) && z.EndMm <= divMm + 1;
+                    notes.Add(up
+                        ? $"monte della via del trasferitore: secondo pacco, doppio comando con il trasferitore; divisione a {Mm(divMm)} mm"
+                        : $"valle della via del trasferitore: primo pacco, fino al fermo finale; divisione a {Mm(divMm)} mm");
+                }
                 if (z.Sections.Count > 1) notes.Add("moduli comandati da un solo inverter");
                 if (!s0.AutoStopWhenEmpty) notes.Add("senza arresto automatico");
                 return new[]
                 {
-                    "Inverter " + Short(s0), string.Join(" + ", z.Sections.Select(Nm)), Mm(z.StartMm), Mm(z.EndMm), Mm(z.EndMm - z.StartMm),
+                    "Inverter " + (divided && trfMod != null && z.Sections.Contains(trfMod) ? z.Id : Short(s0)), string.Join(" + ", z.Sections.Select(Nm)), Mm(z.StartMm), Mm(z.EndMm), Mm(z.EndMm - z.StartMm),
                     $"{N2(s0.LowSpeed)} / {N2(s0.HighSpeed)} / {N2(s0.MaxSpeed)}", $"{N2(s0.Acceleration)} / {N2(s0.Deceleration)}", string.Join("; ", notes)
                 };
             }));
