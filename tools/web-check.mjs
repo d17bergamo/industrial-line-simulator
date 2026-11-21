@@ -73,16 +73,11 @@ try {
   await len.fill('7000');
   await len.dispatchEvent('change');
   await page.waitForTimeout(500);
-  await page.click('#linea .schede button:has-text("Vie a rulli")');
-  await page.screenshot({ path: `${out}/web-6-vie.png`, fullPage: true });
-  await page.click('#linea .schede button:has-text("Componenti")');
-  await page.screenshot({ path: `${out}/web-6-componenti.png`, fullPage: true });
   await page.click('#simula');
   await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
   say(`risultato layout personalizzato: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 400)}`);
   await page.screenshot({ path: `${out}/web-6-risultato.png`, fullPage: true });
   // configurazione completa: tutte le proprietà di un componente
-  await page.click('#linea .schede button:has-text("Tutte le proprietà")');
   const comp = page.locator('#linea select:not(#esempio)').first();
   const opts = await comp.locator('option').allInnerTexts();
   say(`componenti configurabili: ${opts.length} (${opts.slice(0, 6).join(' | ')} …)`);
