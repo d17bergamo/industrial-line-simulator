@@ -26,7 +26,7 @@
     </div>
 
     <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
-        <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" value="@Work.Name" @onchange="e => Edit(() => Work.Name = e.Value?.ToString() ?? "")" /></label>
+        <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" value="@Work.Name" @onchange='e => Edit(() => Work.Name = e.Value?.ToString() ?? "")' /></label>
         <div class="affiancati">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
