@@ -30,6 +30,20 @@ public static class BankingOptions
     /// </summary>
     public const double TailOvershootClearanceMm = 50;
 
+    /// <summary>
+    /// Posizione minima (mm) della coda del secondo pacco sulla via del trasferitore: non oltre lo sbalzo ammesso a monte e mai
+    /// nella sezione dell'inverter precedente (revisore B1/D2). Unico calcolo: lo usano motore, tabella, divisione e Word.
+    /// </summary>
+    public static double MinSecondTailMm(LineProject p)
+    {
+        double lowest = p.Transfer.PositionMm - p.Transfer.EffectiveMaxOverhangMm;
+        return LayoutRules.TransferModule(p) is { } m ? Math.Max(m.StartMm, lowest) : lowest;
+    }
+
+    /// <summary>Due pacchi da <paramref name="lenMm"/> stanno sulla via del trasferitore senza fermo scomparente (secondo per posizionamento).</summary>
+    public static bool TwoFitWithoutStop(LineProject p, double lenMm) =>
+        p.Stopper.PositionMm - 2 * lenMm - p.Transfer.DoubleBankingGapMm >= MinSecondTailMm(p) - 1e-6;
+
     /// <summary>Double banking possibile per il pacco (con almeno un'intestatura).</summary>
     public static bool DoubleBankingAvailable(LineProject p, PackageType t) =>
         HeadingAvailable(p, t, AccumulationMode.DoubleBanking, StopReference.Head) || HeadingAvailable(p, t, AccumulationMode.DoubleBanking, StopReference.Tail);
@@ -67,7 +81,7 @@ public static class BankingOptions
         {
             if (h == StopReference.Tail) return false;                                  // il secondo si ferma a distanza dal primo
             double head2 = Math.Min(firstTail - p.Transfer.DoubleBankingGapMm, head2Max);  // al più tardi prima dei rulli di valle
-            return head2 - len >= start - p.Transfer.EffectiveMaxOverhangMm - 1e-6;
+            return head2 - len >= MinSecondTailMm(p) - 1e-6;
         }
         double safety = p.Simulation.MinSafetyDistanceMm;
         foreach (var s in stops)

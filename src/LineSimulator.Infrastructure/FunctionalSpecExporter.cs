@@ -149,7 +149,7 @@ public static class FunctionalSpecExporter
         {
             if (virtualSecond)
             {
-                bool fits = p.Stopper.PositionMm - 2 * t.LengthMm - p.Transfer.DoubleBankingGapMm >= p.Transfer.PositionMm - p.Transfer.EffectiveMaxOverhangMm - 1;
+                bool fits = BankingOptions.TwoFitWithoutStop(p, t.LengthMm);
                 body.Append(Bullet(fits
                     ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking senza fermo scomparente. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo è fermato per posizionamento (encoder) {N(p.Transfer.DoubleBankingGapMm, "0")} mm dietro al primo. Il trasferitore preleva i due pacchi insieme."
                     : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (due pacchi non stanno sul trasferitore). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));

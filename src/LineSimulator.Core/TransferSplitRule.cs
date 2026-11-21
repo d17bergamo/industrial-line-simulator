@@ -114,7 +114,7 @@ public static class TransferSplitRule
         else
         {
             // dietro al primo pacco più lungo tra quelli che in due ci stanno (sbalzo ammesso a monte incluso)
-            double room = stopper - (start - (stop == null ? p.Transfer.EffectiveMaxOverhangMm : 0));
+            double room = stopper - (stop == null ? BankingOptions.MinSecondTailMm(p) : start);
             double gap = stop == null ? p.Transfer.DoubleBankingGapMm : BankingOptions.TailOvershootClearanceMm;
             var fit = dbl.Where(t => 2 * t.LengthMm + gap <= room + 1e-6).ToList();
             if (fit.Count == 0) return (0, "");

@@ -853,7 +853,7 @@ public sealed partial class SimulationEngine
         {
             // Senza fermo: serve il primo pacco già destinato allo stopper; il secondo può sbalzare un poco oltre il trasferitore
             if ((Stopper.Package ?? _finalAssigned) == null) return false;
-            return tail >= Math.Max(zi.StartM, Transfer.StartM - Project.Transfer.EffectiveMaxOverhangMm / 1000.0) - 1e-6;
+            return tail >= Math.Max(zi.StartM, BankingOptions.MinSecondTailMm(Project) / 1000.0) - 1e-6;
         }
         if (tail < Math.Max(zi.StartM, Transfer.StartM) - 1e-6) return false;
         if (reach > Stopper.PositionM + 1e-6) return false;
