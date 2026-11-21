@@ -103,7 +103,7 @@ public sealed class RollerSection : ComponentBase, IGroupChild
 
     /// <summary>
     /// Secondo inverter nello stesso modulo: posizione in linea del punto di divisione (0 = un solo inverter). I rulli a
-    /// valle del punto restano sull'inverter del modulo, quelli a monte passano a un secondo inverter (nome del modulo + "a").
+    /// valle del punto restano sull'inverter del modulo, quelli a monte passano a un secondo inverter (nome del modulo + "A"; quello di valle "B").
     /// Serve alla via del trasferitore in double banking: il primo pacco resta fermo in battuta sulla parte di valle mentre
     /// il secondo si posiziona su quella di monte, senza strisciamenti. La mette il programma quando una tipologia di pacco
     /// è in double banking (decisione dell'utente del 2026-11-14).

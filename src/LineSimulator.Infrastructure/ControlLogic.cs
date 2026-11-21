@@ -319,11 +319,11 @@ public static class ControlLogicGenerator
             string.Join(", ", rules.Where(r => r.Target == z.Id && (r.Action.StartsWith("AVVIA", StringComparison.Ordinal) || r.Action.StartsWith("VELOCITÀ", StringComparison.Ordinal) || r.Action.StartsWith("POSIZIONA", StringComparison.Ordinal) || r.Action.StartsWith("MARCIA", StringComparison.Ordinal))).Select(r => r.Id)),
             string.Join(", ", rules.Where(r => r.Target == z.Id && r.Action.StartsWith("ARRESTA", StringComparison.Ordinal)).Select(r => r.Id)))).ToList();
 
-        // Via del trasferitore su due inverter (double banking): la valle tiene il nome della via, la monte ha il suffisso "a"
+        // Via del trasferitore su due inverter (double banking): la monte ha il suffisso "A", la valle "B" (es. M3A e M3B)
         double splitMm = TransferSplitRule.SplitMm(p);
         if (splitMm > 0 && topo.StopperZone is { } sz)
         {
-            string down = sz.Id, up = sz.Id + TransferSplitRule.UpstreamSuffix, grp = "Via del trasferitore su due inverter";
+            string down = TransferSplitRule.ValleId(sz.Id), up = TransferSplitRule.MonteId(sz.Id), grp = "Via del trasferitore su due inverter";
             string held = $"{down}_PRIMO_IN_BATTUTA";
             signals.Add(new ControlSignal(held, $"Primo pacco intestato sul fermo finale e tutto a valle del punto di divisione ({splitMm:0} mm), fino al prelievo del trasferitore."));
             rules.Add(new ControlRule($"{up}.INSIEME", grp, $"!SIG({held})", $"STESSO COMANDO di {down}", up,
@@ -332,13 +332,16 @@ public static class ControlLogicGenerator
                 "Il primo pacco resta fermo in battuta: nessun rullo gira sotto di lui."));
             rules.Add(new ControlRule($"{up}.SECONDO_PACCO", grp, $"SIG({held})", $"COMANDI DELLA VIA solo su {up}: ingresso, posizionamento e intestatura del secondo pacco", up,
                 "Il secondo pacco si posiziona e si intesta muovendo solo la parte di monte."));
-            int k = invRows.FindIndex(r => r.Id == down);
+            int k = invRows.FindIndex(r => r.Id == sz.Id);
             if (k >= 0)
             {
                 var r = invRows[k];
-                invRows[k] = r with { StartMm = splitMm, LengthM = (r.EndMm - splitMm) / 1000.0, StopRules = (r.StopRules.Length > 0 ? r.StopRules + ", " : "") + $"{down}.FERMO_IN_BATTUTA" };
+                invRows[k] = r with { Id = down, StartMm = splitMm, LengthM = (r.EndMm - splitMm) / 1000.0, StopRules = (r.StopRules.Length > 0 ? r.StopRules + ", " : "") + $"{down}.FERMO_IN_BATTUTA" };
                 invRows.Insert(k, r with { Id = up, EndMm = splitMm, LengthM = (splitMm - r.StartMm) / 1000.0, StartRules = (r.StartRules.Length > 0 ? r.StartRules + ", " : "") + $"{up}.INSIEME, {up}.SECONDO_PACCO" });
             }
+            // le altre regole che comandavano l'inverter della via ora comandano la parte di valle (M3B): nessun bersaglio senza inverter
+            for (int ri = 0; ri < rules.Count; ri++)
+                if (rules[ri].Target == sz.Id) rules[ri] = rules[ri] with { Target = down };
         }
 
         return new ControlLogicDocument

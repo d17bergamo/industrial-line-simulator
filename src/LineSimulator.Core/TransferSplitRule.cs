@@ -24,7 +24,15 @@ namespace LineSimulator.Core;
 public static class TransferSplitRule
 {
     /// <summary>Suffisso dell'inverter di monte.</summary>
-    public const string UpstreamSuffix = "a";
+    public const string UpstreamSuffix = "A";
+    /// <summary>Suffisso dell'inverter di valle (primo pacco, verso il fermo finale) della via del trasferitore divisa (B13).</summary>
+    public const string DownstreamSuffix = "B";
+
+    /// <summary>Nome dell'inverter di monte (secondo pacco) della via <paramref name="moduleId"/> divisa in due: es. M3A.</summary>
+    public static string MonteId(string moduleId) => moduleId + UpstreamSuffix;
+
+    /// <summary>Nome dell'inverter di valle (primo pacco) della via <paramref name="moduleId"/> divisa in due: es. M3B.</summary>
+    public static string ValleId(string moduleId) => moduleId + DownstreamSuffix;
 
     /// <summary>Punto di divisione attuale della via del trasferitore (mm); 0 = un solo inverter.</summary>
     public static double SplitMm(LineProject p)
@@ -144,7 +152,7 @@ public static class TransferSplitRule
         var (now, why) = Desired(p, null);
         m.SplitAtMm = now;
         if (Math.Abs(now - was) < 0.5) return done;
-        string down = m.Id, up = m.Id + UpstreamSuffix;
+        string down = ValleId(m.Id), up = MonteId(m.Id);
         if (now > 0 && was <= 0)
             done.Add($"Via del trasferitore divisa in due inverter a {now:0} mm ({why}): il primo pacco resta fermo in battuta mentre il secondo si posiziona, senza strisciamenti. Inverter di valle {down} ({p.Stopper.PositionMm - now:0} mm), di monte {up} ({now - m.StartMm:0} mm). Il trasferitore sollevabile ha il doppio comando nello stesso punto.");
         else if (now > 0)

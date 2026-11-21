@@ -352,7 +352,8 @@ public class FableReviewTests
 
         var e = new SimulationEngine(ProjectSerializer.Clone(p));
         Assert.Equal(split / 1000.0, e.TransferSplitM);
-        Assert.Equal(trf.Id + "a", e.MonteInverterId);
+        Assert.Equal(trf.Id + "A", e.MonteInverterId);
+        Assert.Equal(trf.Id + "B", e.ValleInverterId);
 
         six.Banking = AccumulationMode.SingleBanking;
         var back = ProjectAutoFix.Run(p);

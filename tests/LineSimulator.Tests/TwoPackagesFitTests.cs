@@ -29,4 +29,34 @@ public class TwoPackagesFitTests
         var module = LayoutRules.TransferModule(p)!;
         Assert.True(min >= module.StartMm - 1e-6, $"coda minima {min} mm prima dell'inizio del modulo {module.StartMm} mm");
     }
+
+    private static LineProject ThreeStrappers() => SampleProjects.All.Single(m => m.Name.StartsWith("3 legatrici", StringComparison.Ordinal)).Factory();
+
+    [Fact]
+    public void DoubleBanking_TransferRoadwayOnTwoInverters_NamedAandB()
+    {
+        // revisore B13: monte = M3A (secondo pacco), valle = M3B (primo pacco)
+        var p = ThreeStrappers();
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        var e = new LineSimulator.Engine.SimulationEngine(p);
+        string id = LayoutRules.TransferModule(p)!.Id;
+        Assert.True(TransferSplitRule.SplitMm(p) > 0);
+        Assert.Equal(id + "A", e.MonteInverterId);
+        Assert.Equal(id + "B", e.ValleInverterId);
+        Assert.Equal(TransferSplitRule.MonteId(id), e.MonteInverterId);
+        var doc = LineSimulator.Infrastructure.ControlLogicGenerator.Generate(p);
+        Assert.Contains(doc.Inverters, r => r.Id == id + "A");
+        Assert.Contains(doc.Inverters, r => r.Id == id + "B");
+    }
+
+    [Fact]
+    public void SingleBankingOnly_TransferRoadwayOnOneInverter()
+    {
+        var p = ThreeStrappers();
+        BankingOptions.SetBankingAll(p, AccumulationMode.SingleBanking);
+        var e = new LineSimulator.Engine.SimulationEngine(p);
+        Assert.Equal(0, TransferSplitRule.SplitMm(p));
+        Assert.Null(e.MonteInverterId);
+        Assert.Null(e.ValleInverterId);
+    }
 }

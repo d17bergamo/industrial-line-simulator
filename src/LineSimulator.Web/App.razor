@@ -1174,7 +1174,7 @@
                 bool split = e.TransferSplitM is double sp && e.Topology.StopperZone != null && z.Id == e.Topology.StopperZone.Id && sp > z.Info.StartM && sp < z.Info.EndM;
                 if (split)
                 {
-                    _bands.Add(new Band(e.MonteInverterId ?? z.Id + "a", i, z.Info.StartM, e.TransferSplitM!.Value, false));
+                    _bands.Add(new Band(e.MonteInverterId ?? TransferSplitRule.MonteId(z.Id), i, z.Info.StartM, e.TransferSplitM!.Value, false));
                     _bands.Add(new Band(z.Id, i, e.TransferSplitM!.Value, z.Info.EndM, true));
                 }
                 else _bands.Add(new Band(z.Id, i, z.Info.StartM, z.Info.EndM, false));

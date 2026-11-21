@@ -1226,7 +1226,9 @@ public sealed partial class SimulationEngine : ILogicContext
     public double ValleFirstRollerM { get; private set; }
     private const double RollerMarginM = TransferSplitRule.RollerMarginMm / 1000.0;
     /// <summary>Nome dell'inverter della parte di monte della via del trasferitore (la valle tiene il nome della via).</summary>
-    public string? MonteInverterId => TransferSplitM == null || Topology.StopperZone == null ? null : Topology.StopperZone.Id + "a";
+    public string? MonteInverterId => TransferSplitM == null || Topology.StopperZone == null ? null : TransferSplitRule.MonteId(Topology.StopperZone.Id);
+    /// <summary>Nome dell'inverter della parte di valle della via del trasferitore divisa (primo pacco), es. M3B.</summary>
+    public string? ValleInverterId => TransferSplitM == null || Topology.StopperZone == null ? null : TransferSplitRule.ValleId(Topology.StopperZone.Id);
     private bool _valleSynced = true;
 
     /// <summary>
@@ -1797,7 +1799,10 @@ public sealed partial class SimulationEngine : ILogicContext
     private void InitRecorder()
     {
         if (MonteInverterId != null) Recorder.Track("INV:" + MonteInverterId, $"Inverter {MonteInverterId} (via del trasferitore, monte)", TrackGroup.Inverter);
-        foreach (var z in Topology.Zones) Recorder.Track("INV:" + z.Id, z.Inverter.Name.Length > 0 ? z.Inverter.Name : z.Id, TrackGroup.Inverter);
+        foreach (var z in Topology.Zones)
+            Recorder.Track("INV:" + z.Id,
+                ValleInverterId != null && z == Topology.StopperZone ? $"Inverter {ValleInverterId} (via del trasferitore, valle)" : z.Inverter.Name.Length > 0 ? z.Inverter.Name : z.Id,
+                TrackGroup.Inverter);
         foreach (var pc in Project.Photocells) Recorder.Track("PC:" + pc.Id, pc.Name.Length > 0 ? pc.Name : pc.Id, TrackGroup.Photocell);
         foreach (var s in Project.Strappers) Recorder.Track("STR:" + s.Id, s.Name.Length > 0 ? s.Name : s.Id, TrackGroup.Strapper);
         if (BundleClamp != null) Recorder.Track("KNOF", Label(Project.BundleClamp), TrackGroup.Clamp);

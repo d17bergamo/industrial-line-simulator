@@ -69,9 +69,9 @@ public static class LayoutTopViewPdf
         if (i >= 0)
         {
             var z = list[i];
-            string up = z.Id + TransferSplitRule.UpstreamSuffix;
+            string up = TransferSplitRule.MonteId(z.Id), down = TransferSplitRule.ValleId(z.Id);
             list[i] = z with { Id = up, EndMm = split, Label = $"Inverter {up}: {Nm(trf!)} monte (secondo pacco)", Color = Palette[list.Count % Palette.Length] };
-            list.Insert(i + 1, z with { StartMm = split, Label = $"Inverter {z.Id}: {Nm(trf!)} valle (primo pacco)" });
+            list.Insert(i + 1, z with { StartMm = split, Label = $"Inverter {down}: {Nm(trf!)} valle (primo pacco)" });
         }
         return list;
     }
