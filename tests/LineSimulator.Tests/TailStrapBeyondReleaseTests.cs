@@ -70,23 +70,51 @@ public class TailStrapBeyondReleaseTests
     [Theory]
     [InlineData(18)]
     [InlineData(24)]
-    public void ShortRelease_BeyondTheExit_StrappingStartsOnlyWithTheTransferAtHome(int lengthM)
+    public void ShortRelease_BeyondTheExit_PackageStopsAtTheEntryPhotocellWithoutConsent(int lengthM)
     {
+        // B11: il pacco avanza fino alla fotocellula d'ingresso della via del trasferitore; senza consenso (trasferitore a riposo)
+        // si ferma lì, mai dentro la via del trasferitore; con il consenso la legatura prosegue
         var p = ShortReleaseProject(lengthM);
         var e = new SimulationEngine(p);
         double entry = StrappingAreaRules.AccumulationEntryMm(p) / 1000.0;
-        int checkedScans = 0;
+        int beyond = 0;
         while (e.Step())
         {
             foreach (var k in e.Packages)
             {
-                if (k.State is not (PackageState.Positioning or PackageState.Strapping) || k.HeadM <= entry + 1e-3) continue;
-                checkedScans++;
-                Assert.True(e.Transfer.State == TransferState.Home, $"t={e.Time:0.0}: {k.Id} in legatura oltre l'uscita dello svincolo con il trasferitore {e.Transfer.State}");
+                if (k.State is not (PackageState.Positioning or PackageState.Strapping)) continue;
+                if (k.HeadM > entry + 0.5) { beyond++; Assert.True(e.Transfer.State == TransferState.Home, $"t={e.Time:0.0}: {k.Id} in legatura oltre la fotocellula d'ingresso con il trasferitore {e.Transfer.State}"); }
+                if (e.Transfer.State != TransferState.Home)
+                    Assert.True(k.HeadM <= e.Transfer.StartM + 1e-3, $"t={e.Time:0.0}: {k.Id} è entrato nella via del trasferitore con il trasferitore {e.Transfer.State}");
             }
         }
         Assert.True(e.CompletedNormally, Diag(e));
-        Assert.True(checkedScans > 0, "nessun pacco ha superato l'uscita dello svincolo durante la legatura");
+        Assert.Equal(0, e.Collisions);
+        Assert.Equal(0, e.SlipEvents);
+        Assert.True(beyond > 0, "nessun pacco ha superato la fotocellula d'ingresso durante la legatura");
+    }
+
+    [Theory]
+    [InlineData(18)]
+    [InlineData(24)]
+    public void ShortRelease_TransferRollersSwitchOnlyWhenTheHeadCoversTheEntryPhotocell(int lengthM)
+    {
+        var p = ShortReleaseProject(lengthM, 4);
+        var e = new SimulationEngine(p);
+        string trf = LayoutRules.TransferModule(p)!.Id;
+        double entry = StrappingAreaRules.AccumulationEntryMm(p) / 1000.0;
+        int seen = 0, switched = 0;
+        while (e.Step())
+        {
+            var fresh = e.Events.Skip(seen).ToList();
+            seen += fresh.Count;
+            if (!fresh.Any(x => x.Message.StartsWith(trf + ": motori commutati sull'inverter di legatura", StringComparison.Ordinal))) continue;
+            switched++;
+            double head = e.Packages.Where(k => k.State is PackageState.Positioning or PackageState.Strapping).Select(k => k.HeadM).DefaultIfEmpty(0).Max();
+            Assert.True(head >= entry - 0.05, $"t={e.Time:0.0}: via del trasferitore commutata con la testa a {head:0.00} m, fotocellula a {entry:0.00} m");
+        }
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.True(switched > 0, "la via del trasferitore non è mai stata commutata sulla legatura");
     }
 }
 

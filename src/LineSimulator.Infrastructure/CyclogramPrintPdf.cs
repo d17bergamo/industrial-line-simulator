@@ -26,7 +26,7 @@ public static class CyclogramPrintPdf
     /// <summary>Ordine del ciclo di un pacco: così la tabella "quando → allora" si legge dall'ingresso al deposito.</summary>
     private static readonly string[] CycleOrder =
     {
-        "INGRESSO", "AUTOSTART", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "PROSSIMA", "COMMUTA", "LEGATO",
+        "INGRESSO", "AUTOSTART", "RIFERIMENTO", "FERMATA", "LEGA", "APRE", "PROSSIMA", "COMMUTA", "LEGATURA_ATTESA_TRASF", "LEGATO",
         "ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO", "VIA_LIBERA", "RALLENTA", "BATTUTA", "VALLE_FERMA", "SECONDO", "FERMO_CODA",
         "SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO", "PESA", "PESA_DIFF", "RIPOSO", "AUTOSTOP"
     };

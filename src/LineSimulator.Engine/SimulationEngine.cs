@@ -746,8 +746,9 @@ public sealed partial class SimulationEngine : ILogicContext
             string zoneKey = "INV:" + pc.ControlledZoneId;
             if (!pc.Config.IsEnabled || !pc.Output) { _transferStopActive.Remove(pc.Id); continue; }
             // Il pacco in legatura di coda che porta la testa oltre questa fotocellula ha già il consenso del trasferitore
-            // (fermata partita solo con trasferitore a riposo e via libera): la fotocellula non lo ferma (B10)
-            if (Station != null && Station.Package != null && ReferenceEquals(pc.OutputPackage, Station.Package) && StrappingInProgress(Station))
+            // (dato alla fotocellula con trasferitore a riposo e via libera, B11): la fotocellula non lo ferma
+            if (Station != null && Station.Package != null && ReferenceEquals(pc.OutputPackage, Station.Package) && StrappingInProgress(Station)
+                && ReferenceEquals(_entryGranted, Station.Package))
             {
                 _transferStopActive.Remove(pc.Id);
                 continue;
@@ -827,9 +828,14 @@ public sealed partial class SimulationEngine : ILogicContext
             }
             else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning && FollowerWait(Station) is { } wait)
             {
-                // Lo svincolo (o la via del trasferitore) che segue la legatura è ancora occupato dal pacco precedente, oppure il
-                // trasferitore non ha dato il consenso: la legatura aspetta prima di muovere il pacco
+                // Lo svincolo che segue la legatura è ancora occupato dal pacco precedente: la legatura aspetta prima di muovere il pacco
                 mode = InverterMode.Stop; reason = wait;
+            }
+            else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning && EntryWait(Station) is { } entryWait)
+            {
+                // B11: la testa è sulla fotocellula d'ingresso della via del trasferitore e manca il consenso: il pacco si ferma lì
+                // (rampa normale, gli svincoli e la via commutati si fermano con lui) e riparte appena il consenso arriva
+                mode = InverterMode.Stop; reason = entryWait;
             }
             else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning)
             {
@@ -958,49 +964,74 @@ public sealed partial class SimulationEngine : ILogicContext
 
     /// <summary>Svincolo che il pacco in legatura deve impegnare (fermata oltre il suo inizio o testa già dentro).</summary>
     private bool NeedsFollower(StationRuntime st, ZoneRuntime f)
-        => st.Package != null && (st.Package.HeadM > f.Info.StartM - 1e-6 || st.TargetHeadM > f.Info.StartM + 1e-6);
+    {
+        if (st.Package == null) return false;
+        // Via del trasferitore (B11): si commuta sulla legatura solo quando la testa del pacco copre la fotocellula d'ingresso
+        // (almeno 2 m prima: i rulli hanno il tempo di arrivare alla velocità del pacco, senza strisciamenti)
+        if (f.Info == Topology.StopperZone) return st.Package.HeadM >= StrappingAreaRules.AccumulationEntryMm(Project) / 1000.0 - 1e-6;
+        return st.Package.HeadM > f.Info.StartM - 1e-6 || st.TargetHeadM > f.Info.StartM + 1e-6;
+    }
 
     private bool OthersOn(ZoneRuntime f, PackageRuntime? except)
-        => _active.Any(q => q != except && q.OnRollers && q.HeadM > f.Info.StartM + 1e-9 && q.TailM < f.Info.EndM - 1e-9);
+    {
+        // via del trasferitore divisa in double banking: il primo pacco sta a valle, conta solo la metà a monte
+        double end = f.Info == Topology.StopperZone && DoubleBanking && TransferSplitM is { } split ? split : f.Info.EndM;
+        return _active.Any(q => q != except && q.OnRollers && q.HeadM > f.Info.StartM + 1e-9 && q.TailM < end - 1e-9);
+    }
 
     /// <summary>Primo svincolo da impegnare per la prossima fermata ancora occupato da un altro pacco (null = via libera).</summary>
     private ZoneRuntime? FollowerBusyFor(StationRuntime st)
     {
         foreach (var f in Followers)
-            if (NeedsFollower(st, f) && st.Package!.HeadM <= f.Info.StartM + 1e-6 && OthersOn(f, st.Package)) return f;
+            if (f.Info != Topology.StopperZone && NeedsFollower(st, f) && st.Package!.HeadM <= f.Info.StartM + 1e-6 && OthersOn(f, st.Package)) return f;
         return null;
     }
 
-    /// <summary>
-    /// Motivo per cui la prossima fermata di legatura non può ancora partire (null = via libera): svincolo o via del
-    /// trasferitore ancora occupati da un altro pacco, oppure consenso del trasferitore mancante (B10).
-    /// </summary>
+    /// <summary>Motivo per cui la prossima fermata di legatura non può ancora partire: svincolo ancora occupato da un altro pacco (null = via libera).</summary>
     private string? FollowerWait(StationRuntime st)
-    {
-        if (FollowerBusyFor(st) is { } busy)
-            return Topology.StopperZone != null && busy.Info == Topology.StopperZone
-                ? $"Attesa via del trasferitore {busy.Id} libera per la fermata {st.StopIndex + 1}"
-                : $"Attesa svincolo {busy.Id} libero per la fermata {st.StopIndex + 1}";
-        return TransferConsentMissing(st) is { } why ? $"Attesa consenso del trasferitore per la fermata {st.StopIndex + 1}: {why}" : null;
-    }
+        => FollowerBusyFor(st) is { } busy ? $"Attesa svincolo {busy.Id} libero per la fermata {st.StopIndex + 1}" : null;
+
+    /// <summary>Pacco in legatura che ha già il consenso del trasferitore per entrare sulla sua via (dato alla fotocellula d'ingresso).</summary>
+    private PackageRuntime? _entryGranted;
+    private bool _entryWaiting;
 
     /// <summary>
-    /// Regola dell'utente (2026-11-21, B10): se la fermata porta la testa del pacco oltre la fotocellula di uscita dello svincolo
-    /// (inizio dell'accumulo), la legatura parte solo con il trasferitore a riposo e la via davanti libera da altri pacchi.
-    /// In double banking, per il secondo pacco della coppia: primo pacco intestato sul fermo finale e metà a monte libera.
-    /// Dato il consenso vale per tutta la fermata (la testa è già oltre il confine). Null = consenso dato o non necessario.
+    /// Regola dell'utente (2026-11-21, B10 corretta con B11): se la fermata porta la testa del pacco oltre la fotocellula d'ingresso
+    /// della via del trasferitore, il pacco avanza normalmente fino alla fotocellula; lì, se manca il consenso, si ferma e aspetta.
+    /// Consenso: trasferitore a riposo e via davanti libera; in double banking, per il secondo pacco, anche primo pacco intestato
+    /// e metà a monte libera. Dato il consenso vale per tutta la legatura del pacco. Null = può proseguire.
     /// </summary>
-    private string? TransferConsentMissing(StationRuntime st)
+    private string? EntryWait(StationRuntime st)
     {
         var pkg = st.Package;
         if (pkg == null || Topology.StopperZone == null) return null;
+        if (ReferenceEquals(_entryGranted, pkg)) return null;
         double entry = StrappingAreaRules.AccumulationEntryMm(Project) / 1000.0;
-        if (entry > 1e6) return null;                                  // nessun accumulo davanti al trasferitore
-        if (st.TargetHeadM <= entry + 1e-6) return null;               // la fermata resta prima dell'accumulo
-        if (pkg.HeadM > entry + 1e-6) return null;                     // già oltre: il consenso vale per tutta la fermata
+        if (entry > 1e6 || st.TargetHeadM <= entry + 1e-6 || pkg.HeadM < entry - 1e-6)
+        {
+            _entryWaiting = false;
+            return null;                                               // fermata prima dell'accumulo o testa non ancora alla fotocellula
+        }
+        var why = TransferConsentMissing(st, entry);
+        if (why == null)
+        {
+            _entryGranted = pkg;
+            if (_entryWaiting)
+                Link("LEGATURA_ATTESA_TRASF", "Trasferitore a riposo e via davanti libera", "Il pacco in legatura riparte e la via del trasferitore passa sulla legatura", "TRANSFER", StationKey, pkg.Id);
+            _entryWaiting = false;
+            return null;
+        }
+        _entryWaiting = true;
+        return $"Legatura ferma alla fotocellula d'ingresso della via del trasferitore (fermata {st.StopIndex + 1}): {why}";
+    }
+
+    /// <summary>Consenso del trasferitore per l'ingresso del pacco in legatura sulla sua via (null = dato).</summary>
+    private string? TransferConsentMissing(StationRuntime st, double entry)
+    {
+        var pkg = st.Package!;
         if (Transfer.State != TransferState.Home) return "trasferitore non a riposo";
         var first = DoubleBanking ? Stopper.Package ?? _finalAssigned : null;
-        if (first != null)
+        if (first != null && first != pkg)
         {
             if (Stopper.State != StopperState.Aligned) return "primo pacco non ancora intestato sul fermo finale";
             double split = TransferSplitM ?? Transfer.StartM;
