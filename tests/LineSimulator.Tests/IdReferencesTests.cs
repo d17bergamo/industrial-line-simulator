@@ -1,5 +1,6 @@
 using LineSimulator.Core;
 using LineSimulator.Engine;
+using LineSimulator.Infrastructure;
 using LineSimulator.Models;
 
 namespace LineSimulator.Tests;
@@ -67,5 +68,19 @@ public class IdReferencesTests
         Assert.NotNull(ProjectEditing.RenameId(p, sections[0], "  "));
         Assert.NotNull(ProjectEditing.RenameId(p, sections[0], sections[1].Id));
         Assert.Null(ProjectEditing.RenameId(p, sections[0], sections[0].Id));
+    }
+
+    [Fact]
+    public void AutoFix_RunTwice_ProjectIsUnchanged()
+    {
+        // revisore C6: due correzioni che si annullano non devono lasciare il progetto in uno stato diverso alla seconda esecuzione
+        foreach (var m in SampleProjects.All)
+        {
+            var p = m.Factory();
+            ProjectAutoFix.Run(p);
+            string once = ProjectSerializer.Serialize(p);
+            ProjectAutoFix.Run(p);
+            Assert.True(once == ProjectSerializer.Serialize(p), $"{m.Name}: la seconda esecuzione di \"Sistema automaticamente\" ha cambiato il progetto");
+        }
     }
 }
