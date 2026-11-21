@@ -1049,6 +1049,9 @@ public sealed partial class SimulationEngine
         if (_active.Any(x => x.OnRollers && Math.Abs(x.Velocity) > 1e-3 && x.TailM < Transfer.EndM - 1e-6
                              && x.HeadM > Transfer.StartM - (x.Velocity * x.Velocity / (2 * 0.8) + 0.5)))
             return null;
+        // né mentre un pacco in legatura (legatura di coda oltre lo svincolo) è sulla via del trasferitore (B10)
+        if (Station != null && Station.Package != null && StrappingInProgress(Station) && Station.Package.HeadM > Transfer.StartM + 1e-6)
+            return null;
         if (_stops.Count == 0)
             return Stopper.State == StopperState.Aligned && Stopper.Package != null ? new List<PackageRuntime> { Stopper.Package } : null;
 

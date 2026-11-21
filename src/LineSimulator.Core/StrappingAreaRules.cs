@@ -221,6 +221,23 @@ public static class StrappingAreaRules
             trf.CommandZoneId = string.Empty;
             done.Add($"{trf.Id} (fronte accumulo) con inverter proprio");
         }
+        // Regola dell'utente (2026-11-21, B10): durante la legatura di coda il pacco può andare oltre lo svincolo, sulla via del
+        // trasferitore. In quel caso i suoi rulli prendono i comandi della legatura (come lo svincolo) per tutta la fermata;
+        // la fermata parte solo con il trasferitore a riposo e la via libera (consenso nel motore).
+        if (trf != null && !ReferenceEquals(trf, strap))
+        {
+            bool onTransfer = need > reach + 1e-6 && need > trf.StartMm + 1e-6;
+            if (onTransfer && !trf.FollowsStrapping)
+            {
+                trf.FollowsStrapping = true;
+                done.Add($"{trf.Id} (via del trasferitore): motori commutabili sull'inverter di legatura {strap.Id} durante le legature di coda (la testa del pacco più lungo arriva a {need:0} mm, oltre lo svincolo); la fermata parte solo con trasferitore a riposo e via libera");
+            }
+            else if (!onTransfer && trf.FollowsStrapping)
+            {
+                trf.FollowsStrapping = false;
+                done.Add($"{trf.Id} (via del trasferitore): motori commutabili non necessari, la legatura di coda non supera lo svincolo");
+            }
+        }
         return done;
     }
 

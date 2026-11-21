@@ -49,4 +49,42 @@ public class TailStrapBeyondReleaseTests
         Assert.All(e.Packages, k => Assert.Equal(StrapStatus.Done, k.StrapStatus));
         Assert.Equal(p.Infeed.PackageCount, e.Packages.Count(k => k.State == PackageState.Exited));
     }
+
+    [Theory]
+    [InlineData(18)]
+    [InlineData(24)]
+    public void ShortRelease_TransferTrackFollowsTheStrapping_OnlyWhenTheTailStrapNeedsIt(int lengthM)
+    {
+        var p = ShortReleaseProject(lengthM, 2);
+        var e = new SimulationEngine(p);
+        var trf = LayoutRules.TransferModule(p)!;
+        Assert.True(trf.FollowsStrapping, "la via del trasferitore deve essere commutabile sulla legatura");
+        Assert.Contains(e.Preparation.Changes, c => c.Contains("via del trasferitore", StringComparison.OrdinalIgnoreCase) || c.Contains(trf.Id));
+        // con pacchi da 9 m la legatura di coda non esce dallo svincolo: niente commutazione della via del trasferitore
+        var q = ShortReleaseProject(9, 2);
+        _ = new SimulationEngine(q);
+        Assert.False(LayoutRules.TransferModule(q)!.FollowsStrapping);
+    }
+
+    [Theory]
+    [InlineData(18)]
+    [InlineData(24)]
+    public void ShortRelease_BeyondTheExit_StrappingStartsOnlyWithTheTransferAtHome(int lengthM)
+    {
+        var p = ShortReleaseProject(lengthM);
+        var e = new SimulationEngine(p);
+        double entry = StrappingAreaRules.AccumulationEntryMm(p) / 1000.0;
+        int checkedScans = 0;
+        while (e.Step())
+        {
+            foreach (var k in e.Packages)
+            {
+                if (k.State is not (PackageState.Positioning or PackageState.Strapping) || k.HeadM <= entry + 1e-3) continue;
+                checkedScans++;
+                Assert.True(e.Transfer.State == TransferState.Home, $"t={e.Time:0.0}: {k.Id} in legatura oltre l'uscita dello svincolo con il trasferitore {e.Transfer.State}");
+            }
+        }
+        Assert.True(e.CompletedNormally, Diag(e));
+        Assert.True(checkedScans > 0, "nessun pacco ha superato l'uscita dello svincolo durante la legatura");
+    }
 }

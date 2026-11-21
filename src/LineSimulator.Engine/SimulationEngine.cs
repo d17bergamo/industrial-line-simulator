@@ -745,6 +745,13 @@ public sealed partial class SimulationEngine : ILogicContext
             if (!pc.Config.ActsAsTransferStop) continue;
             string zoneKey = "INV:" + pc.ControlledZoneId;
             if (!pc.Config.IsEnabled || !pc.Output) { _transferStopActive.Remove(pc.Id); continue; }
+            // Il pacco in legatura di coda che porta la testa oltre questa fotocellula ha già il consenso del trasferitore
+            // (fermata partita solo con trasferitore a riposo e via libera): la fotocellula non lo ferma (B10)
+            if (Station != null && Station.Package != null && ReferenceEquals(pc.OutputPackage, Station.Package) && StrappingInProgress(Station))
+            {
+                _transferStopActive.Remove(pc.Id);
+                continue;
+            }
             // In single banking il pacco si ferma anche se nell'area del trasferitore c'è già un altro pacco (consenso "fermo libero")
             // (contano solo i pacchi già usciti dalla zona comandata: quello ancora a cavallo deve poter proseguire)
             double zoneEnd = _zoneById.TryGetValue(pc.ControlledZoneId, out var cz) ? cz.Info.EndM : Transfer.StartM;
@@ -818,10 +825,11 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 mode = InverterMode.Stop; reason = $"{Rejector.Id}: ciclo di rigetto in corso ({Rejector.State})";
             }
-            else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning && FollowerBusyFor(Station) is { } busy)
+            else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning && FollowerWait(Station) is { } wait)
             {
-                // Lo svincolo che segue la legatura è ancora occupato dal pacco precedente: la legatura aspetta
-                mode = InverterMode.Stop; reason = $"Attesa svincolo {busy.Id} libero per la fermata {Station.StopIndex + 1}";
+                // Lo svincolo (o la via del trasferitore) che segue la legatura è ancora occupato dal pacco precedente, oppure il
+                // trasferitore non ha dato il consenso: la legatura aspetta prima di muovere il pacco
+                mode = InverterMode.Stop; reason = wait;
             }
             else if (Station != null && z == Station.Zone && Station.State == StationState.Positioning)
             {
@@ -960,6 +968,46 @@ public sealed partial class SimulationEngine : ILogicContext
     {
         foreach (var f in Followers)
             if (NeedsFollower(st, f) && st.Package!.HeadM <= f.Info.StartM + 1e-6 && OthersOn(f, st.Package)) return f;
+        return null;
+    }
+
+    /// <summary>
+    /// Motivo per cui la prossima fermata di legatura non può ancora partire (null = via libera): svincolo o via del
+    /// trasferitore ancora occupati da un altro pacco, oppure consenso del trasferitore mancante (B10).
+    /// </summary>
+    private string? FollowerWait(StationRuntime st)
+    {
+        if (FollowerBusyFor(st) is { } busy)
+            return Topology.StopperZone != null && busy.Info == Topology.StopperZone
+                ? $"Attesa via del trasferitore {busy.Id} libera per la fermata {st.StopIndex + 1}"
+                : $"Attesa svincolo {busy.Id} libero per la fermata {st.StopIndex + 1}";
+        return TransferConsentMissing(st) is { } why ? $"Attesa consenso del trasferitore per la fermata {st.StopIndex + 1}: {why}" : null;
+    }
+
+    /// <summary>
+    /// Regola dell'utente (2026-11-21, B10): se la fermata porta la testa del pacco oltre la fotocellula di uscita dello svincolo
+    /// (inizio dell'accumulo), la legatura parte solo con il trasferitore a riposo e la via davanti libera da altri pacchi.
+    /// In double banking, per il secondo pacco della coppia: primo pacco intestato sul fermo finale e metà a monte libera.
+    /// Dato il consenso vale per tutta la fermata (la testa è già oltre il confine). Null = consenso dato o non necessario.
+    /// </summary>
+    private string? TransferConsentMissing(StationRuntime st)
+    {
+        var pkg = st.Package;
+        if (pkg == null || Topology.StopperZone == null) return null;
+        double entry = StrappingAreaRules.AccumulationEntryMm(Project) / 1000.0;
+        if (entry > 1e6) return null;                                  // nessun accumulo davanti al trasferitore
+        if (st.TargetHeadM <= entry + 1e-6) return null;               // la fermata resta prima dell'accumulo
+        if (pkg.HeadM > entry + 1e-6) return null;                     // già oltre: il consenso vale per tutta la fermata
+        if (Transfer.State != TransferState.Home) return "trasferitore non a riposo";
+        var first = DoubleBanking ? Stopper.Package ?? _finalAssigned : null;
+        if (first != null)
+        {
+            if (Stopper.State != StopperState.Aligned) return "primo pacco non ancora intestato sul fermo finale";
+            double split = TransferSplitM ?? Transfer.StartM;
+            if (first.TailM < split - 1e-6) return "metà a monte della via del trasferitore occupata dal primo pacco";
+        }
+        if (_active.Any(q => q != pkg && q != first && q.OnRollers && q.HeadM > entry + 1e-6 && q.TailM < Transfer.EndM - 1e-6))
+            return "via davanti al trasferitore occupata";
         return null;
     }
 
