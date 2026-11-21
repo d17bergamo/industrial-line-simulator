@@ -12,7 +12,6 @@ public static class EquipmentLibrary
 {
     public const string CatRollers = "Vie a rulli";
     public const string CatStrappers = "Reggiatrici";
-    public const string CatRejectors = "Rigettatrici";
     public const string CatKnof = "Compattatori Knof Sund";
     public const string CatCompactors = "Compattatori laterali";
     public const string CatOthers = "Altri equipaggiamenti";

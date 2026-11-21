@@ -216,7 +216,6 @@ public sealed partial class MainViewModel : ObservableObject
             Status = $"Tipologia simulata: {value.Id} - {value.Name} ({value.LengthMm:0} mm, {value.WeightKg:0} kg)";
         }
     }
-    public Array BankingModes { get; } = Enum.GetValues(typeof(AccumulationMode));
     /// <summary>Intestature selezionabili: "Tail" (di coda) solo se la linea ha un fermo scomparente abilitato.</summary>
     public StopReference[] HeadingModes => BankingOptions.TailHeadingAvailable(_project)
         ? new[] { StopReference.Head, StopReference.Tail }
@@ -955,9 +954,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void AddPackageType()
     {
-        var t = new PackageType { Id = NextId("T", AllComponents()), Name = "Nuova tipologia" };
-        _project.PackageTypes.Add(t);
-        AfterAdd(t);
+        var t = ProjectEditing.Add(_project, "package");
+        if (t != null) AfterAdd(t);
     }
 
     private void AddRule()

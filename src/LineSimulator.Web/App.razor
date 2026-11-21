@@ -45,6 +45,12 @@
             <InputFile OnChange="OnFile" accept=".json" disabled="@_busy" />
         </label>
         </div>
+        @if (_model == -1 && _openChanges.Count > 0)
+        {
+            <details class="famiglia" open><summary>Il progetto aperto è stato aggiornato alle regole attuali (@_openChanges.Count righe): il file originale non cambia</summary>
+                <ul class="nota">@foreach (var c in _openChanges) { <li>@c</li> }</ul>
+            </details>
+        }
         @if (_model == -2)
         {
             <div class="griglia">
@@ -671,20 +677,11 @@
         _type = "*";
     });
 
-    private void AddType() => Edit(() =>
-    {
-        var last = Work.PackageTypes.OrderBy(x => x.LengthMm).LastOrDefault();
-        int m = last == null ? 6 : (int)Math.Min(30, Math.Round(last.LengthMm / 1000) + 3);
-        var t = SampleProjects.Package(m);
-        t.Id = PackageNaming.UniqueId(Work, t);
-        Work.PackageTypes.Add(t);
-        Work.Infeed.TypeSequence = Work.PackageTypes.Select(x => x.Id).ToList();
-    });
+    private void AddType() => Edit(() => ProjectEditing.Add(Work, "package"));
 
     private void RemoveType(PackageType t) => Edit(() =>
     {
-        Work.PackageTypes.Remove(t);
-        Work.Infeed.TypeSequence = Work.Infeed.TypeSequence.Where(x => x != t.Id).ToList();
+        ProjectEditing.Delete(Work, new object[] { t });
         _type = "*";
     });
 
@@ -772,72 +769,6 @@
         });
         StateHasChanged();
     }
-
-    private void SetTransferLength(ChangeEventArgs e)
-    {
-        var m = LayoutRules.TransferModule(Work);
-        if (m == null) return;
-        SetSectionLength(m, e);
-    }
-
-    private void AddStrapper() => Edit(() =>
-    {
-        var last = Work.Strappers.OrderBy(x => x.PositionMm).LastOrDefault();
-        var s = new StrapperConfig
-        {
-            Id = $"L{Work.Strappers.Count + 1}", Name = $"Legatrice {Work.Strappers.Count + 1}",
-            PositionMm = (last?.PositionMm ?? SampleProjects.FirstStrapperPositionMm(1, 12) - SampleProjects.StrapperSpacingMm) + SampleProjects.StrapperSpacingMm
-        };
-        if (last != null) { s.Model = last.Model; s.FootprintLengthMm = last.FootprintLengthMm; }
-        Work.Strappers.Add(s);
-    });
-
-    private string StopChoice => Work.IntermediateStops.FirstOrDefault() is not { } f ? "none"
-        : f.ManualPosition ? "manual" : f.Placement == DevicePlacement.End ? "end" : "center";
-
-    private void SetStopChoice(ChangeEventArgs e) => Edit(() =>
-    {
-        string v = e.Value?.ToString() ?? "none";
-        if (v == "none") { Work.IntermediateStops.Clear(); return; }
-        var place = v == "end" ? DevicePlacement.End : DevicePlacement.Center;
-        var f = Work.IntermediateStops.FirstOrDefault();
-        if (f == null)
-        {
-            f = new IntermediateStopConfig { Id = "FM1", Name = "Fermo scomparente", AlignmentTimeS = 2.0 };
-            Work.IntermediateStops.Add(f);
-        }
-        f.IsEnabled = true;
-        f.ManualPosition = v == "manual";
-        if (v != "manual") { f.Placement = place; f.PositionMm = StrappingAreaRules.StopPositionMm(Work, place); }
-        // con il fermo all'estremità a monte l'intestatura dei pacchi è di coda
-        if (v == "end") foreach (var t in Work.PackageTypes) t.Heading = StopReference.Tail;
-    });
-
-    private void SetScales(ChangeEventArgs e) => Edit(() =>
-    {
-        int n = (int)Num(e, Work.Scales.Count, 1, 2);
-        var proto = Work.Scales.FirstOrDefault() ?? new WeighingScaleConfig();
-        while (Work.Scales.Count > n) Work.Scales.RemoveAt(Work.Scales.Count - 1);
-        while (Work.Scales.Count < n)
-        {
-            var sc = ProjectSerializer.Clone(new LineProject { Scales = { proto } }).Scales[0];
-            sc.Id = $"B{Work.Scales.Count + 1}"; sc.Name = $"Bilico {Work.Scales.Count + 1}";
-            sc.Placement = Work.Scales.Count == 0 ? DevicePlacement.Center : DevicePlacement.End;
-            sc.ManualPosition = false;
-            Work.Scales.Add(sc);
-        }
-        foreach (var sc in Work.Scales) sc.ManualPosition = false;
-        StrappingAreaRules.LayoutScales(Work);
-    });
-
-    private void SetWeighing(ChangeEventArgs e) => Edit(() =>
-    {
-        foreach (var b in Work.Scales)
-        {
-            b.StabilizationTimeS = Num(e, b.StabilizationTimeS, 0, 600);
-            b.ConfirmTimeoutS = Math.Max(b.ConfirmTimeoutS, b.StabilizationTimeS + 30);
-        }
-    });
 
     private string? _json, _jsonNote;
 
@@ -1073,15 +1004,28 @@
         _ => "var(--trasf)"
     };
 
+    private List<string> _openChanges = new();
+
     private async Task OnFile(InputFileChangeEventArgs e)
     {
         _errors.Clear();
+        _openChanges = new List<string>();
         try
         {
             using var reader = new StreamReader(e.File.OpenReadStream(8_000_000));
             string json = await reader.ReadToEndAsync();
-            ProjectSerializer.Deserialize(json);   // verifica che si legga
-            _uploaded = json;
+            // come in Windows: adeguamenti di apertura e correzioni automatiche, con l'elenco di ciò che cambia
+            var rep = ProjectUpgrade.Check(json);
+            _uploaded = ProjectSerializer.Serialize(rep.Project);
+            _openChanges = new List<string>();
+            _openChanges.AddRange(rep.RuleChanges.Take(12).Select(c => "• " + c));
+            if (rep.RuleChanges.Count > 12) _openChanges.Add($"• … altre {rep.RuleChanges.Count - 12} correzioni");
+            if (rep.ValueChanges.Count > 0)
+            {
+                _openChanges.Add($"Valori che cambiano ({rep.ValueChanges.Count}):");
+                _openChanges.AddRange(rep.ValueChanges.Take(10).Select(c => "  " + c));
+                if (rep.ValueChanges.Count > 10) _openChanges.Add("  …");
+            }
             _uploadedName = e.File.Name;
             Model = -1;
         }
