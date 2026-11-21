@@ -133,6 +133,23 @@ public static class ProjectEditing
         return structural || groupChanged;
     }
 
+    /// <summary>
+    /// Cambia l'Id di un componente aggiornando tutti i riferimenti (zone di comando, fotocellule, legatrici, regole, piani,
+    /// sequenza d'ingresso, dispositivi: revisore C2). Restituisce il motivo se l'Id non è ammesso, altrimenti null.
+    /// </summary>
+    public static string? RenameId(LineProject p, ComponentBase component, string newId)
+    {
+        newId = (newId ?? string.Empty).Trim();
+        if (newId.Length == 0) return "L'identificativo non può essere vuoto.";
+        string old = component.Id;
+        if (string.Equals(old, newId, StringComparison.Ordinal)) return null;
+        if (AllComponents(p).Any(x => !ReferenceEquals(x, component) && string.Equals(x.Id, newId, StringComparison.Ordinal)))
+            return $"L'identificativo {newId} è già usato da un altro componente.";
+        SimulationPreparation.RemapReferences(p, new Dictionary<string, string> { [old] = newId });
+        component.Id = newId;
+        return null;
+    }
+
     // ------------------------------------------------------------------ Componenti
 
     /// <summary>Tutti i componenti con un Id (per gli Id progressivi).</summary>

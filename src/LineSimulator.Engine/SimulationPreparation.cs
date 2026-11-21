@@ -157,11 +157,19 @@ public static class SimulationPreparation
     }
 
     /// <summary>Aggiorna tutti i riferimenti agli identificativi rinominati (zone, fotocellule, legatrici, dispositivi, regole, piani).</summary>
-    private static void RemapReferences(LineProject p, IReadOnlyDictionary<string, string> map)
+    internal static void RemapReferences(LineProject p, IReadOnlyDictionary<string, string> map)
     {
         string M(string? id) => id != null && map.TryGetValue(id, out var n) ? n : id ?? string.Empty;
         foreach (var s in p.Sections) if (!string.IsNullOrWhiteSpace(s.CommandZoneId)) s.CommandZoneId = M(s.CommandZoneId);
         foreach (var pc in p.Photocells) pc.ControlledInverterId = M(pc.ControlledInverterId);
+        // fermo comandato dalla fotocellula (anche la chiave di coda "FM1:coda"): segue la rinumerazione dei fermi (revisore C1)
+        foreach (var pc in p.Photocells.Where(x => !string.IsNullOrEmpty(x.CommandsStopId)))
+        {
+            string suffix = TransferEntryRule.TailKeySuffix;
+            bool tail = pc.CommandsStopId.EndsWith(suffix, StringComparison.Ordinal);
+            string stop = tail ? pc.CommandsStopId[..^suffix.Length] : pc.CommandsStopId;
+            pc.CommandsStopId = M(stop) + (tail ? suffix : string.Empty);
+        }
         p.StrappingStation.InverterId = M(p.StrappingStation.InverterId);
         foreach (var rule in p.Rules)
         {
