@@ -12,17 +12,22 @@ public class IdReferencesTests
     {
         var p = SampleProjects.CreateThreeStrappers24m();
         _ = new SimulationEngine(p);                                         // crea i sensori automatici dei fermi
-        var stop = p.IntermediateStops.First();
-        string oldId = stop.Id;
         string suffix = TransferEntryRule.TailKeySuffix;
-        var linked = p.Photocells.Where(x => x.CommandsStopId == oldId || x.CommandsStopId == oldId + suffix).ToList();
-        Assert.NotEmpty(linked);
-        // un Id non progressivo (come dopo una modifica a mano): la rinumerazione lo riporta a FMn e le fotocellule lo seguono
-        stop.Id = "FERMO_X";
-        foreach (var pc in linked) pc.CommandsStopId = pc.CommandsStopId.Replace(oldId, "FERMO_X", StringComparison.Ordinal);
+        var stops = p.IntermediateStops.OrderBy(x => x.PositionMm).ToList();
+        Assert.True(stops.Count >= 2);
+        // ogni fotocellula si ricorda il fermo (oggetto) a cui è collegata
+        var link = p.Photocells.Where(x => !string.IsNullOrEmpty(x.CommandsStopId))
+            .Select(pc => (pc, stop: stops.First(s => pc.CommandsStopId == s.Id || pc.CommandsStopId == s.Id + suffix))).ToList();
+        Assert.NotEmpty(link);
+        // numeri progressivi in ordine inverso (come dopo una modifica a mano): la rinumerazione li rimette in ordine
+        var ids = stops.Select(s => s.Id).ToList();
+        var map = new Dictionary<string, string>();
+        for (int i = 0; i < stops.Count; i++) map[ids[i]] = ids[stops.Count - 1 - i];
+        foreach (var (pc, stop) in link)
+            pc.CommandsStopId = map[stop.Id] + (pc.CommandsStopId.EndsWith(suffix, StringComparison.Ordinal) ? suffix : "");
+        for (int i = 0; i < stops.Count; i++) stops[i].Id = map[ids[i]];
         SimulationPreparation.RenumberIds(p);
-        Assert.NotEqual("FERMO_X", stop.Id);
-        foreach (var pc in linked)
+        foreach (var (pc, stop) in link)
             Assert.True(pc.CommandsStopId == stop.Id || pc.CommandsStopId == stop.Id + suffix, $"{pc.Id}: {pc.CommandsStopId} non segue il fermo {stop.Id}");
     }
 
