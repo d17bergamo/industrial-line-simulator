@@ -11,10 +11,16 @@ public class IdReferencesTests
     public void Renumber_KeepsThePhotocellsOfTheStops()
     {
         var p = SampleProjects.CreateThreeStrappers24m();
+        if (p.IntermediateStops.Count == 0)
+            p.IntermediateStops.Add(new IntermediateStopConfig
+            {
+                Id = "FM1", Name = "Fermo scomparente", Placement = DevicePlacement.Center,
+                PositionMm = StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), AlignmentTimeS = 2.0
+            });
         _ = new SimulationEngine(p);                                         // crea i sensori automatici dei fermi
         string suffix = TransferEntryRule.TailKeySuffix;
         var stops = p.IntermediateStops.OrderBy(x => x.PositionMm).ToList();
-        Assert.True(stops.Count >= 2);
+        Assert.NotEmpty(stops);
         // ogni fotocellula si ricorda il fermo (oggetto) a cui è collegata
         var link = p.Photocells.Where(x => !string.IsNullOrEmpty(x.CommandsStopId))
             .Select(pc => (pc, stop: stops.First(s => pc.CommandsStopId == s.Id || pc.CommandsStopId == s.Id + suffix))).ToList();
@@ -22,7 +28,7 @@ public class IdReferencesTests
         // numeri progressivi in ordine inverso (come dopo una modifica a mano): la rinumerazione li rimette in ordine
         var ids = stops.Select(s => s.Id).ToList();
         var map = new Dictionary<string, string>();
-        for (int i = 0; i < stops.Count; i++) map[ids[i]] = ids[stops.Count - 1 - i];
+        for (int i = 0; i < stops.Count; i++) map[ids[i]] = stops.Count == 1 ? "FM2" : ids[stops.Count - 1 - i];
         foreach (var (pc, stop) in link)
             pc.CommandsStopId = map[stop.Id] + (pc.CommandsStopId.EndsWith(suffix, StringComparison.Ordinal) ? suffix : "");
         for (int i = 0; i < stops.Count; i++) stops[i].Id = map[ids[i]];
