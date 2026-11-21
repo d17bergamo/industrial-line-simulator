@@ -1113,6 +1113,9 @@ public sealed partial class SimulationEngine
     /// <summary>Gruppo di due pacchi sullo stesso bilico: pesata in due tempi con il trasferitore a doppio comando.</summary>
     private bool _sharedPair;
 
+    /// <summary>Pacco a monte di una coppia sullo stesso bilico con il trasferitore normale, finché non è pesato anche il totale.</summary>
+    private PackageRuntime? _sharedUpstream;
+
     /// <summary>
     /// Bilici di destinazione dei pacchi. <paramref name="leaving"/>: pacchi pesati che lasciano il bilico nello stesso ciclo
     /// (trasferitore a due prese): i loro bilici contano come liberi.
@@ -1132,7 +1135,7 @@ public sealed partial class SimulationEngine
                 _scalePlan[p] = new List<ScaleRuntime>();
                 continue;
             }
-            if (cover.Any(used.Contains) && Transfer.TwoPick && pkgs.Count == 2)
+            if (cover.Any(used.Contains) && pkgs.Count == 2)
             {
                 // Double banking con il trasferitore a doppio comando: i due pacchi vanno sullo stesso bilico, pesati uno dopo
                 // l'altro (prima quello a monte, poi il totale); entrambi usano tutti i bilici sotto l'uno o l'altro
@@ -1314,6 +1317,7 @@ public sealed partial class SimulationEngine
                     break;
                 case ScaleState.Completed:
                     if (Transfer.TwoPick) break;                // a due prese il pacco pesato lo porta via il trasferitore
+                    if (ReferenceEquals(p, _sharedUpstream)) break; // coppia sullo stesso bilico: il pacco a monte aspetta la pesata del totale
                     if (!hold && Consent(cfg))
                     {
                         lead.State = ScaleState.Releasing;
@@ -1330,6 +1334,15 @@ public sealed partial class SimulationEngine
                         _active.Remove(p);
                         Emit(SimEventType.PackageExited, EventSeverity.Info,
                             $"{p.Id} pesato ({p.MeasuredWeightKg:0} kg) e scaricato dal bilico {p.ScaleId} (attraversamento {p.LeadTimeS:0.0} s)", lead.Id, p.Id);
+                        if (lead.Companion is { } up && up.State != PackageState.Exited)
+                        {
+                            up.State = PackageState.Exited;
+                            up.ExitTimeS = t;
+                            _active.Remove(up);
+                            Emit(SimEventType.PackageExited, EventSeverity.Info,
+                                $"{up.Id} pesato ({up.MeasuredWeightKg:0} kg) e scaricato dal bilico {up.ScaleId} (attraversamento {up.LeadTimeS:0.0} s)", lead.Id, up.Id);
+                        }
+                        lead.Companion = null;
                         foreach (var f in lead.Followers) { f.State = ScaleState.Idle; f.Package = null; f.Lead = null; }
                         lead.Followers.Clear();
                         lead.State = ScaleState.Idle;

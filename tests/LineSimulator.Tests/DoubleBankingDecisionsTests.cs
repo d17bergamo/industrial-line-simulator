@@ -1,5 +1,6 @@
 using LineSimulator.Core;
 using LineSimulator.Engine;
+using LineSimulator.Engine.Runtime;
 using LineSimulator.Infrastructure;
 using LineSimulator.Models;
 using Xunit;
@@ -104,6 +105,27 @@ public class DoubleBankingDecisionsTests
         foreach (var k in e.Packages.Where(k => k.MeasuredWeightKg.HasValue))
             Assert.True(Math.Abs(k.MeasuredWeightKg!.Value - k.WeightKg) <= 2 * Math.Max(1, p.Scales[0].ResolutionKg), $"{k.Id}: {k.MeasuredWeightKg} kg, vero {k.WeightKg} kg");
         Assert.True(e.Transfer.Cycles < e.Packages.Count + 1);
+    }
+
+    [Theory]
+    [InlineData("1 legatrice")]
+    [InlineData("2 legatrici - pacchi 6/9/12 m")]
+    public void SameScale_WithTheNormalTransfer_EveryPackageIsWeighedInTwoSteps(string model)
+    {
+        // revisore B3: con il trasferitore normale (bilico non a metà corsa) il secondo pacco usciva senza peso
+        var p = Model(model);
+        p.IntermediateStops.Clear();
+        p.Transfer.ScaleAtMidStroke = false;
+        OnlyShortest(p, 6);
+        LongWeighing(p);
+        BankingOptions.SetBankingAll(p, AccumulationMode.DoubleBanking);
+        var e = new SimulationEngine(p);
+        e.RunToCompletion();
+        Clean(e);
+        Assert.DoesNotContain(e.Events, x => x.Message.Contains("senza pesatura", StringComparison.Ordinal));
+        Assert.Equal(e.Packages.Count(k => k.State == PackageState.Exited), e.WeighedPackages);
+        Assert.Contains(e.Events, x => x.Type == SimEventType.WeightAcquired && x.Message.Contains("per differenza", StringComparison.Ordinal));
+        Assert.True(Pairs(e) >= 1, $"{Pairs(e)} cicli con due pacchi");
     }
 
     [Theory]

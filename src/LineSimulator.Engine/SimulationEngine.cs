@@ -1614,15 +1614,27 @@ public sealed partial class SimulationEngine : ILogicContext
                 SetTransferPhase(tr, TransferState.Lowering, t);
             return;
         }
+        double lift = cfg.LiftStrokeMm / 1000.0, stroke = cfg.TranslationStrokeMm / 1000.0;
+        if (tr.State == TransferState.WeighingUpstream)
+        {
+            // Doppio comando (coppia sullo stesso bilico): la metà a valle resta sollevata finché il pacco a monte non è pesato
+            var (monte, valle) = SharedPair(tr);
+            valle.LiftM = lift; valle.LateralM = stroke;
+            var lead = _scales.FirstOrDefault(x => x.Package == monte && x.Lead == null);
+            if (lead == null || lead.State != ScaleState.Completed) return;
+            SetTransferPhase(tr, TransferState.LoweringDownstream, t);
+            Link("PESA_DIFF", "Pacco a monte pesato", "Abbassa la metà a valle: pesata del totale, secondo per differenza", "SCALE:" + lead.Id, "TRANSFER", valle.Id);
+            return;
+        }
         tr.ElapsedS += dt;
         double dur = tr.PhaseDuration(tr.State);
         double f = dur > 0 ? Math.Clamp(tr.ElapsedS / dur, 0, 1) : 1;
-        double lift = cfg.LiftStrokeMm / 1000.0, stroke = cfg.TranslationStrokeMm / 1000.0;
         switch (tr.State)
         {
             case TransferState.Lifting: tr.LiftM = lift * f; break;
             case TransferState.Translating: tr.LiftM = lift; tr.LateralM = stroke * f; break;
             case TransferState.Lowering: tr.LiftM = lift * (1 - f); tr.LateralM = stroke; break;
+            case TransferState.LoweringDownstream: tr.LiftM = lift * (1 - f); tr.LateralM = stroke; break;
             case TransferState.Depositing: tr.LiftM = 0; tr.LateralM = stroke; break;
             case TransferState.Returning: tr.LiftM = 0; tr.LateralM = stroke * (1 - f); break;
         }
@@ -1632,6 +1644,13 @@ public sealed partial class SimulationEngine : ILogicContext
             {
                 pk.LiftM = tr.State == TransferState.Depositing ? 0 : tr.LiftM;
                 pk.LateralM = tr.LateralM;
+            }
+            if (_sharedPair && tr.Packages.Count == 2)
+            {
+                // Doppio comando: scende prima la metà a monte (il pacco a valle resta su)
+                var (monte, valle) = SharedPair(tr);
+                if (tr.State == TransferState.Lowering) valle.LiftM = lift;
+                if (tr.State == TransferState.LoweringDownstream) monte.LiftM = 0;
             }
         }
         if (tr.ElapsedS < dur - 1e-9) return;
@@ -1667,11 +1686,32 @@ public sealed partial class SimulationEngine : ILogicContext
                 SetTransferPhase(tr, TransferState.Lowering, t);
                 break;
             case TransferState.Lowering:
+                if (_sharedPair && tr.Packages.Count == 2)
+                {
+                    var (monte, _) = SharedPair(tr);
+                    monte.LiftM = 0;
+                    monte.LateralM = stroke;
+                    _sharedUpstream = monte;
+                    StartWeighing(monte, _scalePlan[monte], t);
+                    SetTransferPhase(tr, TransferState.WeighingUpstream, t);
+                    break;
+                }
                 SetTransferPhase(tr, TransferState.Depositing, t);
                 break;
+            case TransferState.LoweringDownstream:
+            {
+                var (monte, valle) = SharedPair(tr);
+                valle.LiftM = 0;
+                valle.LateralM = stroke;
+                _sharedUpstream = null;
+                StartWeighing(valle, _scalePlan[valle], t, companion: monte);
+                SetTransferPhase(tr, TransferState.Depositing, t);
+                break;
+            }
             case TransferState.Depositing:
                 foreach (var p in tr.Packages)
                 {
+                    if (_sharedPair) break;             // già depositati uno alla volta dal doppio comando
                     p.LiftM = 0;
                     if (_scalePlan.TryGetValue(p, out var scales) && scales.Count > 0)
                     {
@@ -1685,6 +1725,7 @@ public sealed partial class SimulationEngine : ILogicContext
                         $"{p.Id} depositato nella stazione successiva (attraversamento {p.LeadTimeS:0.0} s)", Project.Transfer.Id, p.Id);
                 }
                 _scalePlan.Clear();
+                _sharedPair = false;
                 tr.Packages.Clear();
                 tr.Cycles++;
                 SetTransferPhase(tr, TransferState.Returning, t);
