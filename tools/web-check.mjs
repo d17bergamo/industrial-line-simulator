@@ -23,7 +23,8 @@ try {
   for (const [name, setup] of [['base', async () => {}]]) {
     await setup();
     t0 = Date.now();
-    await page.click('#simula');
+    say(`nome progetto: ${await page.locator('#nome-progetto').inputValue()}; pacchi da simulare: ${await page.locator('#npacchi').inputValue()}`);
+  await page.click('#simula');
     await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
     say(`simulazione ${name}: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     say(`risultato ${name}: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 600)}`);

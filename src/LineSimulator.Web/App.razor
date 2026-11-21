@@ -26,6 +26,7 @@
     </div>
 
     <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
+        <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" value="@Work.Name" @onchange='e => Edit(() => Work.Name = e.Value?.ToString() ?? "")' /></label>
         <div class="affiancati">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
@@ -138,6 +139,7 @@
                     string pid = pt.Id;
                     <button class="@(SelectedPack?.Id == pid ? "attivo" : "")" @onclick="() => _selPack = pid">@pid</button>
                 }
+                <button class="aggiungi" @onclick="AddType">＋ Aggiungi pacco</button>
             </div>
             <div class="pacco3d"><canvas id="cpack"></canvas></div>
             <div id="rpack" class="righello"></div>
@@ -186,24 +188,30 @@
                 </tbody>
             </table>
         </div>
-        <div class="comandi">
-            <button @onclick="AddType">Aggiungi pacco</button>
-            @if (Work.PackageTypes.Any(x => BankingOptions.DoubleBankingAvailable(Work, x))) { <button @onclick="() => AllBanking(AccumulationMode.DoubleBanking)">Tutti double</button> }
-            <button @onclick="() => AllBanking(AccumulationMode.SingleBanking)">Tutti single</button>
-        </div>
     </div></details>
 
     <details class="zona" open id="simulazione"><summary>Simulazione</summary><div class="corpo">
-        <label class="campo">Misura dei pacchi (una alla volta)
-            <select id="misura" @bind="SimType" disabled="@_busy">
-                @foreach (var t in Work.PackageTypes)
-                {
-                    <option value="@t.Id">@N(t.LengthMm / 1000, "0.#") m (@t.Id)</option>
-                }
-            </select>
-        </label>
-        <p class="nota">I pacchi entrano senza fine finché non fermi la simulazione. Banking, intestatura e fermi si impostano nelle zone Pacchi e Linea.</p>
-        <button id="simula" class="primario" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
+        <div class="riga-sim">
+            <label class="campo">Misura dei pacchi da simulare
+                <select id="misura" @bind="SimType" disabled="@_busy">
+                    @foreach (var t in Work.PackageTypes)
+                    {
+                        <option value="@t.Id">@N(t.LengthMm / 1000, "0.#") m (@t.Id)</option>
+                    }
+                </select>
+            </label>
+            <label class="campo">Pacchi da simulare
+                <select id="npacchi" @bind="_simCount" disabled="@_busy">
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="50">50</option>
+                    <option value="continua">Continua</option>
+                </select>
+            </label>
+            <button id="simula" class="primario" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
+        </div>
+        <p class="nota">Una misura alla volta. Con «Continua» i pacchi entrano senza fine (si vedono gli ultimi 5 minuti). Banking, intestatura e fermi si impostano nelle zone Pacchi e Linea.</p>
         @if (_busy)
         {
             <div class="barra"><div class="barra-valore" style="width:@F(_progress * 100)%"></div></div>
@@ -858,6 +866,7 @@
     private DateTime _lastRes = DateTime.MinValue;
     private const double WarmupS = 180, RecordWindowS = 300;
     private double _progress;
+    private string _simCount = "20";
     private string? _uploaded, _uploadedName;
     private readonly List<string> _errors = new();
     private List<string> _changes = new();
@@ -1086,11 +1095,20 @@
     {
         var p = ProjectSerializer.Clone(Work);
         p.Infeed.TypeSequence = new List<string> { SimType };
-        // simulazione continua: i pacchi entrano senza fine; il ciclogramma tiene gli ultimi 5 minuti
-        p.Infeed.PackageCount = 1_000_000;
-        p.Infeed.Continuous = true;
-        p.Simulation.MaxSimulationTimeS = 1e9;
-        p.Simulation.RecordWindowS = RecordWindowS;
+        if (_simCount == "continua")
+        {
+            // simulazione continua: i pacchi entrano senza fine; il ciclogramma tiene gli ultimi 5 minuti
+            p.Infeed.PackageCount = 1_000_000;
+            p.Infeed.Continuous = true;
+            p.Simulation.MaxSimulationTimeS = 1e9;
+            p.Simulation.RecordWindowS = RecordWindowS;
+        }
+        else
+        {
+            p.Infeed.PackageCount = int.Parse(_simCount, CultureInfo.InvariantCulture);
+            p.Infeed.Continuous = false;
+            p.Simulation.RecordWindowS = 0;
+        }
         return p;
     }
 
@@ -1119,12 +1137,26 @@
                 return;
             }
             int n = 0;
-            while (e.Time < WarmupS && e.Step())
+            if (_simCount == "continua")
             {
-                if (++n % 2000 != 0) continue;
-                _progress = Math.Min(0.98, e.Time / WarmupS);
-                StateHasChanged();
-                await Task.Delay(1);
+                while (e.Time < WarmupS && e.Step())
+                {
+                    if (++n % 2000 != 0) continue;
+                    _progress = Math.Min(0.98, e.Time / WarmupS);
+                    StateHasChanged();
+                    await Task.Delay(1);
+                }
+            }
+            else
+            {
+                int total = int.Parse(_simCount, CultureInfo.InvariantCulture);
+                while (e.Step())
+                {
+                    if (++n % 2000 != 0) continue;
+                    _progress = Math.Min(0.98, e.Packages.Count(k => k.ExitTimeS.HasValue) / (double)Math.Max(1, total));
+                    StateHasChanged();
+                    await Task.Delay(1);
+                }
             }
             _res = e.ComputeResults();
             _events = e.Events.Where(x => x.Severity != EventSeverity.Trace).ToList();
