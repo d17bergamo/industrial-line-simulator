@@ -172,7 +172,7 @@ public static class SampleProjects
         p.Transfer = new TransferConfig
         {
             Id = "TRF", Name = "Trasferitore sollevabile", Kind = TransferKind.Lifting, PositionMm = trfStart, LengthMm = trfLen,
-            LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 2, LowerTimeS = 2, DepositTimeS = 1,
+            LiftStrokeMm = 150, TranslationStrokeMm = 3000, TranslationSpeed = 0.5, LiftTimeS = 3, LowerTimeS = 3, DepositTimeS = 1,
             BlockInfeedUntilHome = true, BatchWaitTimeoutS = 60,
             ScaleAtMidStroke = true          // due prese: via rulli → bilico (metà corsa) → trasferitore d'accumulo
         };

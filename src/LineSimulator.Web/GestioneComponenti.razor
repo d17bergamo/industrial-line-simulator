@@ -15,11 +15,12 @@
         </div>
     }
     <div class="azioni">
-        <button type="button" class="grande" @onclick="Add">Aggiungi@(Fixed != null ? "" : " " + Label(_type).ToLowerInvariant())</button>
-        <button type="button" class="grande secondario" @onclick="Remove" disabled="@(Target() == null)">Rimuovi@(Target() is { } tg && Fixed == null ? " " + NameOf(tg) : "")</button>
+        <button type="button" class="grande aggiungi" @onclick="Add">Aggiungi@(Fixed != null ? "" : " " + Label(_type).ToLowerInvariant())</button>
+        <button type="button" class="grande rimuovi" @onclick="Remove" disabled="@(Target() == null)">Rimuovi@(Target() is { } tg && Fixed == null ? " " + NameOf(tg) : "")</button>
     </div>
 </div>
 @if (_msg.Length > 0) { <p class="nota">@_msg</p> }
+@if (_type == "section" && ProjectEditing.IsProtectedSection(Project, SelectedModel)) { <p class="nota">La via di legatura e quella davanti al trasferitore non si possono rimuovere.</p> }
 
 @code {
     [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
@@ -100,7 +101,10 @@
     {
         var list = Candidates();
         if (list.Count == 0) return null;
-        if (SelectedModel != null && list.Any(x => ReferenceEquals(x, SelectedModel))) return SelectedModel;
+        if (SelectedModel != null && list.Any(x => ReferenceEquals(x, SelectedModel)))
+            return ProjectEditing.CanDelete(Project, SelectedModel) ? SelectedModel : null;
+        list = list.Where(x => ProjectEditing.CanDelete(Project, x)).ToList();
+        if (list.Count == 0) return null;
         var last = list[^1];
         // l'ultimo pacco non si toglie
         if (last is PackageType && list.Count < 2) return null;

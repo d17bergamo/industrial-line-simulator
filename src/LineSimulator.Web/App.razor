@@ -26,7 +26,7 @@
     </div>
 
     <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
-        <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" value="@Work.Name" @onchange='e => Edit(() => Work.Name = e.Value?.ToString() ?? "")' /></label>
+        <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" placeholder="Nome del progetto" value="@(_nameTouched ? Work.Name : "")" @onchange='e => { _nameTouched = true; Edit(() => Work.Name = e.Value?.ToString() ?? ""); }' /></label>
         <div class="affiancati">
         <label class="campo">Parti da
             <select id="esempio" @bind="Model" disabled="@_busy">
@@ -63,7 +63,7 @@
         }
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
         <div class="config-vista">
-            <div class="griglia">
+            <div class="riga-obiettivo">
                 <label class="campo">Obiettivo di produttività (t/h)<input type="number" step="1" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /></label>
             </div>
             <h3 class="categoria">Vista della configurazione</h3>
@@ -184,7 +184,6 @@
                                     <option value="@AccumulationMode.SingleBanking">Single</option>
                                     @if (dbl) { <option value="@AccumulationMode.DoubleBanking">Double</option> }
                                 </select>
-                                @if (!dbl) { <div class="nota">Double non ammesso: @BankingOptions.DoubleBankingBlockReason(Work, t)</div> }
                             </td>
                             <td>
                                 <select class="cella" value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
@@ -196,6 +195,10 @@
                             <td class="nota">@ProdText(t.Id)</td>
                             <td><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)" aria-label="Elimina @t.Id">Elimina</button></td>
                         </tr>
+                        @if (!dbl)
+                        {
+                            <tr class="riga-nota"><td colspan="10" class="nota piccola">@t.Id · double banking non ammesso: @BankingOptions.DoubleBankingBlockReason(Work, t)</td></tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -228,8 +231,6 @@
         {
             <div class="barra"><div class="barra-valore" style="width:@F(_progress * 100)%"></div></div>
         }
-    </div></details>
-
     @if (_errors.Count > 0)
     {
         <section class="errore" id="errori">
@@ -245,7 +246,7 @@
 
     @if (_engine != null && _res != null)
     {
-        <details class="zona" open id="risultati"><summary>Risultato</summary><div class="corpo">
+        <h3 class="categoria">Risultato</h3><div id="risultati">
             <div class="numeri">
                 <div class="numero"><b>@N(_res.TonnesPerHour, "0.0")</b><span>t/h</span></div>
                 <div class="numero"><b>@N(_res.PackagesPerHour, "0.0")</b><span>pacchi/h</span></div>
@@ -294,9 +295,9 @@
                     </ul>
                 </details>
             }
-        </div></details>
+        </div>
 
-        <details class="zona" open id="vista"><summary>Vista della linea</summary><div class="corpo">
+        <h3 class="categoria">Vista della linea</h3><div id="vista">
             <div class="schede">
                 <button id="vista2d" class="@(_view3d ? "" : "attivo")" @onclick="() => SetView(false)">Dall'alto</button>
                 <button id="vista3d" class="@(_view3d ? "attivo" : "")" @onclick="() => SetView(true)">3D</button>
@@ -401,7 +402,12 @@
                 <span><i style="background:var(--trasf)"></i>sul trasferitore</span>
                 <span><i style="background:var(--fc-on)"></i>fotocellula occupata</span>
             </div>
-        </div></details>
+        </div>
+    }
+    </div></details>
+
+    @if (_engine != null && _res != null)
+    {
 
 
         <details class="zona" open id="ciclogramma"><summary>Ciclogramma e Gantt dei pacchi</summary><div class="corpo">
@@ -433,7 +439,7 @@
         <details class="zona" open id="pacchisim"><summary>Ultimi pacchi simulati (di @_res.Packages.Count)</summary><div class="corpo">
             <div>
                 <table class="pacchi">
-                    <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>attesa s</th><th>legature</th></tr></thead>
+                    <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>totale s</th><th>attesa s</th><th>netto s</th><th>legature</th></tr></thead>
                     <tbody>
                         @foreach (var k in _res.Packages.TakeLast(30))
                         {
@@ -442,7 +448,9 @@
                                 <td>@N(k.LengthMm / 1000, "0.#")</td>
                                 <td>@N(k.EntryTimeS, "0")</td>
                                 <td>@N(k.ExitTimeS, "0")</td>
-                                <td>@N(k.WaitingTimeS, "0")</td>
+                                <td>@N(k.ExitTimeS - k.EntryTimeS, "0.0")</td>
+                                <td>@N(k.WaitingTimeS, "0.0")</td>
+                                <td>@N(k.ExitTimeS - k.EntryTimeS - k.WaitingTimeS, "0.0")</td>
                                 <td>@k.StrapsDone/@k.StrapsTotal</td>
                             </tr>
                         }
@@ -504,7 +512,7 @@
         // bilici (selezionabili e spostabili)
         foreach (var sc in w.Scales.Where(x => x.IsEnabled))
         {
-            sb.Append($"<g class=\"trascina{Sel("scale", sc.Id)}\" data-k=\"scale\" data-id=\"{System.Net.WebUtility.HtmlEncode(sc.Id)}\">");
+            sb.Append($"<g class=\"trascina fisso{Sel("scale", sc.Id)}\" data-k=\"scale\" data-id=\"{System.Net.WebUtility.HtmlEncode(sc.Id)}\">");
             sb.Append($"<rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 32}\" width=\"{Wd(sc.LengthMm)}\" height=\"14\" fill=\"transparent\"/><rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 34}\" width=\"{Wd(sc.LengthMm)}\" height=\"6\" fill=\"var(--trasf)\"/>");
             sb.Append($"<text x=\"{X(sc.StartMm + sc.LengthMm / 2)}\" y=\"{base0 + 52}\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(sc.Id)}</text></g>");
         }
@@ -937,7 +945,6 @@
                 case "strapper": { var c = Work.Strappers.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 50); model = c; } break; }
                 case "stop": { var c = Work.IntermediateStops.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 50); model = c; } break; }
                 case "photocell": { var c = Work.Photocells.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 10); model = c; } break; }
-                case "scale": { var c = Work.Scales.FirstOrDefault(x => x.Id == id); if (c != null) { c.StartMm = Snap(c.StartMm + deltaMm, 50); c.ManualPosition = true; model = c; } break; }
                 case "clamp": if (!Work.BundleClamp.PerMachine) { Work.BundleClamp.PositionMm = Snap(Work.BundleClamp.PositionMm + deltaMm, 50); model = Work.BundleClamp; } break;
                 case "compactor": Work.Compactor.PositionMm = Snap(Work.Compactor.PositionMm + deltaMm, 50); model = Work.Compactor; break;
                 case "rejector": Work.Rejector.PositionMm = Snap(Work.Rejector.PositionMm + deltaMm, 50); model = Work.Rejector; break;
@@ -1185,6 +1192,8 @@
         _ => "var(--trasf)"
     };
 
+    /// <summary>Il campo nome progetto resta vuoto finché non lo scrive l'utente (poi segue il nome del progetto).</summary>
+    private bool _nameTouched;
     private List<string> _openChanges = new();
 
     private async Task OnFile(InputFileChangeEventArgs e)
