@@ -563,8 +563,10 @@
         // vie a rulli
         foreach (var s in secs)
         {
+            // tutta la fascia della via si tocca per aprirne le proprietà (solo selezione; la maniglia in fondo la allunga)
+            sb.Append($"<g class=\"trascina fisso{Sel("sezione", s.Id)}\" data-k=\"sezione\" data-id=\"{System.Net.WebUtility.HtmlEncode(s.Id)}\">");
             sb.Append($"<rect x=\"{X(s.StartMm)}\" y=\"{base0}\" width=\"{Wd(s.LengthMm)}\" height=\"28\" rx=\"3\" fill=\"var(--bordo)\" stroke=\"var(--tenue)\"/>");
-            sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text>");
+            sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text></g>");
         }
         // trasferitore e fermo finale
         sb.Append($"<g class=\"trascina{Sel("transfer", "")}\" data-k=\"transfer\" data-id=\"\">");
