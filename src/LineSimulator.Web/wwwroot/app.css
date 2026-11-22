@@ -374,3 +374,17 @@ input.cella.stretta { width: 4.2rem; min-width: 3.4rem; }
 .config-vista svg.vista-config { min-width: 900px; }
 /* quote, guide e scritte del disegno non devono coprire i componenti sotto: il tocco passa */
 svg.vista-config > line, svg.vista-config > text, svg.vista-config > path { pointer-events: none; }
+
+/* ---- mock-up v2 (2026-11-22) ---- */
+.riga-nome { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; align-items: flex-start; }
+.riga-nome .nome-col { flex: 1 1 360px; }
+.scelte.quadrate { gap: .75rem; }
+button.scelta.quadrata, label.scelta.quadrata { width: 148px; height: 148px; flex-direction: column; justify-content: center; gap: .6rem; text-align: center; padding: .75rem; position: relative; }
+.scelta.quadrata .badge { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--morbido); color: var(--accento); font-size: 1.15rem; font-weight: 700; }
+.scelta.quadrata.attiva .badge { background: var(--accento); color: #fff; }
+.descrizione-caso { margin-top: .9rem; background: var(--morbido); border-radius: 8px; padding: .75rem 1rem; font-size: .92rem; }
+.descrizione-caso:empty { display: none; }
+.famiglie { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .75rem; }
+.famiglie .etichetta { margin-right: .25rem; }
+.riga-linea, .riga-blocchi.uguali { align-items: stretch; }
+.vista.orizzontale { height: auto; max-height: none; touch-action: auto; }

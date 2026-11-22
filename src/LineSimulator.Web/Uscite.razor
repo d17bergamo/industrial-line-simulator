@@ -26,7 +26,6 @@
     {
         <button class="azzurro" @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
     }
-    <button class="chiaro" @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
     @if (_busy) { <p class="nota pieno">@_progress</p> }
     @if (_report != null)
     {

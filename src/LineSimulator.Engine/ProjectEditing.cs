@@ -270,9 +270,13 @@ public static class ProjectEditing
     public static bool CanDelete(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
         or IntermediateStopConfig or WeighingScaleConfig or BundleClampConfig or SideCompactorConfig or RejectorConfig;
 
-    /// <summary>La via di legatura (la prima) e quella davanti al trasferitore (M1 e M3 negli esempi) non si tolgono mai.</summary>
+    /// <summary>
+    /// La via di legatura (la prima) e quella davanti al trasferitore (M1 e M3 negli esempi) non si tolgono mai; lo svincolo non si
+    /// toglie se è rimasto l'unico (regola dell'utente del 2026-11-22).
+    /// </summary>
     public static bool IsProtectedSection(LineProject p, object? m) =>
-        m is RollerSection s && (ReferenceEquals(s, p.Sections.OrderBy(x => x.StartMm).FirstOrDefault()) || ReferenceEquals(s, LayoutRules.TransferModule(p)));
+        m is RollerSection s && (ReferenceEquals(s, p.Sections.OrderBy(x => x.StartMm).FirstOrDefault()) || ReferenceEquals(s, LayoutRules.TransferModule(p))
+            || (StrappingAreaRules.ReleaseModules(p) is { Count: 1 } rel && ReferenceEquals(rel[0], s)));
 
     public static bool CanDelete(LineProject p, object? m) => CanDelete(m) && !IsProtectedSection(p, m);
 
