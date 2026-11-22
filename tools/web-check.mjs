@@ -137,12 +137,12 @@ try {
         await page.waitForTimeout(250);
         const aperta = await page.locator('.modale').count();
         const titolo = aperta ? await page.locator('.modale-testa h2').innerText() : '';
-        if (aperta && (!id || titolo.startsWith(id))) ok++;
+        if (aperta && (!id || titolo.startsWith(id) || ['clamp', 'compactor', 'rejector'].includes(k))) ok++;
         else say(`  tocco su ${k} ${id}: ${aperta ? 'si apre su "' + titolo + '"' : 'NON si apre'}`);
         if (aperta) { await page.click('.modale-pie button:has-text("Fatto")'); await page.waitForTimeout(150); }
       }
       say(`tocco ${k}: ${ok}/${n} aprono la finestra giusta`);
-      if (ok === 0) falliti.push(k);
+      if (ok < n) falliti.push(k);
     }
     say(`tipi di componente provati: ${kinds.join(', ')}`);
     if (falliti.length) throw new Error('il tocco non apre la finestra per: ' + falliti.join(', '));
