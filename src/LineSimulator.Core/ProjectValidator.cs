@@ -169,6 +169,8 @@ public static class ProjectValidator
                     r.Error("PC_ACC", "La fotocellula di accumulo deve attivarsi con pacco presente.", pc.Id);
                 if (pc.DetectionMode != PhotocellDetectionMode.Presence)
                     r.Error("PC_ACC_MODE", "La fotocellula di accumulo deve usare la logica di presenza.", pc.Id);
+                if (topo.Downstream(zone) == null)
+                    r.Error("PC_ACC_LAST", $"La fotocellula di accumulo sta sull'ultima zona ({zone.Id}), che non ha una zona a valle: ferma il materiale senza farlo ripartire. Lì ferma la fotocellula di arresto davanti al trasferitore.", pc.Id);
                 if (x < zone.StartM || x > zone.EndM)
                     r.Warn("PC_ACC_ZONE", $"Fotocellula di accumulo fuori dalla zona dell'inverter {zone.Id}.", pc.Id);
                 double v = zone.Inverter.HighSpeed;

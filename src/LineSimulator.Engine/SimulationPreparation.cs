@@ -49,6 +49,7 @@ public static class SimulationPreparation
         // ogni scelta riportata a una possibile, con il suo motivo; via del trasferitore su due inverter se c'è il double banking
         r.Changes.AddRange(TransferSplitRule.Apply(p));
         SyncAutoSensors(p, r);
+        r.Changes.AddRange(PhotocellRules.ApplyProcess(p));            // B15: fotocellule di processo sempre coerenti
         CheckMandatoryStrapping(p, r);
         return r;
     }

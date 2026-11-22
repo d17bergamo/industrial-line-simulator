@@ -22,6 +22,16 @@ public sealed class ZoneRuntime
     public ZoneRuntime(ZoneInfo info)
     {
         Info = info;
+        // Stato iniziale (utente, 2026-11-22, B14): a linea vuota tutte le vie sono già vuote e ferme; si accendono solo quando
+        // serve (consenso d'ingresso, fotocellula di ripartenza a monte, comando della stazione). Le zone senza arresto
+        // automatico restano in marcia, scelta dell'utente.
+        EmptyTravelM = info.LengthM;
+        if (info.Inverter.AutoStopWhenEmpty)
+        {
+            Mode = InverterMode.Stop;
+            AutoStopped = true;
+            Reason = "Linea vuota: ferma in attesa del pacco";
+        }
     }
 
     public ZoneInfo Info { get; }
