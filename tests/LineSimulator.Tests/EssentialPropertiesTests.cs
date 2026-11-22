@@ -58,7 +58,7 @@ public class EssentialPropertiesTests
     }
 
     [Fact]
-    public void ManualPhotocell_RoleDecidedByTheModel_AndRollersShowOnlyLengthAndCount()
+    public void ManualPhotocell_IsAlwaysPresenceOnly_AndRollersShowOnlyLengthAndCount()
     {
         var p = SampleProjects.CreateTwoStrappers12m();
         foreach (var x in p.Photocells.Where(x => x.Action == PhotocellAction.SlowDown)) x.Action = PhotocellAction.None;
@@ -66,7 +66,7 @@ public class EssentialPropertiesTests
         var pc = new PhotocellConfig { Id = "FCX", Name = "Nuova fotocellula", PositionMm = trf.StartMm + 1000 };
         p.Photocells.Add(pc);
         PhotocellRoles.Decide(p, pc);
-        Assert.Equal(PhotocellAction.SlowDown, pc.Action);
+        Assert.Equal(PhotocellAction.None, pc.Action);                          // le manuali sono solo presenza
         var pc2 = new PhotocellConfig { Id = "FCY", Name = "Nuova fotocellula", PositionMm = 3000 };
         p.Photocells.Add(pc2);
         PhotocellRoles.Decide(p, pc2);
