@@ -119,6 +119,38 @@ try {
     await page.waitForTimeout(300);
     if (await page.locator('.modale').count()) throw new Error('la finestra delle proprietà non si chiude');
   }
+  // prova di tocco su OGNI tipo di componente presente nel disegno: la finestra deve aprirsi sul componente giusto
+  {
+    const kinds = await page.locator('.config-vista:not(.bozza) .trascina').evaluateAll(els => [...new Set(els.map(e => e.getAttribute('data-k')))]);
+    const falliti = [];
+    for (const k of kinds) {
+      const els = page.locator(`.config-vista:not(.bozza) .trascina[data-k=${k}]`);
+      const n = await els.count();
+      let ok = 0;
+      for (let i = 0; i < n; i++) {
+        const el = els.nth(i);
+        const id = await el.getAttribute('data-id');
+        await el.scrollIntoViewIfNeeded();
+        const b = await el.boundingBox();
+        if (!b) continue;
+        await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+        await page.waitForTimeout(250);
+        const aperta = await page.locator('.modale').count();
+        const titolo = aperta ? await page.locator('.modale-testa h2').innerText() : '';
+        if (aperta && (!id || titolo.startsWith(id) || ['clamp', 'compactor', 'rejector'].includes(k))) ok++;
+        else say(`  tocco su ${k} ${id}: ${aperta ? 'si apre su "' + titolo + '"' : 'NON si apre'}`);
+        if (!aperta) {
+          const info = await page.evaluate(([x, y, i2]) => { const e = document.elementFromPoint(x, y); const g = e && e.closest('.trascina'); const r = document.querySelector('.modale'); const cat = []; for (let n = e; n && cat.length < 4; n = n.parentElement) cat.push(n.tagName + '.' + (n.getAttribute('class') || '') + (n.getAttribute('data-k') ? '[' + n.getAttribute('data-k') + ']' : '')); return `${cat.join(' < ')} @@ ${e ? e.tagName + '.' + (e.getAttribute('class') || '') : 'nulla'} gruppo=${g ? g.getAttribute('data-k') + ':' + g.getAttribute('data-id') + ' ' + g.getAttribute('class') : '-'}`; }, [b.x + b.width / 2, b.y + b.height / 2, 0]);
+          say(`    sotto il tocco (${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}): ${info}`);
+        }
+        if (aperta) { await page.click('.modale-pie button:has-text("Fatto")'); await page.waitForTimeout(150); }
+      }
+      say(`tocco ${k}: ${ok}/${n} aprono la finestra giusta`);
+      if (ok < n) falliti.push(k);
+    }
+    say(`tipi di componente provati: ${kinds.join(', ')}`);
+    if (falliti.length) throw new Error('il tocco non apre la finestra per: ' + falliti.join(', '));
+  }
   say(`controlli: ${(await page.locator('.blocco:has(h2:has-text("Controlli"))').innerText()).replace(/\s+/g, ' ').slice(0, 200)}; fotocellule: ${await page.locator('.blocco:has(h2:has-text("Fotocellule")) tbody tr').count()}`);
   // pacchi: vista 3D del pacco e double banking nascosto se non ci sta
   await tab('pacchi');
