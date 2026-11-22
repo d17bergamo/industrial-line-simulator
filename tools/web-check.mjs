@@ -130,7 +130,7 @@ try {
   {
     const g = page.locator('.vista-config .trascina[data-k=strapper]').first();
     await g.scrollIntoViewIfNeeded();
-    const before = await page.locator('svg.vista-config').innerHTML();
+    const before = await page.locator('.config-vista:not(.bozza) svg.vista-config').innerHTML();
     const b = await g.boundingBox();
     if (b) {
       await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
@@ -139,7 +139,7 @@ try {
       await page.mouse.up();
       await page.waitForTimeout(800);
     }
-    const after = await page.locator('svg.vista-config').innerHTML();
+    const after = await page.locator('.config-vista:not(.bozza) svg.vista-config').innerHTML();
     say(`trascinamento legatrice nella vista 2D: ${before !== after ? 'ok (vista cambiata)' : 'NESSUN CAMBIAMENTO'}`);
   }
   {
@@ -156,7 +156,7 @@ try {
     say(`vista 2D, fotocellule: ${n0} → aggiunta ${n1} → eliminata ${n2}`);
     if (!(n1 === n0 + 1 && n2 === n0)) throw new Error('aggiunta/eliminazione dalla vista 2D non riuscita');
   }
-  say(`vista di configurazione: ${await page.locator('svg.vista-config').count()}`);
+  say(`vista di configurazione: ${await page.locator('.config-vista:not(.bozza) svg.vista-config').count()}`);
   const dbl = await page.locator('#pacchi table.configurazioni select option[value="DoubleBanking"]').count();
   const sing = await page.locator('#pacchi table.configurazioni select option[value="SingleBanking"]').count();
   say(`opzioni banking: single ${sing}, double ${dbl}`);
