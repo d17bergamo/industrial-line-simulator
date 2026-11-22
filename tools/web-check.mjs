@@ -18,7 +18,7 @@ const tab = async n => { await page.click('#tab-' + n); await page.waitForTimeou
 try {
   let t0 = Date.now();
   await page.goto(url);
-  await page.waitForSelector('#pronto', { timeout: 120000 });
+  await page.waitForSelector('#tab-progetto', { timeout: 120000 });
   say(`avvio: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   await page.screenshot({ path: `${out}/web-1-avvio.png` });
   for (const [name, setup] of [['base', async () => {}]]) {
@@ -26,7 +26,7 @@ try {
     t0 = Date.now();
     say(`nome progetto: "${await page.locator('#nome-progetto').inputValue()}" (vuoto all'inizio); safety: ${await page.locator('#safety').inputValue()}; bozza 2D: ${await page.locator('.bozza svg.vista-config').count()}`);
     await tab('simulazione');
-    say(`pacchi da simulare: ${await page.locator('#npacchi').inputValue()}`);
+    say(`pacchi da simulare: ${await page.locator('.barra-sim .scelta.attiva').allInnerTexts()}`);
   await page.click('#simula');
     await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
     say(`simulazione ${name}: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
@@ -54,20 +54,17 @@ try {
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${out}/web-4-3d-${v.toLowerCase()}.png` });
   }
-  // tema scuro
-  await page.click('#pronto');   // tema scuro scelto con il pulsante
-  say(`tema: ${await page.locator('#pronto').innerText()}`);
   await page.click('#simula');
   await page.waitForSelector('#risultati', { timeout: 600000 });
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: `${out}/web-5-scuro-3d.png`, fullPage: true });
+  await page.screenshot({ path: `${out}/web-5-3d.png`, fullPage: true });
   await page.click('#vista2d');
   await page.click('#play');
   await page.waitForTimeout(15000);
   await page.click('#play');
-  await page.screenshot({ path: `${out}/web-5-scuro-2d.png`, fullPage: true });
+  await page.screenshot({ path: `${out}/web-5-2d.png`, fullPage: true });
   // ciclogramma, Gantt e comandi di riproduzione
-  say(`ciclogramma: ${await page.locator('#ciclogramma svg.ciclogramma').count()} grafici, ${await page.locator('#ciclogramma svg.ciclogramma rect').count()} tratti`);
+  say(`Gantt: ${await page.locator('#ciclogramma svg.ciclogramma').count()} grafici, ${await page.locator('#ciclogramma svg.ciclogramma rect').count()} tratti; pacchi simulati: ${await page.locator('#pacchisim tbody tr').count()} righe; registro eventi: ${await page.locator('.blocco:has(h2:has-text("Registro eventi")) tbody tr').count()} righe`);
   await page.click('#inizio');
   await page.screenshot({ path: `${out}/web-5-ciclogramma.png`, fullPage: true });
   // recap per misura
@@ -76,29 +73,25 @@ try {
   say(`recap: ${await page.locator('#recap tbody tr').count()} righe; ${(await page.locator('#recap').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   await tab('linea');
   say(`gruppi selezionabili nel 2D: ${await page.locator('.vista-config .trascina').count()}`);
-  // produttività per tipologia
   await tab('pacchi');
-  await page.click('button:has-text("Calcola produttività")');
-  await page.waitForFunction(() => document.querySelector('#pacchi')?.innerText.includes('pacchi/h'), null, { timeout: 600000 });
-  say(`produttività: ${(await page.locator('#pacchi table.configurazioni').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   // modifica del progetto: layout personalizzato, pacchi, vie e componenti, poi simulazione
   await tab('progetto');
-  await page.selectOption('#esempio', '-2');
+  await page.click('button.scelta:has-text("Layout da zero")');
   await page.fill('.griglia input[type=text]', '6, 8, 12');
   await page.click('button:has-text("Crea il layout")');
   await page.waitForTimeout(800);
   await tab('pacchi');
   say(`layout personalizzato: ${(await page.locator('#pacchi').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   await page.screenshot({ path: `${out}/web-6-pacchi.png`, fullPage: true });
-  const len = page.locator('#pacchi table.configurazioni input[type=number]').first();
-  await len.fill('7000');
+  const len = page.locator('#pacchi table.configurazioni input.cella').first();
+  await len.fill('7');
   await len.dispatchEvent('change');
   await page.waitForTimeout(500);
   // legature: + e quote tra le legature
   {
     const n = async () => Number((await page.locator('.legature-ctrl h3').innerText()).replace(/\D+/g, ''));
     const n0 = await n();
-    await page.click('.legature-ctrl button.piu');
+    await page.click('.legature-ctrl button.quadro.azzurro');
     await page.waitForTimeout(400);
     const n1 = await n();
     const q = page.locator('.quote-leg input').first();
@@ -112,20 +105,26 @@ try {
   await page.waitForSelector('#risultati, #errori', { timeout: 600000 });
   say(`risultato layout personalizzato: ${(await page.locator('#risultati, #errori').first().innerText()).replace(/\s+/g, ' ').slice(0, 400)}`);
   await page.screenshot({ path: `${out}/web-6-risultato.png`, fullPage: true });
-  // configurazione completa: tutte le proprietà di un componente
+  // proprietà di un componente: finestra che si apre toccandolo nel disegno
   await tab('linea');
-  const comp = page.locator('#linea select').first();
-  const opts = await comp.locator('option').allInnerTexts();
-  say(`componenti configurabili: ${opts.length} (${opts.slice(0, 6).join(' | ')} …)`);
-  await comp.selectOption({ index: Math.min(3, opts.length - 1) });
-  await page.waitForTimeout(300);
-  say(`proprietà mostrate: ${await page.locator('#linea .prop').count()}`);
-  await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: true });
+  {
+    const g = page.locator('.vista-config .trascina[data-k=strapper]').first();
+    await g.scrollIntoViewIfNeeded();
+    const b = await g.boundingBox();
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+    await page.waitForSelector('.modale', { timeout: 10000 });
+    say(`finestra proprietà: ${(await page.locator('.modale-testa h2').innerText())}; proprietà mostrate: ${await page.locator('.modale .prop').count()}`);
+    await page.screenshot({ path: `${out}/web-7-proprieta.png`, fullPage: false });
+    await page.click('.modale-pie button:has-text("Fatto")');
+    await page.waitForTimeout(300);
+    if (await page.locator('.modale').count()) throw new Error('la finestra delle proprietà non si chiude');
+  }
+  say(`controlli: ${(await page.locator('.blocco:has(h2:has-text("Controlli"))').innerText()).replace(/\s+/g, ' ').slice(0, 200)}; fotocellule: ${await page.locator('.blocco:has(h2:has-text("Fotocellule")) tbody tr').count()}`);
   // pacchi: vista 3D del pacco e double banking nascosto se non ci sta
   await tab('pacchi');
   await page.waitForTimeout(800);
   say(`vista 3D del pacco: ${await page.locator('#cpack').count() === 1 ? 'presente' : 'ASSENTE'}`);
-  say(`dati area: ${await page.locator('#linea h4.sotto').count()} sezioni, famiglie ${await page.locator('#linea details.famiglia').count()}, righello ${await page.locator('#rpack svg').count()}, righe pacchi ${await page.locator('#pacchi table.configurazioni tbody tr').count()}`);
+  say(`righello ${await page.locator('#rpack svg').count()}, righe pacchi ${await page.locator('#pacchi table.configurazioni tbody tr').count()}`);
   await tab('linea');
   {
     const g = page.locator('.vista-config .trascina[data-k=strapper]').first();
@@ -145,12 +144,11 @@ try {
   {
     const fc = () => page.locator('.vista-config .trascina[data-k=photocell]').count();
     const n0 = await fc();
-    const gest = page.locator('#linea .gestione').first();
-    await gest.locator('button.chip:has-text("Fotocellula")').click();
-    await gest.locator('button.grande:has-text("Aggiungi")').click();
+    await page.locator('.aggiungi-pannello button:has-text("Fotocellula")').click();
     await page.waitForTimeout(600);
     const n1 = await fc();
-    await gest.locator('button.grande.rimuovi').click();
+    await page.waitForSelector('.modale', { timeout: 10000 });
+    await page.click('.modale-pie button:has-text("Rimuovi")');
     await page.waitForTimeout(600);
     const n2 = await fc();
     say(`vista 2D, fotocellule: ${n0} → aggiunta ${n1} → eliminata ${n2}`);
@@ -164,9 +162,9 @@ try {
   await page.locator('#cpack').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/web-6-pacchi3d.png`, fullPage: false });
   // documenti: PDF, progetto, Gantt, Excel e tutto in un file ZIP vengono scaricati
-  await page.click('header.testa button:has-text("Documenti")');
+  await tab('simulazione');
   await page.waitForTimeout(600);
-  for (const label of ['Vista dall\'alto', 'Salva il progetto', 'Gantt dei pacchi e gradini', 'Risultati della simulazione', 'Tutto (.zip)']) {
+  for (const label of ['Vista dall\'alto (PDF)', 'Progetto (JSON)', 'Gantt (PDF)', 'Risultati (Excel)', 'Tutto (.zip)']) {
     const btn = page.locator(`#uscite button:has-text("${label}")`);
     if (await btn.count() === 0 || await btn.first().isDisabled()) { say(`uscita non disponibile: ${label}`); continue; }
     const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 120000 }), btn.first().click()]);
