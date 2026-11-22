@@ -4,7 +4,6 @@
 
 <header class="testa">
     <div class="marca"><span class="logo">S</span><b>Simulatore Linea</b></div>
-    <div class="nome-pill"><span>Progetto</span><b>@NameShown@(_edited ? " (modificato)" : "")</b></div>
     <nav class="passi" aria-label="Passi">
         <button id="tab-progetto" class="passo @(_tab == 0 ? "attivo" : "")" @onclick="() => SetTab(0)">1 · Progetto</button>
         <button id="tab-pacchi" class="passo @(_tab == 1 ? "attivo" : "")" @onclick="() => SetTab(1)">2 · Pacchi</button>
@@ -35,7 +34,7 @@
                         <button class="scelta @(_model == k ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = k">@SampleProjects.All[k].Name</button>
                     }
                     <button class="scelta @(_model == -2 ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = -2">Layout da zero</button>
-                    <label class="scelta file @(_model == -1 ? "attiva" : "")">Apri file .json<InputFile OnChange="OnFile" accept=".json" disabled="@_busy" /></label>
+                    <label class="scelta file @(_model == -1 ? "attiva" : "")">Apri un file .json<InputFile OnChange="OnFile" accept=".json" disabled="@_busy" /></label>
                 </div>
                 @if (_model == -1 && _openChanges.Count > 0)
                 {
@@ -55,7 +54,7 @@
             <div class="blocco largo-560">
                 <div class="riga-obiettivo">
                     <div>
-                        <label class="etichetta" for="obiettivo">Obiettivo di produttività</label>
+                        <label class="etichetta" for="obiettivo">Produttività</label>
                         <div class="grande-valore"><input id="obiettivo" inputmode="decimal" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /><span>t/h</span></div>
                     </div>
                     <div>
@@ -68,23 +67,22 @@
         </div>
 
         <div class="blocco">
-            <div class="titolo-blocco"><h2>Bozza della linea: @Work.Name</h2><span>Vista dall'alto, solo da guardare. La modifichi nel passo Linea.</span></div>
+            <div class="titolo-blocco"><h2>Layout</h2></div>
             <div class="config-vista bozza">@((MarkupString)ConfigSvg(true))</div>
-            <p class="nota">Il pacco corre da sinistra a destra.</p>
         </div>
 
-        <div class="avanti"><button class="scuro grande" @onclick="() => SetTab(1)">Avanti: i pacchi →</button></div>
+        <div class="avanti"><button class="scuro grande" @onclick="() => SetTab(1)">Pacchi →</button></div>
     </section>
 
     @* ================= PASSO 2: PACCHI ================= *@
     <section class="scheda" id="scheda-1" hidden="@(_tab != 1)">
-        <div class="titolo-pagina"><h1>Cosa devo legare</h1><p>Compila una riga per ogni tipo di pacco e sistema le legature sull'anteprima.</p></div>
+        <div class="titolo-pagina"><h1>Pacchi</h1><p>Indica i tipi di pacco da legare: lunghezza, peso, legature e come devono essere lavorati.</p></div>
 
         <div class="blocco" id="pacchi">
             <div class="titolo-blocco"><h2>Tipologie di pacco</h2><button class="azzurro" @onclick="AddType">+ Aggiungi pacco</button></div>
             <div class="tabella-scroll">
                 <table class="tabella configurazioni">
-                    <thead><tr><th>Pacco</th><th>Lungh. (m)</th><th>Peso (t)</th><th>Legature</th><th>Tipo</th><th>Banking</th><th>Intestatura</th><th></th></tr></thead>
+                    <thead><tr><th>Pacco</th><th>Lungh. (m)</th><th>Peso (kg)</th><th>Legature</th><th>Tipo</th><th>Banking</th><th>Intestatura</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var (t, ti) in Work.PackageTypes.ToList().Select((x, i) => (x, i)))
                         {
@@ -93,7 +91,7 @@
                             <tr class="@(SelectedPack?.Id == t.Id ? "scelto" : "")">
                                 <td><button class="nome-pacco" @onclick="() => _selPack = t.Id"><span class="quadrato" style="background:@PackColor(ti)"></span>@t.Id</button></td>
                                 <td><input class="cella" inputmode="decimal" value="@Mt(t.LengthMm)" @onchange="e => SetLengthM(t, e)" /></td>
-                                <td><input class="cella" inputmode="decimal" value="@F(t.WeightKg / 1000)" @onchange="e => Edit(() => t.WeightKg = Math.Round(Num(e, t.WeightKg / 1000, 0.001, 100) * 1000, 1))" /></td>
+                                <td><input class="cella" inputmode="decimal" value="@F(t.WeightKg)" @onchange="e => Edit(() => t.WeightKg = Math.Round(Num(e, t.WeightKg, 1, 100000), 1))" /></td>
                                 <td><input class="cella stretta" type="number" min="1" max="20" value="@t.StrapCount" @onchange="e => SetStraps(t, e)" /></td>
                                 <td>
                                     <select class="cella" value="@t.BindingType" @onchange="e => SetBinding(t, e)">
@@ -137,7 +135,6 @@
                         <button class="@(_pv2d ? "" : "attivo")" @onclick="() => SetPackView(false)">3D</button>
                     </div>
                 </div>
-                <p class="nota alto">@N(sp.LengthMm / 1000, "0.#") m · @N(sp.WeightKg / 1000, "0.##") t · @sp.StrapPositionsMm.Count legature</p>
                 <div class="pacco3d"><canvas id="cpack"></canvas></div>
                 <div id="rpack" class="righello"></div>
                 <div class="legature-ctrl">
@@ -162,30 +159,28 @@
 
         <div class="avanti due">
             <button class="chiaro grande" @onclick="() => SetTab(0)">← Progetto</button>
-            <button class="scuro grande" @onclick="() => SetTab(2)">Avanti: la linea →</button>
+            <button class="scuro grande" @onclick="() => SetTab(2)">Linea →</button>
         </div>
     </section>
 
     @* ================= PASSO 3: LINEA ================= *@
     <section class="scheda" id="scheda-2" hidden="@(_tab != 2)">
-        <div class="titolo-pagina"><h1>Com'è fatta la linea</h1><p>Vista dall'alto. Tocca un componente per vederne e cambiarne le proprietà, trascinalo per spostarlo.</p></div>
+        <div class="titolo-pagina"><h1>Com'è fatta la linea</h1><p>Vista dall'alto. Tocca un componente per aprire le sue proprietà in una piccola finestra; trascina le macchine, allunga le vie con la maniglia a fine modulo.</p></div>
 
         <div class="riga-linea">
             <aside class="aggiungi-pannello">
                 <div class="etichetta">Aggiungi</div>
                 <button @onclick='() => AddComp("strapper")'>+ Legatrice</button>
-                <button @onclick='() => AddComp("section")'>+ Via a rulli</button>
-                <button @onclick='() => AddComp("photocell")'>+ Fotocellula di presenza</button>
-                <button @onclick='() => AddComp("stop-center")'>+ Fermo scomparente</button>
-                <button @onclick='() => AddComp("scale-center")'>+ Bilico</button>
                 <button @onclick='() => AddComp("clamp")'>+ Stringifascio</button>
                 <button @onclick='() => AddComp("compactor")'>+ Compattatore</button>
-                <button @onclick='() => AddComp("rejector")'>+ Rigettatrice</button>
+                <button @onclick='() => AddComp("section")'>+ Via a rulli</button>
+                <button @onclick='() => AddComp("stop-center")'>+ Fermo scomparente</button>
+                <button @onclick='() => AddComp("scale-center")'>+ Bilico</button>
+                <button @onclick='() => AddComp("photocell")'>+ Fotocellula</button>
                 @if (_msg.Length > 0) { <p class="nota">@_msg</p> }
             </aside>
             <div class="blocco disegno" id="linea">
                 <div class="config-vista">@((MarkupString)ConfigSvg())</div>
-                <p class="nota">Il pacco corre da sinistra a destra. Legatrici sopra e sotto la via di legatura; l'ultima via si divide in M3A (monte) e M3B (valle) quando c'è un double banking.</p>
             </div>
         </div>
 
@@ -233,7 +228,7 @@
 
         <div class="avanti due">
             <button class="chiaro grande" @onclick="() => SetTab(1)">← Pacchi</button>
-            <button class="scuro grande" @onclick="() => SetTab(3)">Avanti: la simulazione →</button>
+            <button class="scuro grande" @onclick="() => SetTab(3)">Simulazione →</button>
         </div>
     </section>
 
@@ -244,7 +239,7 @@
             <div class="modale-testa"><h2>@CompTitle(sc)</h2><button class="chiudi" @onclick="CloseProp" aria-label="Chiudi">×</button></div>
             <div class="modale-corpo">
                 @if (sc is PhotocellConfig { IsAutoGenerated: true }) { <p class="nota">Fotocellula automatica: la mette il programma in base ai pacchi. Si aggiungono solo fotocellule di presenza.</p> }
-                @if (ProjectEditing.IsProtectedSection(Work, sc)) { <p class="nota">La via di legatura e quella davanti al trasferitore non si possono rimuovere.</p> }
+                @if (ProjectEditing.IsProtectedSection(Work, sc)) { <p class="nota">La via a rulli di legatura e quella davanti al trasferitore non si possono rimuovere.</p> }
                 <Proprieta Project="Work" Model="sc" Changed="OnPropChanged" @key="sc" />
             </div>
             <div class="modale-pie">
@@ -260,7 +255,7 @@
 
         <div class="blocco barra-sim" id="simulazione">
             <div class="gruppo-sim">
-                <span class="etichetta">Misura</span>
+                <span class="etichetta">Lunghezza pacco</span>
                 @foreach (var t in Work.PackageTypes)
                 {
                     string tid = t.Id;
@@ -318,8 +313,7 @@
                 <div class="kpi-carta giallo-b">
                     <div class="kpi-nome">Collo di bottiglia</div>
                     <div class="kpi-valore piccolo">@(string.IsNullOrWhiteSpace(_res.BottleneckName) ? "–" : _res.BottleneckName)</div>
-                    <div class="kpi-nota">@_res.BottleneckExplanation</div>
-                </div>
+                                    </div>
                 <div class="kpi-carta @(_res.Collisions == 0 && _res.SlipEvents == 0 ? "verde-b" : "rosso-b")">
                     <div class="kpi-nome">Collisioni · strisciamenti</div>
                     <div class="kpi-valore">@_res.Collisions · @_res.SlipEvents</div>
@@ -518,22 +512,6 @@
         }
 
         <div class="riga-blocchi">
-            @if (_engine != null && _res != null)
-            {
-                <div class="blocco largo-420">
-                    <h2>Registro eventi</h2>
-                    <table class="tabella">
-                        <tbody>
-                            @foreach (var x in RecentEvents())
-                            {
-                                <tr class="@(x.Severity == EventSeverity.Error ? "grave" : x.Severity == EventSeverity.Warning ? "avviso" : "")">
-                                    <td class="id">@N(x.TimeS, "0.0") s</td><td>@x.Message</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
             <div class="blocco largo-420" id="uscite">
                 <h2>Documenti</h2>
                 <Uscite Mode="documenti" Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
