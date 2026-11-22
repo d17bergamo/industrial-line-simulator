@@ -760,10 +760,10 @@
                     var e = new SimulationEngine(p);
                     while (e.Step()) { }
                     r = e.ComputeResults();
-                    if (SteadyStateRun.Reached(r)) break;
+                    if (SteadyStateRun.Reached(r) || r.Deadlock || r.Collisions > 0 || !r.Completed) break;
                     await Task.Delay(1);
                 }
-                string? problem = r.Collisions > 0 ? "collisioni" : r.Deadlock ? "blocco" : r.PackagesExited == 0 ? "nessun pacco uscito"
+                string? problem = r.Collisions > 0 ? "collisioni" : r.SlipEvents > 0 ? "strisciamenti" : r.Deadlock ? "blocco" : r.PackagesExited == 0 ? "nessun pacco uscito"
                     : !SteadyStateRun.Reached(r) ? "regime non raggiunto" : null;
                 _recap.Add(new RecapRow(t.Id, t.LengthMm, r.PackagesExited, SteadyStateRun.SteadyFromPackage(r), r.SteadyStateFromS, r.CycleTimeMeanS, r.TonnesPerHour, r.BottleneckName, problem));
             }
@@ -1641,7 +1641,7 @@
                     await Task.Delay(1);
                 }
                 _res = e.ComputeResults();
-                if (SteadyStateRun.Reached(_res)) break;
+                if (SteadyStateRun.Reached(_res) || _res.Deadlock || _res.Collisions > 0 || !_res.Completed) break;
             }
             _events = e.Events.Where(x => x.Severity != EventSeverity.Trace).ToList();
             _evIdx = e.Events.Count;
@@ -1659,7 +1659,7 @@
                 if (split)
                 {
                     _bands.Add(new Band(e.MonteInverterId ?? TransferSplitRule.MonteId(z.Id), i, z.Info.StartM, e.TransferSplitM!.Value, false));
-                    _bands.Add(new Band(z.Id, i, e.TransferSplitM!.Value, z.Info.EndM, true));
+                    _bands.Add(new Band(TransferSplitRule.ValleId(z.Id), i, e.TransferSplitM!.Value, z.Info.EndM, true));
                 }
                 else _bands.Add(new Band(z.Id, i, z.Info.StartM, z.Info.EndM, false));
             }
