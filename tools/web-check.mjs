@@ -140,7 +140,7 @@ try {
         if (aperta && (!id || titolo.startsWith(id) || ['clamp', 'compactor', 'rejector'].includes(k))) ok++;
         else say(`  tocco su ${k} ${id}: ${aperta ? 'si apre su "' + titolo + '"' : 'NON si apre'}`);
         if (!aperta) {
-          const info = await page.evaluate(([x, y, i2]) => { const e = document.elementFromPoint(x, y); const g = e && e.closest('.trascina'); const r = document.querySelector('.modale'); return `${e ? e.tagName + '.' + (e.getAttribute('class') || '') : 'nulla'} gruppo=${g ? g.getAttribute('data-k') + ':' + g.getAttribute('data-id') + ' ' + g.getAttribute('class') : '-'}`; }, [b.x + b.width / 2, b.y + b.height / 2, 0]);
+          const info = await page.evaluate(([x, y, i2]) => { const e = document.elementFromPoint(x, y); const g = e && e.closest('.trascina'); const r = document.querySelector('.modale'); const cat = []; for (let n = e; n && cat.length < 4; n = n.parentElement) cat.push(n.tagName + '.' + (n.getAttribute('class') || '') + (n.getAttribute('data-k') ? '[' + n.getAttribute('data-k') + ']' : '')); return `${cat.join(' < ')} @@ ${e ? e.tagName + '.' + (e.getAttribute('class') || '') : 'nulla'} gruppo=${g ? g.getAttribute('data-k') + ':' + g.getAttribute('data-id') + ' ' + g.getAttribute('class') : '-'}`; }, [b.x + b.width / 2, b.y + b.height / 2, 0]);
           say(`    sotto il tocco (${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}): ${info}`);
         }
         if (aperta) { await page.click('.modale-pie button:has-text("Fatto")'); await page.waitForTimeout(150); }
