@@ -7,102 +7,56 @@
 @using LineSimulator.Models
 @inject IJSRuntime JS
 
-<div class="tutto">
-    <div><b>Scarica tutto in un unico file</b><div class="nota">Disegni, specifiche, progetto@(Engine != null && Results != null ? " e risultati" : " (i risultati dopo una simulazione)") in un archivio ZIP</div></div>
-    <button class="primario" @onclick="AllZip">⬇ Tutto (.zip)</button>
-</div>
-<div class="documenti">
-    <div class="gruppo">
-        <h3 class="categoria">Disegni</h3>
-        <button class="doc" @onclick="TopView"><span class="fmt">PDF</span><span>Vista dall'alto</span><span class="giu">⬇</span></button>
-        <button class="doc" @onclick="PrintCyclogram"><span class="fmt">PDF</span><span>Ciclogramma da stampare</span><span class="giu">⬇</span></button>
-        <select value="@_cycType" @onchange="@(e => _cycType = e.Value?.ToString() ?? string.Empty)" aria-label="Pacco del ciclogramma">
-            <option value="">ciclogramma di tutti i pacchi</option>
-            @foreach (var t in Project.PackageTypes) { <option value="@t.Id">ciclogramma solo @t.Id</option> }
-        </select>
-        <button class="doc" @onclick="GanttPdf" disabled="@(Engine == null || Results == null)"><span class="fmt">PDF</span><span>Gantt dei pacchi e gradini</span><span class="giu">⬇</span></button>
-    </div>
-    <div class="gruppo">
-        <h3 class="categoria">Specifiche</h3>
-        <button class="doc" @onclick="FunctionalSpec"><span class="fmt">DOCX</span><span>Specifica funzionale</span><span class="giu">⬇</span></button>
-        <button class="doc" @onclick="ControlLogicZip"><span class="fmt">ZIP</span><span>Logica di controllo (JSON + CSV)</span><span class="giu">⬇</span></button>
-    </div>
-    <div class="gruppo">
-        <h3 class="categoria">Risultati</h3>
-        <button class="doc" @onclick="Excel" disabled="@(Engine == null || Results == null)"><span class="fmt">XLSX</span><span>Risultati della simulazione</span><span class="giu">⬇</span></button>
-        <button class="doc" @onclick="CsvZip" disabled="@(Engine == null || Results == null)"><span class="fmt">CSV</span><span>Risultati (tabelle)</span><span class="giu">⬇</span></button>
-        @if (Engine == null || Results == null) { <p class="nota">Si attivano dopo una simulazione.</p> }
-    </div>
-    <div class="gruppo">
-        <h3 class="categoria">Progetto</h3>
-        <button class="doc" @onclick="SaveProject"><span class="fmt">JSON</span><span>Salva il progetto</span><span class="giu">⬇</span></button>
-        <button class="doc" @onclick="SaveLayout"><span class="fmt">JSON</span><span>Solo il layout</span><span class="giu">⬇</span></button>
-        <button class="doc" @onclick="CopyProject"><span class="fmt">TXT</span><span>Copia negli appunti</span><span class="giu">⎘</span></button>
-    </div>
-</div>
-
-<h3 class="categoria">Obiettivo di produttività</h3>
-<p class="nota">Obiettivo: <b>@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> + Safety @Project.Simulation.SafetyPercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) % = <b>@Project.Simulation.EffectiveTargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> da garantire (si imposta nel passo Progetto).</p>
-<div class="comandi strumenti">
-    <button @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
-    <button @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
-</div>
-@if (_busy) { <p class="nota">@_progress</p> }
-@if (_report != null)
+@if (Mode != "obiettivo")
 {
-    <pre class="rapporto">@_report.Summary</pre>
-    <div class="comandi strumenti">
-        @if (_report.BestProject != null && _report.Path.Count > 0) { <button class="primario" @onclick="@(() => Apply(_report.BestProject!, _report.Path.Count + " modifiche dell'ottimizzatore"))">Applica il percorso proposto</button> }
-        @if (_report.ReleaseProject != null) { <button @onclick="@(() => Apply(_report.ReleaseProject!, _report.ReleaseLengthening?.Title ?? "svincolo allungato"))">@(_report.ReleaseLengthening?.Title ?? "Allunga lo svincolo")</button> }
-        @if (_report.SavingProject != null) { <button @onclick="@(() => Apply(_report.SavingProject!, _report.Saving?.Title ?? "risparmio"))">Unisci lo svincolo all'inverter di legatura</button> }
-        <button @onclick="() => _report = null">Chiudi</button>
+    <div class="bottoni-doc">
+        <button @onclick="TopView">Vista dall'alto (PDF)</button>
+        <button @onclick="FunctionalSpec">Specifiche (Word)</button>
+        <button @onclick="ControlLogicZip">Logica di controllo (JSON + CSV)</button>
+        <button @onclick="PrintCyclogram">Ciclogramma (PDF)</button>
+        <button @onclick="GanttPdf" disabled="@(Engine == null || Results == null)">Gantt (PDF)</button>
+        <button @onclick="Excel" disabled="@(Engine == null || Results == null)">Risultati (Excel)</button>
+        <button @onclick="SaveProject">Progetto (JSON)</button>
+        <button class="azzurro" @onclick="AllZip">Tutto (.zip)</button>
     </div>
 }
-@if (_zones != null)
+@if (Mode == "obiettivo")
 {
-    <pre class="rapporto">@_zones.Explanation</pre>
-    <div class="comandi strumenti">
-        @if (_zones.Best != null) { <button class="primario" @onclick="ApplyZones">Applica la suddivisione migliore</button> }
-        <button @onclick="() => _zones = null">Chiudi</button>
-    </div>
+    @if (Results != null && Results.TonnesPerHour < Project.Simulation.EffectiveTargetTonnesPerHour)
+    {
+        <button class="azzurro" @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
+    }
+    <button class="chiaro" @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
+    @if (_busy) { <p class="nota pieno">@_progress</p> }
+    @if (_report != null)
+    {
+        <div class="rapporto-blocco pieno">
+            <pre class="rapporto">@_report.Summary</pre>
+            <div class="comandi strumenti">
+                @if (_report.BestProject != null && _report.Path.Count > 0) { <button class="azzurro" @onclick="@(() => Apply(_report.BestProject!, _report.Path.Count + " modifiche dell'ottimizzatore"))">Applica il percorso proposto</button> }
+                @if (_report.ReleaseProject != null) { <button @onclick="@(() => Apply(_report.ReleaseProject!, _report.ReleaseLengthening?.Title ?? "svincolo allungato"))">@(_report.ReleaseLengthening?.Title ?? "Allunga lo svincolo")</button> }
+                @if (_report.SavingProject != null) { <button @onclick="@(() => Apply(_report.SavingProject!, _report.Saving?.Title ?? "risparmio"))">Unisci lo svincolo all'inverter di legatura</button> }
+                <button @onclick="() => _report = null">Chiudi</button>
+            </div>
+        </div>
+    }
+    @if (_zones != null)
+    {
+        <div class="rapporto-blocco pieno">
+            <pre class="rapporto">@_zones.Explanation</pre>
+            <div class="comandi strumenti">
+                @if (_zones.Best != null) { <button class="azzurro" @onclick="ApplyZones">Applica la suddivisione migliore</button> }
+                <button @onclick="() => _zones = null">Chiudi</button>
+            </div>
+        </div>
+    }
 }
-
-<h3 class="categoria">Controllo dell'equipaggiamento</h3>
-@{ var check = Check(); }
-<ul class="elenco">
-    @foreach (var c in check) { <li class="@(c.IsProblem ? "grave" : "")">@c.Message</li> }
-</ul>
-@if (check.Any(c => c.IsProblem))
-{
-    <button @onclick="FixEquipment">Correggi automaticamente</button>
-}
-
-@if (Engine != null)
-{
-    <h3 class="categoria">Registro eventi</h3>
-    <div class="griglia">
-        <label class="campo">Cerca<input type="text" value="@_filter" @onchange="@(e => _filter = e.Value?.ToString() ?? string.Empty)" placeholder="es. P003, FC2, Strisciamento" /></label>
-        <label class="campo">Mostra
-            <select value="@_level" @onchange="@(e => _level = e.Value?.ToString() ?? "info")">
-                <option value="info">informazioni e avvisi</option>
-                <option value="warning">solo avvisi e allarmi</option>
-                <option value="trace">tutto (anche i dettagli)</option>
-            </select>
-        </label>
-    </div>
-    var evs = Events().ToList();
-    <p class="nota">@evs.Count eventi@(evs.Count > 300 ? ", mostrati i primi 300" : "")</p>
-    <div class="registro">
-        @foreach (var x in evs.Take(300))
-        {
-            <div class="@(x.Severity >= EventSeverity.Warning ? "grave" : "")"><b>@x.TimeS.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',') s</b> @x.Message</div>
-        }
-    </div>
-}
-@if (_note != null) { <p class="nota">@_note</p> }
+@if (_note != null && Mode != "obiettivo") { <p class="nota">@_note</p> }
 
 @code {
     [Parameter, EditorRequired] public LineProject Project { get; set; } = null!;
+    /// <summary>"documenti": i pulsanti dei documenti; "obiettivo": Raggiungi l'obiettivo e Ottimizza le zone con i loro rapporti.</summary>
+    [Parameter] public string Mode { get; set; } = "documenti";
     [Parameter] public SimulationEngine? Engine { get; set; }
     [Parameter] public SimulationResults? Results { get; set; }
     /// <summary>Il progetto cambia (correzioni) o va sostituito (proposte dell'ottimizzatore).</summary>

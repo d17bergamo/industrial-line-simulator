@@ -22,7 +22,7 @@
     <script>
         // Tema: "auto" segue il sistema; la scelta resta nel browser, se il browser lo permette.
         window.tema = {
-            leggi: function () { try { return localStorage.getItem('tema') || 'auto'; } catch (e) { return 'auto'; } },
+            leggi: function () { return 'chiaro'; },
             imposta: function (v) {
                 if (v === 'auto') document.documentElement.removeAttribute('data-tema');
                 else document.documentElement.setAttribute('data-tema', v);
