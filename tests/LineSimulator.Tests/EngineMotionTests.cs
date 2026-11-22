@@ -87,12 +87,12 @@ public class EngineMotionTests
     }
 
     [Fact]
-    public void WithoutSlowDown_ExcessiveImpactIsReported()
+    public void WithoutSlowDown_TheProgramAddsIt_AndTheImpactIsNotExcessive()
     {
         var e = new SimulationEngine(TestLines.SingleZone());
+        Assert.Contains(e.Preparation.Changes, x => x.Contains("rallentamento prima del fermo finale", StringComparison.Ordinal));
         e.RunToCompletion();
-        Assert.True(e.ExcessiveImpacts > 0);
-        Assert.Contains(e.Events, x => x.Type == SimEventType.ExcessiveImpact);
+        Assert.Equal(0, e.ExcessiveImpacts);
     }
 
     [Fact]
