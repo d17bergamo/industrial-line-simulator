@@ -147,10 +147,6 @@ try {
     await page.locator('.aggiungi-pannello button:has-text("Fotocellula")').click();
     await page.waitForTimeout(600);
     const n1 = await fc();
-    const nuova = page.locator('.vista-config .trascina[data-k=photocell]:not(.fisso)').last();
-    await nuova.scrollIntoViewIfNeeded();
-    const bb = await nuova.boundingBox();
-    await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
     await page.waitForSelector('.modale', { timeout: 10000 });
     await page.click('.modale-pie button:has-text("Rimuovi")');
     await page.waitForTimeout(600);
