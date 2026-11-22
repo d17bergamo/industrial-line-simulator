@@ -1011,8 +1011,7 @@ public sealed partial class MainViewModel : ObservableObject
         SelectModel(model);
     }
 
-    private static bool CanDelete(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
-        or IntermediateStopConfig or WeighingScaleConfig or BundleClampConfig or SideCompactorConfig or RejectorConfig;
+    private bool CanDelete(object? m) => ProjectEditing.CanDelete(_project, m);
 
     private void DeleteSelected()
     {

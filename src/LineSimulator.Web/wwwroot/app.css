@@ -224,3 +224,13 @@ svg.ciclogramma { width: 100%; height: auto; display: block; background: var(--c
 .cy-wait { fill: var(--attesa); background: var(--attesa); opacity: .55; }
 .cy-occ { fill: var(--fc-on); background: var(--fc-on); }
 .legenda i.cy-work, .legenda i.cy-prep, .legenda i.cy-move, .legenda i.cy-wait, .legenda i.cy-occ { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; }
+
+/* ritocchi 2026-11-22 */
+.gestione .grande.aggiungi { background: var(--ok); border-color: var(--ok); color: #fff; }
+.gestione .grande.rimuovi { background: transparent; color: var(--tenue); border-color: var(--bordo); font-weight: 500; }
+.riga-obiettivo { display: flex; align-items: center; gap: .6rem; flex-wrap: nowrap; }
+.riga-obiettivo .campo { display: flex; flex-direction: row; align-items: center; gap: .6rem; white-space: nowrap; }
+.riga-obiettivo input { width: 6rem; }
+tr.riga-nota td { padding-top: 0; border-top: 0; }
+.nota.piccola { font-size: .72rem; }
+.vista-config .trascina.fisso { cursor: pointer; }

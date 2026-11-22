@@ -270,10 +270,16 @@ public static class ProjectEditing
     public static bool CanDelete(object? m) => m is RollerSection or PhotocellConfig or StrapperConfig or PackageType or LogicRule
         or IntermediateStopConfig or WeighingScaleConfig or BundleClampConfig or SideCompactorConfig or RejectorConfig;
 
+    /// <summary>La via di legatura (la prima) e quella davanti al trasferitore (M1 e M3 negli esempi) non si tolgono mai.</summary>
+    public static bool IsProtectedSection(LineProject p, object? m) =>
+        m is RollerSection s && (ReferenceEquals(s, p.Sections.OrderBy(x => x.StartMm).FirstOrDefault()) || ReferenceEquals(s, LayoutRules.TransferModule(p)));
+
+    public static bool CanDelete(LineProject p, object? m) => CanDelete(m) && !IsProtectedSection(p, m);
+
     /// <summary>Elimina i componenti: le vie a rulli da valle a monte, e la linea si richiude.</summary>
     public static void Delete(LineProject p, IEnumerable<object> models)
     {
-        foreach (var m in models.Where(CanDelete).OrderByDescending(x => x is RollerSection rs ? rs.StartMm : 0).ToList())
+        foreach (var m in models.Where(x => CanDelete(p, x)).OrderByDescending(x => x is RollerSection rs ? rs.StartMm : 0).ToList())
         {
             switch (m)
             {

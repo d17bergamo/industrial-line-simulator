@@ -235,10 +235,10 @@ public sealed class TransferConfig : ComponentBase
     public LateralSide DestinationSide { get; set; } = LateralSide.Right;
 
     [UiProperty("Tempo di sollevamento", "s", "Tempi", Order = 10)]
-    public double LiftTimeS { get; set; } = 2.0;
+    public double LiftTimeS { get; set; } = 3.0;
 
     [UiProperty("Tempo di abbassamento", "s", "Tempi", Order = 11)]
-    public double LowerTimeS { get; set; } = 2.0;
+    public double LowerTimeS { get; set; } = 3.0;
 
     [UiProperty("Velocità di traslazione", "m/s", "Tempi", Order = 12)]
     public double TranslationSpeed { get; set; } = 0.5;
