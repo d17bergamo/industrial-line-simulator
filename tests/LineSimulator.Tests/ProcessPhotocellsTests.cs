@@ -13,7 +13,7 @@ public class ProcessPhotocellsTests
         var last = new LineTopology(p).Zones[^1];
         p.Photocells.Add(new PhotocellConfig
         {
-            Id = "FCX", Name = "Accumulo sull'ultima zona", PositionMm = last.StartM * 1000 + 1000, ControlledInverterId = "M2",
+            Id = "FCX", Name = "Accumulo sull'ultima zona", PositionMm = last.StartM * 1000 + 1000, ControlledInverterId = last.Id,
             Action = PhotocellAction.Accumulation, ResponseTimeMs = 20
         });
         return p;

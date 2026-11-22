@@ -872,7 +872,7 @@ public sealed partial class SimulationEngine : ILogicContext
             else if (z.Config.AutoStopWhenEmpty && ShouldAutoStop(z))
             {
                 mode = InverterMode.Stop;
-                reason = $"Arresto automatico: corsa a vuoto {z.EmptyTravelM:0.0} m ≥ lunghezza zona {z.Info.LengthM:0.0} m senza pacchi sulle fotocellule";
+                reason = ZoneRuntime.IdleReason;
                 autoStop = true;
             }
             else

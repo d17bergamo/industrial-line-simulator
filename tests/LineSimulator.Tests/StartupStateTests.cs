@@ -31,7 +31,7 @@ public class StartupStateTests
         Assert.True(e.CompletedNormally, e.FinishReason);
         Assert.Equal(0, e.Collisions);
         Assert.Equal(0, e.SlipEvents);
-        Assert.DoesNotContain(e.Events.Where(x => x.TimeS < 1.0), x => x.Message.Contains("corsa a vuoto", StringComparison.Ordinal));
+        Assert.DoesNotContain(e.Events.Where(x => x.TimeS < 1.0), x => x.Message.Contains("Arresto automatico", StringComparison.Ordinal));
     }
 
     [Fact]

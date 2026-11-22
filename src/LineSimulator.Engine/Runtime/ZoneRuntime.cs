@@ -30,7 +30,7 @@ public sealed class ZoneRuntime
         {
             Mode = InverterMode.Stop;
             AutoStopped = true;
-            Reason = "Linea vuota: ferma in attesa del pacco";
+            Reason = IdleReason;
         }
     }
 
@@ -59,6 +59,9 @@ public sealed class ZoneRuntime
     /// Quando raggiunge la lunghezza della zona, la zona è vuota e l'inverter può spegnersi.
     /// </summary>
     public double EmptyTravelM { get; internal set; }
+
+    /// <summary>Motivo dell'arresto automatico (anche allo stato iniziale: linea vuota, nessun evento all'avvio).</summary>
+    internal const string IdleReason = "Arresto automatico: via vuota (corsa a vuoto ≥ lunghezza zona) in attesa del pacco";
     /// <summary>Fotocellule poste nella zona (rilevano i pacchi presenti).</summary>
     public IReadOnlyList<PhotocellRuntime> OwnPhotocells { get; internal set; } = Array.Empty<PhotocellRuntime>();
     /// <summary>Fotocellula a monte della zona che ne comanda la ripartenza all'arrivo di un pacco (null per la prima zona).</summary>
