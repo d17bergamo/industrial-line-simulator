@@ -124,7 +124,7 @@ try {
     await gest.locator('button.grande:has-text("Aggiungi")').click();
     await page.waitForTimeout(600);
     const n1 = await fc();
-    await gest.locator('button.grande.secondario').click();
+    await gest.locator('button.grande.rimuovi').click();
     await page.waitForTimeout(600);
     const n2 = await fc();
     say(`vista 2D, fotocellule: ${n0} → aggiunta ${n1} → eliminata ${n2}`);
