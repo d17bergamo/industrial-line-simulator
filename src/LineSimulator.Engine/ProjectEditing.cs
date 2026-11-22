@@ -288,9 +288,15 @@ public static class ProjectEditing
             switch (m)
             {
                 case RollerSection s:
+                {
+                    var rel = StrappingAreaRules.ReleaseModules(p);
                     p.Sections.Remove(s);
                     LineReflow.CloseGap(p, s.StartMm, s.EndMm);
+                    // C8: svincolo già diviso in sezioni dal programma → le sezioni rimaste si riuniscono e la preparazione lo
+                    // ridivide dalla nuova lunghezza totale (le sezioni le decide il simulatore)
+                    if (rel.Count > 1 && rel.Contains(s)) StrappingAreaRules.MergeSplitRelease(p, rel);
                     break;
+                }
                 case PhotocellConfig pc: p.Photocells.Remove(pc); break;
                 case StrapperConfig st: p.Strappers.Remove(st); break;
                 case PackageType tp:

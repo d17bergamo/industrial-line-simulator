@@ -24,7 +24,7 @@ public class ProcessPhotocellsTests
     {
         var p = WithAccumulationOnTheLastZone();
         var e = new SimulationEngine(p);
-        Assert.DoesNotContain(p.Photocells, x => x.Id == "FCX");
+        Assert.Equal(PhotocellAction.None, p.Photocells.Single(x => x.Id == "FCX").Action);   // B17: resta di presenza
         Assert.Contains(e.Preparation.Changes, c => c.StartsWith("FCX:", StringComparison.Ordinal) && c.Contains("ultima zona", StringComparison.Ordinal));
         p.Infeed.PackageCount = 3;
         e.RunToCompletion();

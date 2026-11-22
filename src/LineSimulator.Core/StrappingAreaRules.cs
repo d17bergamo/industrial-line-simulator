@@ -313,6 +313,32 @@ public static class StrappingAreaRules
         return done;
     }
 
+    /// <summary>
+    /// C8: riunisce in una via sola le sezioni rimaste di uno svincolo diviso dal programma (riconosciuto dalle fotocellule di
+    /// parcheggio <c>FCS…</c>) e toglie quelle fotocellule; <see cref="SplitReleaseIntoSections"/> lo ridivide poi dalla lunghezza
+    /// totale. Uno svincolo diviso a mano (senza <c>FCS…</c>) non si tocca. <paramref name="before"/> = sezioni prima della modifica.
+    /// </summary>
+    public static bool MergeSplitRelease(LineProject p, IReadOnlyList<RollerSection> before)
+    {
+        var ids = new HashSet<string>(before.Select(s => s.Id), StringComparer.Ordinal);
+        var parking = p.Photocells.Where(x => x.Id.StartsWith("FCS", StringComparison.Ordinal) && ids.Contains(x.ControlledInverterId)).ToList();
+        if (parking.Count == 0) return false;
+        var rest = before.Where(s => p.Sections.Contains(s)).OrderBy(s => s.StartMm).ToList();
+        foreach (var pc in parking) p.Photocells.Remove(pc);
+        if (rest.Count == 0) return true;
+        var first = rest[0];
+        double end = rest[^1].EndMm;
+        foreach (var s in rest.Skip(1)) p.Sections.Remove(s);
+        double pitch = first.RollerPitchMm > 0 ? first.RollerPitchMm : RollerSection.DefaultPitchMm;
+        first.RollerCount = Math.Max(2, (int)Math.Round((end - first.StartMm) / pitch));
+        first.LengthMm = end - first.StartMm;
+        int dot = first.Id.IndexOf('.');
+        if (dot > 0 && !p.Sections.Any(x => x != first && x.Id == first.Id[..dot])) first.Id = first.Id[..dot];
+        int sez = first.Name.IndexOf(" - sezione ", StringComparison.Ordinal);
+        if (sez > 0) first.Name = first.Name[..sez];
+        return true;
+    }
+
     /// <summary>Copia di una via a rulli (stessi parametri di azionamento e geometria): Id e posizione si impostano dopo.</summary>
     private static RollerSection CloneSection(RollerSection src)
     {
