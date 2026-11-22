@@ -42,7 +42,7 @@
 </div>
 
 <h3 class="categoria">Obiettivo di produttività</h3>
-<p class="nota">Obiettivo: <b>@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> (si imposta in Linea e configurazione → Dati area).</p>
+<p class="nota">Obiettivo: <b>@Project.Simulation.TargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> + Safety @Project.Simulation.SafetyPercent.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) % = <b>@Project.Simulation.EffectiveTargetTonnesPerHour.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) t/h</b> da garantire (si imposta nel passo Progetto).</p>
 <div class="comandi strumenti">
     <button @onclick="ReachTarget" disabled="@_busy">Raggiungi l'obiettivo</button>
     <button @onclick="OptimizeZones" disabled="@_busy">Ottimizza le zone di comando</button>
@@ -237,7 +237,7 @@
         _progress = "Analisi in corso: il simulatore prova le modifiche una alla volta (può richiedere qualche minuto)…";
         StateHasChanged();
         await Task.Delay(50);
-        try { _report = ProductivityAdvisor.Analyze(ProjectSerializer.Clone(Project), Project.Simulation.TargetTonnesPerHour); }
+        try { _report = ProductivityAdvisor.Analyze(ProjectSerializer.Clone(Project), Project.Simulation.EffectiveTargetTonnesPerHour); }
         catch (Exception ex) { _note = "Analisi non riuscita: " + ex.Message; }
         _busy = false;
     }
@@ -255,7 +255,7 @@
 
     private async Task Apply(LineProject p, string what)
     {
-        p.Simulation.TargetTonnesPerHour = Project.Simulation.TargetTonnesPerHour;
+        p.Simulation.TargetTonnesPerHour = Project.Simulation.TargetTonnesPerHour; p.Simulation.SafetyPercent = Project.Simulation.SafetyPercent;
         _report = null;
         _note = "Applicato: " + what;
         await Replace.InvokeAsync(p);

@@ -4,28 +4,21 @@
 
 <main>
     <header class="testa">
-        <div class="titolo"><h1>Simulatore Linea</h1><small>@Work.Name@(_edited ? " (modificato)" : "")</small></div>
-        <nav class="passi" aria-label="Vai alla zona">
-            <button class="passo" @onclick='() => Go("linea")'>Linea</button>
-            <button class="passo" @onclick='() => Go("pacchi")'>Pacchi</button>
-            <button class="passo" @onclick='() => Go("simulazione")'>Simulazione</button>
-            <button class="passo" @onclick='() => Go("risultati")'>Risultati</button>
-            <button class="passo" @onclick='() => Go("uscite")'>Documenti</button>
+        <div class="titolo"><h1>Simulatore Linea</h1><small>@(_nameTouched && !string.IsNullOrWhiteSpace(Work.Name) ? Work.Name : "Senza nome")@(_edited ? " (modificato)" : "")</small></div>
+        <nav class="passi" aria-label="Passi">
+            <button id="tab-progetto" class="passo @(_tab == 0 ? "attivo" : "")" @onclick="() => SetTab(0)">1 · Progetto</button>
+            <button id="tab-pacchi" class="passo @(_tab == 1 ? "attivo" : "")" @onclick="() => SetTab(1)">2 · Pacchi</button>
+            <button id="tab-linea" class="passo @(_tab == 2 ? "attivo" : "")" @onclick="() => SetTab(2)">3 · Linea</button>
+            <button id="tab-simulazione" class="passo @(_tab == 3 ? "attivo" : "")" @onclick="() => SetTab(3)">4 · Simulazione</button>
         </nav>
         <div class="azioni">
-            <button class="piccolo solo-ampio" @onclick='() => Js("zone.tutte", false)' title="Chiude tutte le zone">Comprimi tutto</button>
-            <button class="piccolo solo-ampio" @onclick='() => Js("zone.tutte", true)' title="Apre tutte le zone">Espandi tutto</button>
-            <button class="piccolo primario-p solo-ampio" @onclick='() => Go("uscite")'>⬇ Documenti</button>
+            <button class="piccolo primario-p" @onclick="GoDocs">⬇ Documenti</button>
             <button id="pronto" class="piccolo" @onclick="NextTheme">@(_theme == "scuro" ? "☀ Tema: scuro" : _theme == "chiaro" ? "🌙 Tema: chiaro" : "◐ Tema: auto")</button>
         </div>
     </header>
-    <div class="zone-telefono">
-        <button class="piccolo" @onclick='() => Js("zone.tutte", false)'>Comprimi tutto</button>
-        <button class="piccolo" @onclick='() => Js("zone.tutte", true)'>Espandi tutto</button>
-        <button class="piccolo primario-p" @onclick='() => Go("uscite")'>⬇ Documenti</button>
-    </div>
 
-    <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
+    <section class="scheda" id="scheda-0" hidden="@(_tab != 0)">
+    <details class="zona" open id="progetto"><summary>Progetto</summary><div class="corpo">
         <label class="campo largo">Nome del progetto<input id="nome-progetto" type="text" placeholder="Nome del progetto" value="@(_nameTouched ? Work.Name : "")" @onchange='e => { _nameTouched = true; Edit(() => Work.Name = e.Value?.ToString() ?? ""); }' /></label>
         <div class="affiancati">
         <label class="campo">Parti da
@@ -62,10 +55,21 @@
             <button @onclick="CreateCustom" disabled="@_busy">Crea il layout</button>
         }
         <p class="nota">In modifica: <b>@Work.Name</b>@(_edited ? " (modificato)" : "")</p>
+        <div class="riga-obiettivo">
+            <label class="campo">Obiettivo di produttività<input id="obiettivo" type="number" step="1" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /> t/h</label>
+            <label class="campo">Safety<input id="safety" type="number" step="1" value="@F(Work.Simulation.SafetyPercent)" @onchange="e => Edit(() => Work.Simulation.SafetyPercent = Num(e, Work.Simulation.SafetyPercent, 0, 200))" /> %</label>
+            <span class="nota">Da garantire: @N(Work.Simulation.EffectiveTargetTonnesPerHour, "0.#") t/h</span>
+        </div>
+        <h3 class="categoria">Bozza della linea</h3>
+        <p class="nota">Solo da guardare, con i dati veri del progetto scelto. Si modifica nel passo Linea.</p>
+        <div class="config-vista bozza">@((MarkupString)ConfigSvg(true))</div>
+        <div class="avanti"><button class="primario" @onclick="() => SetTab(1)">Avanti: i pacchi →</button></div>
+    </div></details>
+    </section>
+
+    <section class="scheda" id="scheda-2" hidden="@(_tab != 2)">
+    <details class="zona" open id="linea"><summary>Linea e configurazione</summary><div class="corpo">
         <div class="config-vista">
-            <div class="riga-obiettivo">
-                <label class="campo">Obiettivo di produttività (t/h)<input type="number" step="1" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /></label>
-            </div>
             <h3 class="categoria">Vista della configurazione</h3>
             <GestioneComponenti Project="Work" SelectedModel="SelectedComp" Changed="OnViewManaged" />
             <p class="nota">@(SelectedComp == null ? "Tocca un componente nel disegno per selezionarlo: Rimuovi toglie quello selezionato." : $"Selezionato: {_selId}")</p>
@@ -136,7 +140,10 @@
             </details>
         }
     </div></details>
+    <div class="avanti"><button class="primario" @onclick="() => SetTab(3)">Avanti: la simulazione →</button></div>
+    </section>
 
+    <section class="scheda" id="scheda-1" hidden="@(_tab != 1)">
     <details class="zona" open id="pacchi"><summary>Pacchi</summary><div class="corpo">
         <div class="pacco-vista">
             <div class="schede">
@@ -156,6 +163,27 @@
                 <span class="nota">Trascina il pacco per ruotare, rotellina per ingrandire; trascina una legatura (sul pacco o sul righello) per spostarla a passi di 50 mm. Quote in mm tra le legature.</span>
             </div>
         </div>
+        @if (SelectedPack is { } sp)
+        {
+            var qs = Quotes(sp);
+            <div class="legature-ctrl">
+                <h3 class="categoria">Legature: @sp.StrapPositionsMm.Count</h3>
+                <button class="piccolo" @onclick="() => StrapMinus(sp)" disabled="@(sp.StrapPositionsMm.Count < 2)" aria-label="Togli una legatura">−</button>
+                <button class="piccolo piu" @onclick="() => StrapPlus(sp)" disabled="@(sp.StrapPositionsMm.Count >= 20)" aria-label="Aggiungi una legatura">+</button>
+            </div>
+            <p class="nota">Trascina le legature sul modello o sul righello. Il + inserisce una legatura nel tratto più lungo, il − toglie l'ultima.</p>
+            <h3 class="categoria">Quote tra le legature</h3>
+            <p class="nota">Scrivi un valore in mm e premi Invio: si sposta la legatura a destra della quota; l'ultima quota sposta l'ultima legatura. Passo 50 mm.</p>
+            <div class="quote-leg">
+                @for (int qi = 0; qi < qs.Count; qi++)
+                {
+                    int q = qi;
+                    <label class="campo">@QuoteLabel(qs.Count, q)
+                        <span class="con-unita"><input type="number" step="50" value="@F(qs[q])" @onchange="e => SetQuote(sp, q, e)" /> mm</span>
+                    </label>
+                }
+            </div>
+        }
         <div class="riga-sim">
             <button class="secondario" @onclick="CalcProd" disabled="@_prodBusy">@(_prodBusy ? "Calcolo in corso…" : "Calcola produttività per tipologia")</button>
             <span class="nota">Simula 12 pacchi di ogni tipologia da sola e misura tempo ciclo e t/h a regime.</span>
@@ -205,6 +233,10 @@
         </div>
     </div></details>
 
+    <div class="avanti"><button class="primario" @onclick="() => SetTab(2)">Avanti: la linea →</button></div>
+    </section>
+
+    <section class="scheda" id="scheda-3" hidden="@(_tab != 3)">
     <details class="zona" open id="simulazione"><summary>Simulazione</summary><div class="corpo">
         <div class="riga-sim">
             <label class="campo">Misura dei pacchi da simulare
@@ -251,6 +283,7 @@
                 <div class="numero"><b>@N(_res.TonnesPerHour, "0.0")</b><span>t/h</span></div>
                 <div class="numero"><b>@N(_res.PackagesPerHour, "0.0")</b><span>pacchi/h</span></div>
                 <div class="numero"><b>@N(_res.CycleTimeMeanS, "0.0")</b><span>s per pacco</span></div>
+                <div class="numero"><b>@N(StrapMeanS(), "0.0")</b><span>s di legatura</span></div>
                 <div class="numero @(_res.SlipEvents == 0 ? "ok" : "male")"><b>@_res.SlipEvents</b><span>strisciamenti</span></div>
                 <div class="numero @(_res.Collisions == 0 ? "ok" : "male")"><b>@_res.Collisions</b><span>collisioni</span></div>
                 <div class="numero"><b>@_res.PackagesExited/@_res.PackagesRequested</b><span>pacchi usciti</span></div>
@@ -262,6 +295,10 @@
             else
             {
                 <p class="esito male">@(_res.Completed ? "Simulazione finita con anomalie." : "Simulazione non completata: " + _res.FinishReason)</p>
+            }
+            @if (Work.Simulation.EffectiveTargetTonnesPerHour > 0)
+            {
+                <p class="esito @(_res.TonnesPerHour >= Work.Simulation.EffectiveTargetTonnesPerHour ? "ok" : "male")">Obiettivo @N(Work.Simulation.TargetTonnesPerHour, "0.#") t/h + Safety @N(Work.Simulation.SafetyPercent, "0.#") % = @N(Work.Simulation.EffectiveTargetTonnesPerHour, "0.#") t/h: @(_res.TonnesPerHour >= Work.Simulation.EffectiveTargetTonnesPerHour ? "raggiunto" : "non raggiunto, vedi «Raggiungi l'obiettivo» nei Documenti")</p>
             }
             @if (!string.IsNullOrWhiteSpace(_res.BottleneckName))
             {
@@ -404,6 +441,24 @@
             </div>
         </div>
     }
+        <h3 class="categoria">Recap della simulazione</h3>
+        <div class="riga-sim">
+            <button class="secondario" @onclick="RunRecap" disabled="@(_recapBusy || _busy)">@(_recapBusy ? "Calcolo in corso…" : "Simula tutte le misure")</button>
+            <button class="secondario" @onclick="DownloadRecap" disabled="@(_recap.Count == 0)">Scarica recap (Excel)</button>
+            <span class="nota">20 pacchi per ogni misura, una alla volta.</span>
+        </div>
+        @if (_recap.Count > 0)
+        {
+            <div class="tabella-scroll"><table class="pacchi" id="recap">
+                <thead><tr><th>Pacco</th><th>m</th><th>pacchi</th><th>peso t</th><th>tempo s</th><th>ciclo s</th><th>t/h</th><th>scarto da obiettivo + safety</th><th>collo di bottiglia</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _recap)
+                    {
+                        <tr><td>@r.TypeId</td><td>@N(r.LengthMm / 1000, "0.#")</td><td>@r.Exited</td><td>@N(r.TonnesTotal, "0.0")</td><td>@N(r.TimeS, "0")</td><td>@N(r.CycleS, "0.0")</td><td>@N(r.Tph, "0.0")</td><td>@Gap(r.Tph)</td><td class="nota">@(r.Problem ?? r.Bottleneck)</td></tr>
+                    }
+                </tbody>
+            </table></div>
+        }
     </div></details>
 
     @if (_engine != null && _res != null)
@@ -436,12 +491,12 @@
             <p class="nota">Verde = pacco in movimento sui rulli; gli altri colori sono lo stato (legatura, intestatura, trasferitore, accumulo…).</p>
         </div></details>
 
-        <details class="zona" open id="pacchisim"><summary>Ultimi pacchi simulati (di @_res.Packages.Count)</summary><div class="corpo">
+        <details class="zona" open id="pacchisim"><summary>Pacchi simulati (@_res.Packages.Count)</summary><div class="corpo">
             <div>
                 <table class="pacchi">
                     <thead><tr><th>Pacco</th><th>m</th><th>ingresso s</th><th>uscita s</th><th>totale s</th><th>attesa s</th><th>netto s</th><th>legature</th></tr></thead>
                     <tbody>
-                        @foreach (var k in _res.Packages.TakeLast(30))
+                        @foreach (var k in _res.Packages)
                         {
                             <tr>
                                 <td>@k.Id</td>
@@ -464,11 +519,12 @@
         <p class="nota">Altri strumenti qui sotto: obiettivo di produttività, ottimizzazione delle zone, controllo dell'equipaggiamento, registro eventi.</p>
         <Uscite Project="Work" Engine="_engine" Results="_res" Replace="ReplaceWork" />
     </div></details>
+    </section>
 </main>
 
 @code {
     // Vista 2D della configurazione (orizzontale, da monte a valle): si ridisegna dal progetto a ogni modifica.
-    private string ConfigSvg()
+    private string ConfigSvg(bool readOnly = false)
     {
         var w = Work;
         var secs = w.Sections.Where(x => x.IsEnabled).OrderBy(x => x.StartMm).ToList();
@@ -538,7 +594,7 @@
         foreach (var pc in w.Photocells.Where(x => x.IsEnabled))
         {
             string fc = (pc.Name ?? "").Split(' ')[0];
-            sb.Append($"<g class=\"trascina{Sel("photocell", pc.Id)}\" data-k=\"photocell\" data-id=\"{System.Net.WebUtility.HtmlEncode(pc.Id)}\"><rect x=\"{X(pc.PositionMm - 60)}\" y=\"{base0 - 46}\" width=\"{Wd(120)}\" height=\"46\" fill=\"transparent\"/><line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
+            sb.Append($"<g class=\"trascina{(pc.IsAutoGenerated ? " fisso" : "")}{Sel("photocell", pc.Id)}\" data-k=\"photocell\" data-id=\"{System.Net.WebUtility.HtmlEncode(pc.Id)}\"><rect x=\"{X(pc.PositionMm - 60)}\" y=\"{base0 - 46}\" width=\"{Wd(120)}\" height=\"46\" fill=\"transparent\"/><line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
             sb.Append($"<text x=\"{X(pc.PositionMm)}\" y=\"{base0 - 40}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{System.Net.WebUtility.HtmlEncode(fc)}</text></g>");
         }
         // maniglia di fine modulo: trascinandola si allunga o accorcia il modulo (a rulli interi)
@@ -596,7 +652,132 @@
         }
         double H = Math.Max(300, yr + Math.Min(row, 4) * 20 + 14);
         sb.Append("</svg>");
-        return sb.ToString().Replace("@@H@@", H.ToString("0", CultureInfo.InvariantCulture));
+        var svg = sb.ToString().Replace("@@H@@", H.ToString("0", CultureInfo.InvariantCulture));
+        return readOnly ? svg.Replace("class=\"trascina", "class=\"ro") : svg;
+    }
+
+    // ---- schede (passi) della pagina
+    private int _tab;
+    private void SetTab(int t) { _tab = t; _packKey = null; Js("schede.mostra"); }
+    private async Task GoDocs() { _tab = 3; StateHasChanged(); await Task.Delay(60); Go("uscite"); }
+
+    // ---- legature del pacco: + / − e quote tra le legature
+    private static List<double> Quotes(PackageType t)
+    {
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        var q = new List<double>();
+        double prev = 0;
+        foreach (var p in pos) { q.Add(p - prev); prev = p; }
+        q.Add(t.LengthMm - prev);
+        return q;
+    }
+
+    private static string QuoteLabel(int count, int i) =>
+        count == 1 ? "Testa → coda" : i == 0 ? "Testa → L1" : i == count - 1 ? $"L{i} → coda" : $"L{i} → L{i + 1}";
+
+    private void StrapPlus(PackageType t) => Edit(() =>
+    {
+        var marks = new List<double> { 0 }; marks.AddRange(t.StrapPositionsMm.OrderBy(x => x)); marks.Add(t.LengthMm);
+        int best = 0;
+        for (int i = 1; i < marks.Count; i++) if (marks[i] - marks[i - 1] > marks[best + 1] - marks[best]) best = i - 1;
+        double mid = StrapEditing.Snap((marks[best] + marks[best + 1]) / 2);
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        if (mid <= marks[best] || mid >= marks[best + 1] || pos.Contains(mid)) return;
+        pos.Add(mid);
+        t.StrapPositionsMm = pos.OrderBy(x => x).ToList();
+        _packKey = null;
+    });
+
+    private void StrapMinus(PackageType t) => Edit(() =>
+    {
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        if (pos.Count < 2) return;
+        pos.RemoveAt(pos.Count - 1);
+        t.StrapPositionsMm = pos;
+        _packKey = null;
+    });
+
+    private void SetQuote(PackageType t, int i, ChangeEventArgs e) => Edit(() =>
+    {
+        var pos = t.StrapPositionsMm.OrderBy(x => x).ToList();
+        if (!double.TryParse(e.Value?.ToString()?.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) || v <= 0) { _packKey = null; return; }
+        if (i < pos.Count)
+            MoveStrapTo(t, i, (i == 0 ? 0 : pos[i - 1]) + v);
+        else if (pos.Count > 0)
+            MoveStrapTo(t, pos.Count - 1, t.LengthMm - v);
+        _packKey = null;
+    });
+
+    // ---- recap della simulazione: una riga per misura (20 pacchi ciascuna)
+    private sealed record RecapRow(string TypeId, double LengthMm, int Exited, double TonnesTotal, double TimeS, double? CycleS, double? Tph, string Bottleneck, string? Problem);
+    private readonly List<RecapRow> _recap = new();
+    private bool _recapBusy;
+
+    private async Task RunRecap()
+    {
+        if (_recapBusy || _busy) return;
+        _recapBusy = true; _recap.Clear();
+        StateHasChanged();
+        await Task.Delay(30);
+        foreach (var t in Work.PackageTypes.ToList())
+        {
+            try
+            {
+                var p = PackageProductivity.PrepareFor(Work, t.Id, 20);
+                var e = new SimulationEngine(p);
+                while (e.Step()) { }
+                var r = e.ComputeResults();
+                string? problem = r.Collisions > 0 ? "collisioni" : r.Deadlock ? "blocco" : r.PackagesExited == 0 ? "nessun pacco uscito" : null;
+                double tons = r.Packages.Where(k => k.ExitTimeS.HasValue).Sum(k => k.WeightKg) / 1000.0;
+                _recap.Add(new RecapRow(t.Id, t.LengthMm, r.PackagesExited, tons, r.SimulatedTimeS, r.CycleTimeMeanS, r.TonnesPerHour, r.BottleneckName, problem));
+            }
+            catch (Exception ex) { _recap.Add(new RecapRow(t.Id, t.LengthMm, 0, 0, 0, null, null, "", ex.Message)); }
+            StateHasChanged();
+            await Task.Delay(1);
+        }
+        _recapBusy = false;
+    }
+
+    private string Gap(double? tph)
+    {
+        double goal = Work.Simulation.EffectiveTargetTonnesPerHour;
+        if (goal <= 0 || tph == null) return "–";
+        double d = tph.Value - goal;
+        return (d >= 0 ? "+" : "") + N(d, "0.0") + " t/h " + (d >= 0 ? "(ok)" : "(sotto)");
+    }
+
+    private void DownloadRecap()
+    {
+        if (_recap.Count == 0) return;
+        using var wb = new ClosedXML.Excel.XLWorkbook();
+        var ws = wb.AddWorksheet("Recap");
+        string[] h = { "Pacco", "Lunghezza (m)", "Pacchi usciti", "Peso totale (t)", "Tempo totale (s)", "Ciclo medio (s)", "Produttività (t/h)", "Obiettivo con safety (t/h)", "Scarto (t/h)", "Collo di bottiglia", "Note" };
+        for (int c = 0; c < h.Length; c++) { ws.Cell(1, c + 1).Value = h[c]; ws.Cell(1, c + 1).Style.Font.Bold = true; }
+        double goal = Work.Simulation.EffectiveTargetTonnesPerHour;
+        for (int i = 0; i < _recap.Count; i++)
+        {
+            var r = _recap[i]; int row = i + 2;
+            ws.Cell(row, 1).Value = r.TypeId; ws.Cell(row, 2).Value = r.LengthMm / 1000.0; ws.Cell(row, 3).Value = r.Exited;
+            ws.Cell(row, 4).Value = Math.Round(r.TonnesTotal, 3); ws.Cell(row, 5).Value = Math.Round(r.TimeS, 1);
+            if (r.CycleS is double cs) ws.Cell(row, 6).Value = Math.Round(cs, 2);
+            if (r.Tph is double tp) { ws.Cell(row, 7).Value = Math.Round(tp, 2); if (goal > 0) ws.Cell(row, 9).Value = Math.Round(tp - goal, 2); }
+            if (goal > 0) ws.Cell(row, 8).Value = Math.Round(goal, 2);
+            ws.Cell(row, 10).Value = r.Bottleneck; ws.Cell(row, 11).Value = r.Problem ?? "";
+        }
+        ws.Columns().AdjustToContents();
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        Js("salva.file", "recap_simulazione.xlsx", Convert.ToBase64String(ms.ToArray()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    /// <summary>Tempo medio di legatura per pacco (dal Gantt registrato).</summary>
+    private double? StrapMeanS()
+    {
+        if (_engine == null) return null;
+        var v = PackageGantt.Build(_engine.Recorder)
+            .Select(r => r.Segments.Where(g => g.State == PackageState.Strapping).Sum(g => g.EndS - g.StartS))
+            .Where(x => x > 0).ToList();
+        return v.Count == 0 ? null : v.Average();
     }
 
     // ---- ciclogramma e Gantt a schermo
@@ -701,7 +882,6 @@
     }
     private LineProject? _work;
     private bool _edited;
-    private int _tab = 1;
     private List<string> _check = new(), _checkErrors = new();
     private int _cStrappers = 2, _cMaxM = 12;
     private string _cLengths = "6, 9, 12";
