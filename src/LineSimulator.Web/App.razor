@@ -360,7 +360,7 @@
                     <button id="play" class="scuro" @onclick="TogglePlay">@(_playing ? "Pausa" : "Riproduci")</button>
                     <button class="quadro" @onclick="() => Seek(_t + 5)" aria-label="Avanti">»</button>
                     <label class="nota" for="velocita">Velocità</label>
-                    <select id="velocita" class="cella" value="@_speed" @onchange="e => _speed = int.Parse(e.Value?.ToString() ?? "4")">
+                    <select id="velocita" class="cella" value="@_speed" @onchange='e => _speed = int.Parse(e.Value?.ToString() ?? "4")'>
                         @foreach (var v in Speeds) { <option value="@v">×@v</option> }
                     </select>
                 </div>
