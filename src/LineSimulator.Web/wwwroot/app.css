@@ -388,3 +388,7 @@ button.scelta.quadrata, label.scelta.quadrata { width: 148px; height: 148px; fle
 .famiglie .etichetta { margin-right: .25rem; }
 .riga-linea, .riga-blocchi.uguali { align-items: stretch; }
 .vista.orizzontale { height: auto; max-height: none; touch-action: auto; }
+
+/* Progetto: Produttività e Safety una sotto l'altra, a destra */
+.riga-nome .riga-obiettivo { flex-direction: column; flex-wrap: nowrap; align-items: flex-end; gap: 1rem; text-align: right; margin-left: auto; }
+.riga-nome .riga-obiettivo .grande-valore { justify-content: flex-end; }
