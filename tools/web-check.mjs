@@ -129,7 +129,7 @@ try {
       let ok = 0;
       for (let i = 0; i < n; i++) {
         const el = els.nth(i);
-        const id = await el.getAttribute('data-id');
+        const id = (await el.getAttribute('data-fc')) || (await el.getAttribute('data-id'));   // fotocellule: nome progressivo FCn
         await el.scrollIntoViewIfNeeded();
         const b = await el.boundingBox();
         if (!b) continue;
