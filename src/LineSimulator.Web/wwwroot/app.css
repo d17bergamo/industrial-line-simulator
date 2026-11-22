@@ -372,3 +372,5 @@ input.cella.stretta { width: 4.2rem; min-width: 3.4rem; }
 
 /* disegno della linea: su telefono resta largo e scorre di lato, così i componenti piccoli si toccano */
 .config-vista svg.vista-config { min-width: 900px; }
+/* quote, guide e scritte del disegno non devono coprire i componenti sotto: il tocco passa */
+svg.vista-config > line, svg.vista-config > text, svg.vista-config > path { pointer-events: none; }
