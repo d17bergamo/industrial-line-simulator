@@ -63,6 +63,16 @@ try {
   await page.waitForTimeout(15000);
   await page.click('#play');
   await page.screenshot({ path: `${out}/web-5-scuro-2d.png`, fullPage: true });
+  // ciclogramma, Gantt e comandi di riproduzione
+  say(`ciclogramma: ${await page.locator('#ciclogramma svg.ciclogramma').count()} grafici, ${await page.locator('#ciclogramma svg.ciclogramma rect').count()} tratti`);
+  await page.click('#inizio');
+  await page.screenshot({ path: `${out}/web-5-ciclogramma.png`, fullPage: true });
+  // selezione nel disegno 2D di una macchina diversa da legatrici e fotocellule (se presente)
+  say(`gruppi selezionabili nel 2D: ${await page.locator('.vista-config .trascina').count()}`);
+  // produttività per tipologia
+  await page.click('button:has-text("Calcola produttività")');
+  await page.waitForFunction(() => document.querySelector('#pacchi')?.innerText.includes('pacchi/h'), null, { timeout: 600000 });
+  say(`produttività: ${(await page.locator('#pacchi table.configurazioni').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
   // modifica del progetto: layout personalizzato, pacchi, vie e componenti, poi simulazione
   await page.selectOption('#esempio', '-2');
   await page.fill('.griglia input[type=text]', '6, 8, 12');

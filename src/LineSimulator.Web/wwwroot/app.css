@@ -215,3 +215,12 @@ input.cella.stretta { min-width: 3.6rem; width: 4.2rem; }
 .riga-sim .campo { margin-bottom: .7rem; }
 .riga-sim .primario { margin-bottom: .7rem; }
 .schede button.aggiungi { border-style: dashed; color: var(--accento); }
+
+/* ciclogramma e Gantt a schermo */
+svg.ciclogramma { width: 100%; height: auto; display: block; background: var(--carta); border: 1px solid var(--bordo); border-radius: 6px; }
+.cy-work { fill: var(--accento); background: var(--accento); }
+.cy-prep { fill: var(--lega); background: var(--lega); }
+.cy-move { fill: var(--trasf); background: var(--trasf); }
+.cy-wait { fill: var(--attesa); background: var(--attesa); opacity: .55; }
+.cy-occ { fill: var(--fc-on); background: var(--fc-on); }
+.legenda i.cy-work, .legenda i.cy-prep, .legenda i.cy-move, .legenda i.cy-wait, .legenda i.cy-occ { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; }

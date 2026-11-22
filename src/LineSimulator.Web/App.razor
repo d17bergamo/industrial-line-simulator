@@ -156,9 +156,13 @@
                 <span class="nota">Trascina il pacco per ruotare, rotellina per ingrandire; trascina una legatura (sul pacco o sul righello) per spostarla a passi di 50 mm. Quote in mm tra le legature.</span>
             </div>
         </div>
+        <div class="riga-sim">
+            <button class="secondario" @onclick="CalcProd" disabled="@_prodBusy">@(_prodBusy ? "Calcolo in corso…" : "Calcola produttività per tipologia")</button>
+            <span class="nota">Simula 12 pacchi di ogni tipologia da sola e misura tempo ciclo e t/h a regime.</span>
+        </div>
         <div class="tabella-scroll">
             <table class="pacchi configurazioni">
-                <thead><tr><th>Pacco</th><th>Lunghezza (mm)</th><th>Peso (kg)</th><th>Legature</th><th>Tipo</th><th>Banking</th><th>Intestatura</th><th>Distanze (mm)</th><th></th></tr></thead>
+                <thead><tr><th>Pacco</th><th>Lunghezza (mm)</th><th>Peso (kg)</th><th>Legature</th><th>Tipo</th><th>Banking</th><th>Intestatura</th><th>Distanze (mm)</th><th>Produttività</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var t in Work.PackageTypes.ToList())
                     {
@@ -180,6 +184,7 @@
                                     <option value="@AccumulationMode.SingleBanking">Single</option>
                                     @if (dbl) { <option value="@AccumulationMode.DoubleBanking">Double</option> }
                                 </select>
+                                @if (!dbl) { <div class="nota">Double non ammesso: @BankingOptions.DoubleBankingBlockReason(Work, t)</div> }
                             </td>
                             <td>
                                 <select class="cella" value="@BankingOptions.ChosenHeading(Work, t)" @onchange="e => Edit(() => t.Heading = Enum.Parse<StopReference>(e.Value!.ToString()!))">
@@ -188,6 +193,7 @@
                                 </select>
                             </td>
                             <td class="nota">@Gaps(t)</td>
+                            <td class="nota">@ProdText(t.Id)</td>
                             <td><button class="piccolo" @onclick="() => RemoveType(t)" disabled="@(Work.PackageTypes.Count < 2)" aria-label="Elimina @t.Id">Elimina</button></td>
                         </tr>
                     }
@@ -368,7 +374,11 @@
             </svg>
 
             <div class="comandi">
+                <button id="inizio" class="piccolo" @onclick="() => Seek(_winStart)" aria-label="Torna all'inizio">⏮</button>
+                <button class="piccolo" @onclick="() => Seek(_t - 5)">−5 s</button>
                 <button id="play" @onclick="TogglePlay">@(_playing ? "Pausa" : "Avvia")</button>
+                <button class="piccolo" @onclick="() => Seek(_t + 5)">+5 s</button>
+                <button class="piccolo" @onclick="() => Seek(_end)" aria-label="Vai alla fine">⏭</button>
                 @foreach (var v in Speeds)
                 {
                     <button class="@(v == _speed ? "attivo" : "")" @onclick="() => _speed = v">×@(v)</button>
@@ -391,6 +401,33 @@
                 <span><i style="background:var(--trasf)"></i>sul trasferitore</span>
                 <span><i style="background:var(--fc-on)"></i>fotocellula occupata</span>
             </div>
+        </div></details>
+
+
+        <details class="zona" open id="ciclogramma"><summary>Ciclogramma e Gantt dei pacchi</summary><div class="corpo">
+            <div class="riga-sim">
+                <label class="campo">Finestra (s)
+                    <select value="@_cySpan" @onchange='e => _cySpan = int.Parse(e.Value?.ToString() ?? "60")'>
+                        @foreach (var v in new[] { 30, 60, 120, 300 }) { <option value="@v">@v</option> }
+                    </select>
+                </label>
+                <label class="campo">Da (s)
+                    <input type="range" min="@F(_winStart)" max="@F(Math.Max(_winStart, _end - _cySpan))" step="1" value="@F(CyStart)" @oninput='e => _cyStart = double.Parse(e.Value?.ToString() ?? "0", CultureInfo.InvariantCulture)' />
+                </label>
+                <span class="nota">@N(CyStart, "0") – @N(CyStart + _cySpan, "0") s · la linea rossa è l'istante mostrato nella vista</span>
+            </div>
+            <h3 class="categoria">Ciclogramma dei dispositivi</h3>
+            @((MarkupString)CyclogramSvg())
+            <div class="legenda">
+                <span><i class="cy-work"></i>lavora / in battuta</span>
+                <span><i class="cy-prep"></i>prepara / allinea</span>
+                <span><i class="cy-move"></i>movimento</span>
+                <span><i class="cy-wait"></i>attesa</span>
+                <span><i class="cy-occ"></i>fotocellula occupata</span>
+            </div>
+            <h3 class="categoria">Gantt dei pacchi</h3>
+            @((MarkupString)GanttSvg())
+            <p class="nota">Verde = pacco in movimento sui rulli; gli altri colori sono lo stato (legatura, intestatura, trasferitore, accumulo…).</p>
         </div></details>
 
         <details class="zona" open id="pacchisim"><summary>Ultimi pacchi simulati (di @_res.Packages.Count)</summary><div class="corpo">
@@ -464,9 +501,31 @@
             sb.Append($"<g class=\"trascina{Sel("stop", fs.Id)}\" data-k=\"stop\" data-id=\"{System.Net.WebUtility.HtmlEncode(fs.Id)}\"><polygon points=\"{X(fs.PositionMm)},{base0 - 4} {X(fs.PositionMm - 150)},{base0 - 22} {X(fs.PositionMm + 150)},{base0 - 22}\" fill=\"var(--intesta)\"/></g>");
             marks.Add((fs.PositionMm, "fermo"));
         }
-        // bilici
+        // bilici (selezionabili e spostabili)
         foreach (var sc in w.Scales.Where(x => x.IsEnabled))
-            sb.Append($"<rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 34}\" width=\"{Wd(sc.LengthMm)}\" height=\"6\" fill=\"var(--trasf)\"/>");
+        {
+            sb.Append($"<g class=\"trascina{Sel("scale", sc.Id)}\" data-k=\"scale\" data-id=\"{System.Net.WebUtility.HtmlEncode(sc.Id)}\">");
+            sb.Append($"<rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 32}\" width=\"{Wd(sc.LengthMm)}\" height=\"14\" fill=\"transparent\"/><rect x=\"{X(sc.StartMm)}\" y=\"{base0 + 34}\" width=\"{Wd(sc.LengthMm)}\" height=\"6\" fill=\"var(--trasf)\"/>");
+            sb.Append($"<text x=\"{X(sc.StartMm + sc.LengthMm / 2)}\" y=\"{base0 + 52}\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(sc.Id)}</text></g>");
+        }
+        // stringifascio, compattatore e rigettatrice
+        foreach (var (cid, cpos) in LayoutRules.BundleClampPositions(w))
+        {
+            if (cpos <= 0) continue;
+            sb.Append($"<g class=\"trascina{Sel("clamp", w.BundleClamp.Id)}\" data-k=\"clamp\" data-id=\"{System.Net.WebUtility.HtmlEncode(w.BundleClamp.Id)}\"><rect x=\"{X(cpos - 150)}\" y=\"{base0 - 18}\" width=\"{Wd(300)}\" height=\"64\" rx=\"3\" fill=\"var(--macchina)\" opacity=\".8\"/>");
+            sb.Append($"<text x=\"{X(cpos)}\" y=\"{base0 - 22}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(cid)}</text></g>");
+        }
+        if (w.Compactor.IsEnabled && w.Compactor.PositionMm > 0)
+        {
+            double jl = Math.Max(300, w.Compactor.JawLengthMm);
+            sb.Append($"<g class=\"trascina{Sel("compactor", w.Compactor.Id)}\" data-k=\"compactor\" data-id=\"{System.Net.WebUtility.HtmlEncode(w.Compactor.Id)}\"><rect x=\"{X(w.Compactor.PositionMm - jl / 2)}\" y=\"{base0 - 12}\" width=\"{Wd(jl)}\" height=\"6\" fill=\"var(--intesta)\"/><rect x=\"{X(w.Compactor.PositionMm - jl / 2)}\" y=\"{base0 + 34}\" width=\"{Wd(jl)}\" height=\"6\" fill=\"var(--intesta)\"/>");
+            sb.Append($"<text x=\"{X(w.Compactor.PositionMm)}\" y=\"{base0 - 16}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(w.Compactor.Id)}</text></g>");
+        }
+        if (w.Rejector.IsEnabled)
+        {
+            sb.Append($"<g class=\"trascina{Sel("rejector", w.Rejector.Id)}\" data-k=\"rejector\" data-id=\"{System.Net.WebUtility.HtmlEncode(w.Rejector.Id)}\"><rect x=\"{X(w.Rejector.PositionMm)}\" y=\"{base0 + 40}\" width=\"{Wd(w.Rejector.LengthMm)}\" height=\"10\" fill=\"var(--errore)\" opacity=\".35\"/>");
+            sb.Append($"<text x=\"{X(w.Rejector.PositionMm + w.Rejector.LengthMm / 2)}\" y=\"{base0 + 49}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(w.Rejector.Id)}</text></g>");
+        }
         // fotocellule: numero FC sopra la via
         foreach (var pc in w.Photocells.Where(x => x.IsEnabled))
         {
@@ -530,6 +589,91 @@
         double H = Math.Max(300, yr + Math.Min(row, 4) * 20 + 14);
         sb.Append("</svg>");
         return sb.ToString().Replace("@@H@@", H.ToString("0", CultureInfo.InvariantCulture));
+    }
+
+    // ---- ciclogramma e Gantt a schermo
+    private int _cySpan = 60;
+    private double? _cyStart;
+    private double CyStart => Math.Clamp(_cyStart ?? _winStart, _winStart, Math.Max(_winStart, _end - _cySpan));
+
+    private static string CyClass(TrackGroup g, CycleState st)
+    {
+        if (g == TrackGroup.Photocell) return st == CycleState.On ? "cy-occ" : "";
+        return st switch
+        {
+            CycleState.Working or CycleState.Closed or CycleState.Translating or CycleState.Depositing or CycleState.InPosition
+                or CycleState.Aligned or CycleState.On or CycleState.Positioning or CycleState.Fault => "cy-work",
+            CycleState.Preparing or CycleState.Aligning => "cy-prep",
+            CycleState.Lifting or CycleState.Lowering or CycleState.Returning or CycleState.Closing or CycleState.Opening or CycleState.Unloading => "cy-move",
+            CycleState.Waiting or CycleState.WaitConsent or CycleState.Consent or CycleState.Interlock => "cy-wait",
+            _ => ""
+        };
+    }
+
+    private string CyclogramSvg()
+    {
+        if (_engine == null) return "";
+        var ci = CultureInfo.InvariantCulture;
+        string F2(double v) => v.ToString("0.#", ci);
+        double t0 = CyStart, t1 = t0 + _cySpan;
+        const double W = 1000, LW = 150, RH = 16;
+        var tracks = _engine.Recorder.Tracks.Where(t => t.Segments.Any(x => x.EndS > t0 && x.StartS < t1 && CyClass(t.Group, x.State) != "")).ToList();
+        double H = 24 + tracks.Count * RH + 6;
+        double X(double t) => LW + (W - LW - 6) * (t - t0) / (t1 - t0);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<svg class=\"ciclogramma\" viewBox=\"0 0 {W} {F2(H)}\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-label=\"Ciclogramma dei dispositivi\">");
+        double step = _cySpan <= 30 ? 5 : _cySpan <= 120 ? 10 : 30;
+        for (double t = Math.Ceiling(t0 / step) * step; t <= t1; t += step)
+            sb.Append($"<line x1=\"{F2(X(t))}\" y1=\"16\" x2=\"{F2(X(t))}\" y2=\"{F2(H)}\" stroke=\"var(--bordo)\"/><text x=\"{F2(X(t))}\" y=\"11\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{t:0}</text>");
+        for (int i = 0; i < tracks.Count; i++)
+        {
+            double y = 20 + i * RH;
+            sb.Append($"<text x=\"{LW - 4}\" y=\"{F2(y + 11)}\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(tracks[i].Label)}</text>");
+            foreach (var sg in tracks[i].Segments)
+            {
+                if (sg.EndS <= t0 || sg.StartS >= t1) continue;
+                string cl = CyClass(tracks[i].Group, sg.State);
+                if (cl == "") continue;
+                double xa = X(Math.Max(sg.StartS, t0)), xb = X(Math.Min(sg.EndS, t1));
+                sb.Append($"<rect class=\"{cl}\" x=\"{F2(xa)}\" y=\"{F2(y + 1)}\" width=\"{F2(Math.Max(1, xb - xa))}\" height=\"{RH - 3}\" rx=\"2\"><title>{System.Net.WebUtility.HtmlEncode(tracks[i].Label)}: {sg.State} {sg.StartS:0.0}–{sg.EndS:0.0} s</title></rect>");
+            }
+        }
+        if (_t >= t0 && _t <= t1) sb.Append($"<line x1=\"{F2(X(_t))}\" y1=\"14\" x2=\"{F2(X(_t))}\" y2=\"{F2(H)}\" stroke=\"var(--errore)\" stroke-width=\"1.5\"/>");
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private string GanttSvg()
+    {
+        if (_engine == null) return "";
+        var ci = CultureInfo.InvariantCulture;
+        string F2(double v) => v.ToString("0.#", ci);
+        double t0 = CyStart, t1 = t0 + _cySpan;
+        const double W = 1000, LW = 70, RH = 18;
+        var rows = PackageGantt.Build(_engine.Recorder).Where(r => r.EndS > t0 && r.StartS < t1).ToList();
+        double H = 24 + rows.Count * RH + 6;
+        double X(double t) => LW + (W - LW - 6) * (t - t0) / (t1 - t0);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<svg class=\"ciclogramma\" viewBox=\"0 0 {W} {F2(H)}\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-label=\"Gantt dei pacchi\">");
+        double step = _cySpan <= 30 ? 5 : _cySpan <= 120 ? 10 : 30;
+        for (double t = Math.Ceiling(t0 / step) * step; t <= t1; t += step)
+            sb.Append($"<line x1=\"{F2(X(t))}\" y1=\"16\" x2=\"{F2(X(t))}\" y2=\"{F2(H)}\" stroke=\"var(--bordo)\"/><text x=\"{F2(X(t))}\" y=\"11\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{t:0}</text>");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            double y = 20 + i * RH;
+            sb.Append($"<text x=\"{LW - 4}\" y=\"{F2(y + 12)}\" text-anchor=\"end\" font-size=\"9\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(rows[i].PackageId)} · {rows[i].LengthM:0.#} m</text>");
+            foreach (var sg in rows[i].Segments)
+            {
+                if (sg.EndS <= t0 || sg.StartS >= t1) continue;
+                double xa = X(Math.Max(sg.StartS, t0)), xb = X(Math.Min(sg.EndS, t1));
+                string fill = sg.Moving ? "var(--rulli-marcia)" : PackFill(sg.State);
+                string tip = $"{sg.Label}: {sg.StartS:0.0}–{sg.EndS:0.0} s" + (sg.Moving ? $", {sg.DistanceM:0.0} m, vmax {sg.MaxSpeed:0.00} m/s" : "");
+                sb.Append($"<rect x=\"{F2(xa)}\" y=\"{F2(y + 1)}\" width=\"{F2(Math.Max(1, xb - xa))}\" height=\"{RH - 3}\" fill=\"{fill}\" rx=\"2\"><title>{System.Net.WebUtility.HtmlEncode(tip)}</title></rect>");
+            }
+        }
+        if (_t >= t0 && _t <= t1) sb.Append($"<line x1=\"{F2(X(_t))}\" y1=\"14\" x2=\"{F2(X(_t))}\" y2=\"{F2(H)}\" stroke=\"var(--errore)\" stroke-width=\"1.5\"/>");
+        sb.Append("</svg>");
+        return sb.ToString();
     }
 
     private static readonly int[] Speeds = { 1, 4, 10, 30 };
@@ -608,8 +752,31 @@
         catch (Exception ex) { _checkErrors.Add("Controllo non riuscito: " + ex.Message); }
     }
 
+    private readonly Dictionary<string, PackageProductivityResult> _prod = new();
+    private bool _prodBusy;
+
+    private string ProdText(string id) => !_prod.TryGetValue(id, out var r) ? "–"
+        : r.Problem != null ? r.Problem
+        : $"{N(r.CycleTimeS, "0.0")} s · {N(r.PackagesPerHour, "0.0")} pacchi/h · {N(r.TonnesPerHour, "0.0")} t/h";
+
+    private async Task CalcProd()
+    {
+        _prodBusy = true; _prod.Clear();
+        StateHasChanged();
+        await Task.Delay(30);
+        var snap = ProjectSerializer.Clone(Work);
+        foreach (var t in snap.PackageTypes.ToList())
+        {
+            _prod[t.Id] = PackageProductivity.Evaluate(snap, t.Id);
+            StateHasChanged();
+            await Task.Delay(1);
+        }
+        _prodBusy = false;
+    }
+
     private void Edit(Action change)
     {
+        _prod.Clear();
         change();
         _edited = true;
         Check();
@@ -713,6 +880,12 @@
         "stop" => Work.IntermediateStops.FirstOrDefault(x => x.Id == _selId),
         "photocell" => Work.Photocells.FirstOrDefault(x => x.Id == _selId),
         "sezione" => Work.Sections.FirstOrDefault(x => x.Id == _selId),
+        "scale" => Work.Scales.FirstOrDefault(x => x.Id == _selId),
+        "clamp" => Work.BundleClamp,
+        "compactor" => Work.Compactor,
+        "rejector" => Work.Rejector,
+        "stopper" => Work.Stopper,
+        "transfer" => Work.Transfer,
         _ => null
     };
 
@@ -724,6 +897,10 @@
             IntermediateStopConfig c => ("stop", c.Id),
             PhotocellConfig c => ("photocell", c.Id),
             RollerSection c => ("sezione", c.Id),
+            WeighingScaleConfig c => ("scale", c.Id),
+            BundleClampConfig => ("clamp", Work.BundleClamp.Id),
+            SideCompactorConfig => ("compactor", Work.Compactor.Id),
+            RejectorConfig => ("rejector", Work.Rejector.Id),
             _ => null
         };
         if (r == null) return false;
@@ -760,11 +937,15 @@
                 case "strapper": { var c = Work.Strappers.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 50); model = c; } break; }
                 case "stop": { var c = Work.IntermediateStops.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 50); model = c; } break; }
                 case "photocell": { var c = Work.Photocells.FirstOrDefault(x => x.Id == id); if (c != null) { c.PositionMm = Snap(c.PositionMm + deltaMm, 10); model = c; } break; }
+                case "scale": { var c = Work.Scales.FirstOrDefault(x => x.Id == id); if (c != null) { c.StartMm = Snap(c.StartMm + deltaMm, 50); c.ManualPosition = true; model = c; } break; }
+                case "clamp": if (!Work.BundleClamp.PerMachine) { Work.BundleClamp.PositionMm = Snap(Work.BundleClamp.PositionMm + deltaMm, 50); model = Work.BundleClamp; } break;
+                case "compactor": Work.Compactor.PositionMm = Snap(Work.Compactor.PositionMm + deltaMm, 50); model = Work.Compactor; break;
+                case "rejector": Work.Rejector.PositionMm = Snap(Work.Rejector.PositionMm + deltaMm, 50); model = Work.Rejector; break;
                 case "stopper": Work.Stopper.PositionMm = Snap(Work.Stopper.PositionMm + deltaMm, 50); model = Work.Stopper; break;
                 case "transfer": Work.Transfer.PositionMm = Snap(Work.Transfer.PositionMm + deltaMm, 50); model = Work.Transfer; break;
                 case "sezione": { var c = Work.Sections.FirstOrDefault(x => x.Id == id); if (c != null) ResizeSection(c, c.LengthMm + deltaMm); break; }
             }
-            if (model != null) ProjectEditing.AfterEdit(Work, model, "PositionMm");
+            if (model != null) ProjectEditing.AfterEdit(Work, model, model is WeighingScaleConfig ? "StartMm" : "PositionMm");
             ProjectEditing.Normalize(Work);
         });
         StateHasChanged();
@@ -1198,6 +1379,14 @@
             _res = e.ComputeResults();
             _lastRes = DateTime.UtcNow;
         }
+    }
+
+    private void Seek(double t)
+    {
+        if (_engine == null) return;
+        _t = Math.Clamp(t, _winStart, _end);
+        _frame = _engine.Recorder.FrameAt(_t);
+        Push3D();
     }
 
     private void OnSeek(ChangeEventArgs e)
