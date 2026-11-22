@@ -47,7 +47,7 @@ public sealed partial class MainViewModel
             var snapshot = ProjectSerializer.Clone(_project);
             if (_lineSpeedOverride is double ov)                       // stessa velocità di linea della simulazione mostrata
                 foreach (var s in snapshot.Sections) { s.HighSpeed = ov; s.LowSpeed = Math.Min(s.LowSpeed, ov); }
-            double target = _project.Simulation.TargetTonnesPerHour;
+            double target = _project.Simulation.EffectiveTargetTonnesPerHour;
             var progress = new Progress<string>(s => Status = "Obiettivo di produttività: " + s);
             var report = await Task.Run(() => ProductivityAdvisor.Analyze(snapshot, target, progress: progress));
             var path = _filePath;

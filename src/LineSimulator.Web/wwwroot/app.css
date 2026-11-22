@@ -234,3 +234,22 @@ svg.ciclogramma { width: 100%; height: auto; display: block; background: var(--c
 tr.riga-nota td { padding-top: 0; border-top: 0; }
 .nota.piccola { font-size: .72rem; }
 .vista-config .trascina.fisso { cursor: pointer; }
+
+/* schede (passi) 2026-11-22 */
+.scheda[hidden] { display: none; }
+button.passo.attivo { background: var(--accento); color: var(--accento-testo); }
+.avanti { display: flex; justify-content: flex-end; margin: .4rem 0 1rem; }
+.avanti .primario { width: auto; padding: .7rem 1.4rem; }
+.riga-obiettivo { flex-wrap: wrap; gap: .6rem 1.4rem; }
+.riga-obiettivo .campo { flex-direction: row; align-items: center; }
+.riga-obiettivo input { width: 6rem; font-size: 1.3rem; font-weight: 700; }
+.bozza { pointer-events: none; }
+.bozza .vista-config { pointer-events: none; }
+.legature-ctrl { display: flex; align-items: center; gap: .6rem; margin-top: .8rem; }
+.legature-ctrl h3 { margin: 0 auto 0 0; }
+.legature-ctrl button { width: 44px; font-size: 1.3rem; padding: 0; }
+.legature-ctrl button.piu { background: var(--accento); color: var(--accento-testo); border-color: var(--accento); }
+.quote-leg { display: flex; flex-wrap: wrap; gap: .5rem; }
+.quote-leg .campo { background: var(--morbido); border: 1px solid var(--accento); border-radius: 10px; padding: .4rem .7rem; font-size: .78rem; font-weight: 600; }
+.quote-leg input { width: 5.5rem; text-align: right; }
+.con-unita { display: flex; align-items: center; gap: .3rem; font-weight: 400; }

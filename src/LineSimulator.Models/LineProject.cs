@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LineSimulator.Models;
 
 public sealed class SimulationSettings
@@ -12,6 +14,17 @@ public sealed class SimulationSettings
     /// <summary>Obiettivo di produttività in tonnellate/ora sul mix di pacchi in ingresso (0 = nessun obiettivo).</summary>
     [UiProperty("Obiettivo di produttività", "t/h", "Obiettivo", Order = 1)]
     public double TargetTonnesPerHour { get; set; }
+
+    /// <summary>
+    /// Margine di sicurezza (%) sull'obiettivo: la linea deve poter andare più veloce di quanto richiesto, quindi si
+    /// progetta e si confronta con obiettivo × (1 + Safety/100). Non cambia la simulazione.
+    /// </summary>
+    [UiProperty("Safety (margine sull'obiettivo)", "%", "Obiettivo", Order = 2)]
+    public double SafetyPercent { get; set; } = 15;
+
+    /// <summary>Obiettivo con il margine di sicurezza (0 se non c'è obiettivo).</summary>
+    [JsonIgnore]
+    public double EffectiveTargetTonnesPerHour => TargetTonnesPerHour <= 0 ? 0 : TargetTonnesPerHour * (1 + Math.Max(0, SafetyPercent) / 100.0);
 
     /// <summary>Il software decide inverter e inseguimento dello svincolo (spegnere solo per confronti o casi particolari).</summary>
     public bool AutoReleaseInverters { get; set; } = true;

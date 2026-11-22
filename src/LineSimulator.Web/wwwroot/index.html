@@ -42,6 +42,12 @@
                 document.querySelectorAll('details.zona').forEach(function (d) { d.open = aperte; });
             }
         };
+        // Schede (passi): dopo il cambio, i canvas 3D rileggono la loro dimensione e si torna in cima
+        window.schede = {
+            mostra: function () {
+                setTimeout(function () { window.dispatchEvent(new Event('resize')); window.scrollTo({ top: 0 }); }, 60);
+            }
+        };
         // Progetto modificato: copia negli appunti (i download sono bloccati nella pagina su claude.ai)
         window.salva = {
             copia: async function (testo) {
