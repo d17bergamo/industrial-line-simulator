@@ -183,7 +183,7 @@
                 <div class="config-vista">@((MarkupString)ConfigSvg())</div>
                 <div class="famiglie">
                     <span class="etichetta">Famiglie</span>
-                    @foreach (var (fk, fl) in Families)
+                    @foreach (var (fk, fl) in FamilyList)
                     {
                         string key = fk;
                         <button class="scelta @(_fam == key ? "attiva" : "")" @onclick="() => OpenFamily(key)">@fl (@FamilyCount(key))</button>
@@ -244,7 +244,7 @@
     {
         <div class="velo" @onclick="CloseProp"></div>
         <aside class="modale" role="dialog" aria-label="Proprietà della famiglia">
-            <div class="modale-testa"><h2>Famiglia: @Families.First(f => f.Key == _fam).Label</h2><button class="chiudi" @onclick="CloseProp" aria-label="Chiudi">×</button></div>
+            <div class="modale-testa"><h2>Famiglia: @FamilyList.First(f => f.Key == _fam).Label</h2><button class="chiudi" @onclick="CloseProp" aria-label="Chiudi">×</button></div>
             <div class="modale-corpo">
                 <p class="nota">Valgono per tutti i componenti della famiglia evidenziati nel disegno, tranne quelli personalizzati.</p>
                 <Proprieta Project="Work" Model="fm" Changed="OnPropChanged" @key="fm" />
@@ -1105,7 +1105,7 @@
 
     // ---- famiglie: si seleziona tutta la famiglia e si aprono le sue proprietà (valgono per tutti i figli non personalizzati)
     private string _fam = "";
-    private static readonly (string Key, string Label)[] Families =
+    private static readonly (string Key, string Label)[] FamilyList =
         { ("sezione", "Vie a rulli"), ("strapper", "Legatrici"), ("photocell", "Fotocellule"), ("scale", "Bilici") };
 
     private int FamilyCount(string key) => key switch
