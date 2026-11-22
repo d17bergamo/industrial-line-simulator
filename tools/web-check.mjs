@@ -139,6 +139,10 @@ try {
         const titolo = aperta ? await page.locator('.modale-testa h2').innerText() : '';
         if (aperta && (!id || titolo.startsWith(id) || ['clamp', 'compactor', 'rejector'].includes(k))) ok++;
         else say(`  tocco su ${k} ${id}: ${aperta ? 'si apre su "' + titolo + '"' : 'NON si apre'}`);
+        if (!aperta) {
+          const info = await page.evaluate(([x, y, i2]) => { const e = document.elementFromPoint(x, y); const g = e && e.closest('.trascina'); const r = document.querySelector('.modale'); return `${e ? e.tagName + '.' + (e.getAttribute('class') || '') : 'nulla'} gruppo=${g ? g.getAttribute('data-k') + ':' + g.getAttribute('data-id') + ' ' + g.getAttribute('class') : '-'}`; }, [b.x + b.width / 2, b.y + b.height / 2, 0]);
+          say(`    sotto il tocco (${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}): ${info}`);
+        }
         if (aperta) { await page.click('.modale-pie button:has-text("Fatto")'); await page.waitForTimeout(150); }
       }
       say(`tocco ${k}: ${ok}/${n} aprono la finestra giusta`);
