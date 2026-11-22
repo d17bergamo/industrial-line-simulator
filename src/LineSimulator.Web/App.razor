@@ -19,56 +19,55 @@
     <section class="scheda" id="scheda-0" hidden="@(_tab != 0)">
         <div class="titolo-pagina"><h1>Progetto</h1><p>Dai un nome al progetto e indica il risultato che la linea deve garantire.</p></div>
 
-        <div class="blocco">
-            <label class="etichetta" for="nome-progetto">Nome del progetto</label>
-            <input id="nome-progetto" class="nome-grande" type="text" placeholder="Scrivi il nome del progetto" value="@(_nameTouched ? Work.Name : "")" @onchange='e => { _nameTouched = true; Edit(() => Work.Name = e.Value?.ToString() ?? ""); }' />
-        </div>
-
-        <div class="riga-blocchi">
-            <div class="blocco largo-380">
-                <div class="etichetta">Parti da</div>
-                <div class="scelte">
-                    @for (int i = 0; i < SampleProjects.All.Count; i++)
-                    {
-                        int k = i;
-                        <button class="scelta @(_model == k ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = k">@SampleProjects.All[k].Name</button>
-                    }
-                    <button class="scelta @(_model == -2 ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = -2">Layout da zero</button>
-                    <label class="scelta file @(_model == -1 ? "attiva" : "")">Apri un file .json<InputFile OnChange="OnFile" accept=".json" disabled="@_busy" /></label>
-                </div>
-                @if (_model == -1 && _openChanges.Count > 0)
-                {
-                    <p class="nota">Il progetto aperto è stato aggiornato alle regole attuali (@_openChanges.Count righe): il file originale non cambia.</p>
-                }
-                @if (_model == -2)
-                {
-                    <div class="griglia">
-                        <label class="campo">Legatrici<input type="number" min="1" max="6" @bind="_cStrappers" /></label>
-                        <label class="campo">Pacco più lungo (m)<input type="number" min="3" max="30" @bind="_cMaxM" /></label>
-                        <label class="campo">Misure dei pacchi (m)<input type="text" @bind="_cLengths" placeholder="6, 9, 12" /></label>
-                    </div>
-                    <label class="spunta"><input type="checkbox" @bind="_cStop" /> Con fermo scomparente</label>
-                    <button class="scuro" @onclick="CreateCustom" disabled="@_busy">Crea il layout</button>
-                }
+        <div class="blocco riga-nome">
+            <div class="nome-col">
+                <label class="etichetta" for="nome-progetto">Nome del progetto</label>
+                <input id="nome-progetto" class="nome-grande" type="text" placeholder="Scrivi il nome del progetto" value="@(_nameTouched ? Work.Name : "")" @onchange='e => { _nameTouched = true; Edit(() => Work.Name = e.Value?.ToString() ?? ""); }' />
             </div>
-            <div class="blocco largo-560">
-                <div class="riga-obiettivo">
-                    <div>
-                        <label class="etichetta" for="obiettivo">Produttività</label>
-                        <div class="grande-valore"><input id="obiettivo" inputmode="decimal" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /><span>t/h</span></div>
-                    </div>
-                    <div>
-                        <label class="etichetta" for="safety">Safety</label>
-                        <div class="grande-valore"><input id="safety" inputmode="decimal" value="@F(Work.Simulation.SafetyPercent)" @onchange="e => Edit(() => Work.Simulation.SafetyPercent = Num(e, Work.Simulation.SafetyPercent, 0, 200))" /><span>%</span></div>
-                    </div>
+            <div class="riga-obiettivo">
+                <div>
+                    <label class="etichetta" for="obiettivo">Produttività</label>
+                    <div class="grande-valore"><input id="obiettivo" inputmode="decimal" value="@F(Work.Simulation.TargetTonnesPerHour)" @onchange="e => Edit(() => Work.Simulation.TargetTonnesPerHour = Num(e, Work.Simulation.TargetTonnesPerHour, 0, 10000))" /><span>t/h</span></div>
                 </div>
-                <p class="nota">Da garantire: @N(Work.Simulation.EffectiveTargetTonnesPerHour, "0.#") t/h</p>
+                <div>
+                    <label class="etichetta" for="safety">Safety</label>
+                    <div class="grande-valore"><input id="safety" inputmode="decimal" value="@F(Work.Simulation.SafetyPercent)" @onchange="e => Edit(() => Work.Simulation.SafetyPercent = Num(e, Work.Simulation.SafetyPercent, 0, 200))" /><span>%</span></div>
+                </div>
             </div>
         </div>
 
         <div class="blocco">
-            <div class="titolo-blocco"><h2>Layout</h2></div>
-            <div class="config-vista bozza">@((MarkupString)ConfigSvg(true))</div>
+            <div class="etichetta">Parti da</div>
+            <div class="scelte quadrate">
+                @for (int i = 0; i < SampleProjects.All.Count; i++)
+                {
+                    int k = i;
+                    string letter = ((char)('A' + k)).ToString();
+                    <button class="scelta quadrata @(_model == k ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = k"><span class="badge">@letter</span>Layout @letter</button>
+                }
+                <button class="scelta quadrata @(_model == -2 ? "attiva" : "")" disabled="@_busy" @onclick="() => Model = -2"><span class="badge">+</span>Layout da zero</button>
+                <label class="scelta quadrata file @(_model == -1 ? "attiva" : "")"><span class="badge">&#123; &#125;</span>Apri un file .json<InputFile OnChange="OnFile" accept=".json" disabled="@_busy" /></label>
+            </div>
+            <p class="descrizione-caso">@ModelText</p>
+            @if (_model == -1 && _openChanges.Count > 0)
+            {
+                <p class="nota">Il progetto aperto è stato aggiornato alle regole attuali (@_openChanges.Count righe): il file originale non cambia.</p>
+            }
+            @if (_model == -2)
+            {
+                <div class="griglia">
+                    <label class="campo">Legatrici<input type="number" min="1" max="6" @bind="_cStrappers" /></label>
+                    <label class="campo">Pacco più lungo (m)<input type="number" min="3" max="30" @bind="_cMaxM" /></label>
+                    <label class="campo">Misure dei pacchi (m)<input type="text" @bind="_cLengths" placeholder="6, 9, 12" /></label>
+                </div>
+                <label class="spunta"><input type="checkbox" @bind="_cStop" /> Con fermo scomparente</label>
+                <button class="scuro" @onclick="CreateCustom" disabled="@_busy">Crea il layout</button>
+            }
+        </div>
+
+        <div class="blocco">
+            <div class="etichetta">Layout</div>
+            <div class="config-vista bozza">@((MarkupString)ConfigSvg(true, schematic: true))</div>
         </div>
 
         <div class="avanti"><button class="scuro grande" @onclick="() => SetTab(1)">Pacchi →</button></div>
@@ -171,6 +170,7 @@
             <aside class="aggiungi-pannello">
                 <div class="etichetta">Aggiungi</div>
                 <button @onclick='() => AddComp("strapper")'>+ Legatrice</button>
+                <button @onclick='() => AddComp("strapper-sma")'>+ Reggettatrice</button>
                 <button @onclick='() => AddComp("clamp")'>+ Stringifascio</button>
                 <button @onclick='() => AddComp("compactor")'>+ Compattatore</button>
                 <button @onclick='() => AddComp("section")'>+ Via a rulli</button>
@@ -181,10 +181,18 @@
             </aside>
             <div class="blocco disegno" id="linea">
                 <div class="config-vista">@((MarkupString)ConfigSvg())</div>
+                <div class="famiglie">
+                    <span class="etichetta">Famiglie</span>
+                    @foreach (var (fk, fl) in Families)
+                    {
+                        string key = fk;
+                        <button class="scelta @(_fam == key ? "attiva" : "")" @onclick="() => OpenFamily(key)">@fl (@FamilyCount(key))</button>
+                    }
+                </div>
             </div>
         </div>
 
-        <div class="riga-blocchi">
+        <div class="riga-blocchi uguali">
             <div class="blocco largo-420">
                 <h2>Controlli</h2>
                 @if (_check.Count > 0 || _checkErrors.Count > 0)
@@ -215,7 +223,7 @@
                         @foreach (var pc in Work.Photocells.OrderBy(x => x.PositionMm))
                         {
                             <tr>
-                                <td class="id">@pc.Id</td>
+                                <td class="id">@FcName(pc)</td>
                                 <td><span class="chip @(pc.IsAutoGenerated ? "chip-azzurro" : "chip-giallo")">@(pc.IsAutoGenerated ? "Automatica" : "Presenza")</span></td>
                                 <td class="nota-cella">@PhotocellAudit.Role(pc)</td>
                             </tr>
@@ -232,14 +240,28 @@
         </div>
     </section>
 
-    @if (_tab == 2 && _propOpen && SelectedComp is { } sc)
+    @if (_tab == 2 && _propOpen && FamilyModel is { } fm)
+    {
+        <div class="velo" @onclick="CloseProp"></div>
+        <aside class="modale" role="dialog" aria-label="Proprietà della famiglia">
+            <div class="modale-testa"><h2>Famiglia: @Families.First(f => f.Key == _fam).Label</h2><button class="chiudi" @onclick="CloseProp" aria-label="Chiudi">×</button></div>
+            <div class="modale-corpo">
+                <p class="nota">Valgono per tutti i componenti della famiglia evidenziati nel disegno, tranne quelli personalizzati.</p>
+                <Proprieta Project="Work" Model="fm" Changed="OnPropChanged" @key="fm" />
+            </div>
+            <div class="modale-pie">
+                <button class="scuro" @onclick="CloseProp">Fatto</button>
+            </div>
+        </aside>
+    }
+    else if (_tab == 2 && _propOpen && SelectedComp is { } sc)
     {
         <div class="velo" @onclick="CloseProp"></div>
         <aside class="modale" role="dialog" aria-label="Proprietà del componente">
             <div class="modale-testa"><h2>@CompTitle(sc)</h2><button class="chiudi" @onclick="CloseProp" aria-label="Chiudi">×</button></div>
             <div class="modale-corpo">
                 @if (sc is PhotocellConfig { IsAutoGenerated: true }) { <p class="nota">Fotocellula automatica: la mette il programma in base ai pacchi. Si aggiungono solo fotocellule di presenza.</p> }
-                @if (ProjectEditing.IsProtectedSection(Work, sc)) { <p class="nota">La via a rulli di legatura e quella davanti al trasferitore non si possono rimuovere.</p> }
+                @if (ProjectEditing.IsProtectedSection(Work, sc)) { <p class="nota">La via a rulli di legatura, la via davanti al trasferitore e lo svincolo, se è l'unico, non si possono rimuovere.</p> }
                 <Proprieta Project="Work" Model="sc" Changed="OnPropChanged" @key="sc" />
             </div>
             <div class="modale-pie">
@@ -251,7 +273,7 @@
 
     @* ================= PASSO 4: SIMULAZIONE ================= *@
     <section class="scheda" id="scheda-3" hidden="@(_tab != 3)">
-        <div class="titolo-pagina"><h1>Simulazione e risultati</h1><p>Una misura alla volta. Scegli quanti pacchi simulare e premi Simula.</p></div>
+        <div class="titolo-pagina"><h1>Simulazione e risultati</h1><p>Una misura alla volta. Premi Simula: si simula finché la linea non va a regime e la produttività si calcola su quel periodo.</p></div>
 
         <div class="blocco barra-sim" id="simulazione">
             <div class="gruppo-sim">
@@ -262,15 +284,7 @@
                     <button class="scelta @(SimType == tid ? "attiva" : "")" disabled="@_busy" @onclick="() => SimType = tid">@N(t.LengthMm / 1000, "0.#") m</button>
                 }
             </div>
-            <div class="gruppo-sim">
-                <span class="etichetta">Pacchi</span>
-                @foreach (var (v, lbl) in new[] { ("10", "10"), ("20", "20"), ("50", "50"), ("continua", "Continua") })
-                {
-                    string vv = v;
-                    <button class="scelta @(_simCount == vv ? "attiva" : "")" disabled="@_busy" @onclick="() => _simCount = vv">@lbl</button>
-                }
-            </div>
-            <button id="simula" class="verde grande spinto" @onclick="Run" disabled="@_busy">@(_busy ? "Simulazione in corso…" : "Simula")</button>
+            <button id="simula" class="verde grande spinto" @onclick="Run" disabled="@_busy">@(_busy ? $"Simulazione in corso… ({_runCount} pacchi)" : "Simula")</button>
         </div>
         @if (_busy)
         {
@@ -296,7 +310,7 @@
             </div>
             <div id="risultati" class="kpi">
                 <div class="kpi-carta verde-b">
-                    <div class="kpi-nome">Produttività</div>
+                    <div class="kpi-nome">Produttività a regime</div>
                     <div class="kpi-valore">@N(_res.TonnesPerHour, "0.0") <small>t/h</small></div>
                     <div class="kpi-nota">@(goalEff > 0 ? $"obiettivo {N(goalEff, "0.#")} t/h: {(reached ? "raggiunto" : "non raggiunto")}" : "nessun obiettivo")</div>
                 </div>
@@ -373,22 +387,23 @@
                     </div>
                     <p class="nota">Un dito ruota, due dita avvicinano e spostano.</p>
                 }
-                <svg class="vista" style="@(_view3d ? "display:none" : "")" viewBox="0 0 @VW @VH" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vista dall'alto della linea">
+                @* vista dall'alto orizzontale come il layout del passo Progetto: il pacco corre da sinistra a destra *@
+                <svg class="vista orizzontale" style="@(_view3d ? "display:none" : "")" viewBox="0 0 @VH @VW" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vista dall'alto della linea">
                     <g>
-                        <rect x="@F(BandX)" y="@F(Y(_engine.Transfer.StartM))" width="@F(BandW + _strokeM * KX)" height="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)"
+                        <rect x="@F(Y(_engine.Transfer.StartM))" y="@F(BandX)" width="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)" height="@F(BandW + _strokeM * KX)"
                               fill="none" stroke="var(--bordo)" stroke-dasharray="6 5" stroke-width="2" rx="4" />
                         @if (_accM > 0)
                         {
-                            <rect x="@F(BandX + _strokeM * KX)" y="@F(Y(_engine.Transfer.StartM))" width="@F(BandW + _accM * KX)" height="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)"
+                            <rect x="@F(Y(_engine.Transfer.StartM))" y="@F(BandX + _strokeM * KX)" width="@F((_engine.Transfer.EndM - _engine.Transfer.StartM) * _ky)" height="@F(BandW + _accM * KX)"
                                   fill="none" stroke="var(--bordo)" stroke-width="2" rx="4" />
                         }
                     </g>
                     @foreach (var b in _bands)
                     {
                         <g>
-                            <rect x="@F(BandX)" y="@F(Y(b.StartM) + 1)" width="@F(BandW)" height="@F(Math.Max(1, (b.EndM - b.StartM) * _ky - 2))" rx="3" fill="@BandFill(Speed(b))" />
-                            <text x="4" y="@F(Y(b.StartM) + 22)" font-size="20">@b.Id</text>
-                            <text x="4" y="@F(Y(b.StartM) + 44)" font-size="17">@N(Speed(b), "0.00")</text>
+                            <rect x="@F(Y(b.StartM) + 1)" y="@F(BandX)" width="@F(Math.Max(1, (b.EndM - b.StartM) * _ky - 2))" height="@F(BandW)" rx="3" fill="@BandFill(Speed(b))" />
+                            <text x="@F(Y(b.StartM) + 4)" y="@F(BandX - 40)" font-size="16">@b.Id</text>
+                            <text x="@F(Y(b.StartM) + 4)" y="@F(BandX - 22)" font-size="14">@N(Speed(b), "0.00")</text>
                         </g>
                     }
                     @for (int i = 0; i < _engine.Strappers.Count; i++)
@@ -396,29 +411,29 @@
                         var s = _engine.Strappers[i];
                         bool work = _frame != null && i < _frame.StrapperStates.Length && _frame.StrapperStates[i] != StrapperState.Idle;
                         <g>
-                            <rect x="@F(BandX - 10)" y="@F(Y(s.PositionM) - 5)" width="@F(BandW + 20)" height="10" rx="3" fill="@(work ? "var(--lega)" : "var(--macchina)")" opacity="@(work ? "1" : "0.75")" />
-                            <text x="@F(BandX + BandW + 16)" y="@F(Y(s.PositionM) + 7)" font-size="19">@s.Id</text>
+                            <rect x="@F(Y(s.PositionM) - 5)" y="@F(BandX - 10)" width="10" height="@F(BandW + 20)" rx="3" fill="@(work ? "var(--lega)" : "var(--macchina)")" opacity="@(work ? "1" : "0.75")" />
+                            <text x="@F(Y(s.PositionM))" y="@F(BandX + BandW + 30)" font-size="16" text-anchor="middle">@s.Id</text>
                         </g>
                     }
                     @for (int i = 0; i < _engine.Photocells.Count; i++)
                     {
                         bool on = _frame != null && i < _frame.PhotocellOutputs.Length && _frame.PhotocellOutputs[i];
-                        <g><circle cx="@F(BandX - 9)" cy="@F(Y(_engine.Photocells[i].PositionM))" r="6" fill="@(on ? "var(--fc-on)" : "var(--fc)")" /></g>
+                        <g><circle cx="@F(Y(_engine.Photocells[i].PositionM))" cy="@F(BandX - 9)" r="6" fill="@(on ? "var(--fc-on)" : "var(--fc)")" /></g>
                     }
                     @for (int i = 0; i < _engine.IntermediateStops.Count; i++)
                     {
                         bool up = _frame != null && i < _frame.StopRaised.Length && _frame.StopRaised[i];
-                        <g><rect x="@F(BandX - 4)" y="@F(Y(_engine.IntermediateStops[i].PositionM) - 2.5)" width="@F(BandW + 8)" height="5" fill="@(up ? "var(--errore)" : "var(--attesa)")" opacity="@(up ? "1" : "0.5")" /></g>
+                        <g><rect x="@F(Y(_engine.IntermediateStops[i].PositionM) - 2.5)" y="@F(BandX - 4)" width="5" height="@F(BandW + 8)" fill="@(up ? "var(--errore)" : "var(--attesa)")" opacity="@(up ? "1" : "0.5")" /></g>
                     }
-                    <g><rect x="@F(BandX - 6)" y="@F(Y(_engine.Stopper.PositionM))" width="@F(BandW + 12)" height="7" fill="var(--errore)" /></g>
+                    <g><rect x="@F(Y(_engine.Stopper.PositionM))" y="@F(BandX - 6)" width="7" height="@F(BandW + 12)" fill="var(--errore)" /></g>
                     @if (_frame != null)
                     {
                         @foreach (var p in _frame.Packages)
                         {
                             double h = Math.Max(8, p.LengthM * _ky);
                             <g>
-                                <rect x="@F(BandX + 6 + p.LateralM * KX)" y="@F(Y(p.HeadM - p.LengthM))" width="@F(BandW - 12)" height="@F(h)" rx="5" fill="@PackFill(p.State)" />
-                                <text class="et-pacco" x="@F(BandX + BandW / 2 + p.LateralM * KX)" y="@F(Y(p.HeadM - p.LengthM / 2) + 7)" font-size="19" text-anchor="middle">@p.Id</text>
+                                <rect x="@F(Y(p.HeadM - p.LengthM))" y="@F(BandX + 6 + p.LateralM * KX)" width="@F(h)" height="@F(BandW - 12)" rx="5" fill="@PackFill(p.State)" />
+                                <text class="et-pacco" x="@F(Y(p.HeadM - p.LengthM / 2))" y="@F(BandX + BandW / 2 + p.LateralM * KX + 6)" font-size="16" text-anchor="middle">@p.Id</text>
                             </g>
                         }
                     }
@@ -442,7 +457,7 @@
         <div class="blocco" id="recap-blocco">
             <div class="titolo-blocco">
                 <h2>Recap della simulazione</h2>
-                <span>20 pacchi per ogni misura · obiettivo @N(Work.Simulation.TargetTonnesPerHour, "0.#") t/h + @N(Work.Simulation.SafetyPercent, "0.#")% di safety = @N(Work.Simulation.EffectiveTargetTonnesPerHour, "0.#") t/h</span>
+                <span>Produttività calcolata a regime · obiettivo @N(Work.Simulation.TargetTonnesPerHour, "0.#") t/h + @N(Work.Simulation.SafetyPercent, "0.#")% di safety = @N(Work.Simulation.EffectiveTargetTonnesPerHour, "0.#") t/h</span>
                 <span class="spinto"></span>
                 <button class="chiaro" @onclick="RunRecap" disabled="@(_recapBusy || _busy)">@(_recapBusy ? "Calcolo in corso…" : "Simula tutte le misure")</button>
                 <button class="chiaro" @onclick="DownloadRecap" disabled="@(_recap.Count == 0)">Scarica recap (Excel)</button>
@@ -450,12 +465,12 @@
             @if (_recap.Count > 0)
             {
                 <div class="tabella-scroll"><table class="tabella" id="recap">
-                    <thead><tr><th>Misura</th><th>Pacchi</th><th>Peso totale</th><th>Tempo totale</th><th>Ciclo medio</th><th>Produttività</th><th>Rispetto all'obiettivo</th><th>Collo di bottiglia</th></tr></thead>
+                    <thead><tr><th>Lunghezza pacco</th><th>A regime dal pacco</th><th>Tempo a regime</th><th>Ciclo medio</th><th>Produttività</th><th>Rispetto all'obiettivo</th><th>Collo di bottiglia</th></tr></thead>
                     <tbody>
                         @foreach (var r in _recap)
                         {
                             <tr>
-                                <td><b>@N(r.LengthMm / 1000, "0.#") m</b></td><td>@r.Exited</td><td>@N(r.TonnesTotal, "0.0") t</td><td>@N(r.TimeS, "0") s</td><td>@N(r.CycleS, "0.0") s</td>
+                                <td><b>@N(r.LengthMm / 1000, "0.#") m</b></td><td>@(r.SteadyFrom is int sf ? $"dal {sf}°" : "–")</td><td>@(r.SteadyFromS is double ts ? N(ts, "0") + " s" : "–")</td><td>@N(r.CycleS, "0.0") s</td>
                                 <td><b>@N(r.Tph, "0.0") t/h</b></td>
                                 <td><span class="chip @(r.Tph >= Work.Simulation.EffectiveTargetTonnesPerHour ? "chip-verde" : "chip-giallo")">@Gap(r.Tph)</span></td>
                                 <td>@(r.Problem ?? r.Bottleneck)</td>
@@ -525,7 +540,7 @@
 
 @code {
     // Vista 2D della configurazione (orizzontale, da monte a valle): si ridisegna dal progetto a ogni modifica.
-    private string ConfigSvg(bool readOnly = false)
+    private string ConfigSvg(bool readOnly = false, bool schematic = false)
     {
         var w = Work;
         var secs = w.Sections.Where(x => x.IsEnabled).OrderBy(x => x.StartMm).ToList();
@@ -544,7 +559,15 @@
             // tutta la fascia della via si tocca per aprirne le proprietà (solo selezione; la maniglia in fondo la allunga)
             sb.Append($"<g class=\"trascina fisso{Sel("sezione", s.Id)}\" data-k=\"sezione\" data-id=\"{System.Net.WebUtility.HtmlEncode(s.Id)}\">");
             sb.Append($"<rect x=\"{X(s.StartMm)}\" y=\"{base0}\" width=\"{Wd(s.LengthMm)}\" height=\"28\" rx=\"3\" fill=\"var(--bordo)\" stroke=\"var(--tenue)\"/>");
-            sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text></g>");
+            if (s.SplitAtMm > s.StartMm && s.SplitAtMm < s.EndMm)
+            {
+                // via divisa in due inverter: monte = nome + "A", valle = nome + "B"
+                sb.Append($"<line x1=\"{X(s.SplitAtMm)}\" y1=\"{base0}\" x2=\"{X(s.SplitAtMm)}\" y2=\"{base0 + 28}\" stroke=\"var(--tenue)\" stroke-dasharray=\"3 2\"/>");
+                sb.Append($"<text x=\"{X((s.StartMm + s.SplitAtMm) / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}A</text>");
+                sb.Append($"<text x=\"{X((s.SplitAtMm + s.EndMm) / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}B</text></g>");
+            }
+            else
+                sb.Append($"<text x=\"{X(s.StartMm + s.LengthMm / 2)}\" y=\"{base0 + 18}\" text-anchor=\"middle\" font-size=\"11\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(s.Id)}</text></g>");
         }
         // trasferitore e fermo finale
         sb.Append($"<g class=\"trascina{Sel("transfer", "")}\" data-k=\"transfer\" data-id=\"\">");
@@ -596,13 +619,16 @@
         // fotocellule: numero FC sopra la via
         foreach (var pc in w.Photocells.Where(x => x.IsEnabled))
         {
-            string fc = (pc.Name ?? "").Split(' ')[0];
+            string fc = FcName(pc);
             sb.Append($"<g class=\"trascina{(pc.IsAutoGenerated ? " fisso" : "")}{Sel("photocell", pc.Id)}\" data-k=\"photocell\" data-id=\"{System.Net.WebUtility.HtmlEncode(pc.Id)}\"><rect x=\"{(((pc.PositionMm - x0) * k + M) - 18).ToString("0.#", CultureInfo.InvariantCulture)}\" y=\"{base0 - 46}\" width=\"36\" height=\"46\" fill=\"transparent\"/><line x1=\"{X(pc.PositionMm)}\" y1=\"{base0 - 2}\" x2=\"{X(pc.PositionMm)}\" y2=\"{base0 - 30}\" stroke=\"var(--fc-on)\" stroke-width=\"1.5\"/><circle cx=\"{X(pc.PositionMm)}\" cy=\"{base0 - 32}\" r=\"4\" fill=\"var(--fc-on)\"/>");
             sb.Append($"<text x=\"{X(pc.PositionMm)}\" y=\"{base0 - 40}\" text-anchor=\"middle\" font-size=\"9\" fill=\"var(--tenue)\">{System.Net.WebUtility.HtmlEncode(fc)}</text></g>");
         }
         // maniglia di fine modulo: trascinandola si allunga o accorcia il modulo (a rulli interi)
         foreach (var s in secs)
             sb.Append($"<g class=\"trascina{Sel("sezione", s.Id)}\" data-k=\"sezione\" data-id=\"{System.Net.WebUtility.HtmlEncode(s.Id)}\"><rect x=\"{((s.EndMm - x0) * k + M - 10).ToString("0.#", CultureInfo.InvariantCulture)}\" y=\"{base0 + 4}\" width=\"20\" height=\"20\" rx=\"3\" fill=\"var(--accento)\" opacity=\".85\"/></g>");
+        double H = 150;   // schema (pagina Progetto): senza quote né dimensioni
+        if (!schematic)
+        {
         // catena di quote: inizio via → legatrici e fermi → inizio trasferitore → fermo finale
         marks.Add((x0, "")); marks.Add((w.Transfer.PositionMm, "")); marks.Add((w.Stopper.PositionMm, ""));
         var xs = marks.Select(m => m.Mm).Distinct().OrderBy(v => v).ToList();
@@ -644,7 +670,7 @@
             if (rf == null) continue;
             double d = Math.Abs(rf.Value.Mm - pc.PositionMm);
             if (d < 1) continue;
-            string fc = (pc.Name ?? pc.Id).Split(' ')[0];
+            string fc = FcName(pc);
             double ya = yr + (row % 4) * 20;
             row++;
             double xa = Math.Min(pc.PositionMm, rf.Value.Mm), xb = Math.Max(pc.PositionMm, rf.Value.Mm);
@@ -653,7 +679,8 @@
             sb.Append($"<line x1=\"{X(xa)}\" y1=\"{ya}\" x2=\"{X(xb)}\" y2=\"{ya}\" stroke=\"var(--fc-on)\"/>");
             sb.Append($"<text x=\"{X((xa + xb) / 2)}\" y=\"{ya - 3}\" text-anchor=\"middle\" font-size=\"10\" fill=\"var(--testo)\">{System.Net.WebUtility.HtmlEncode(fc)} ↔ {System.Net.WebUtility.HtmlEncode(rf.Value.Name)}: {d:0}</text>");
         }
-        double H = Math.Max(300, yr + Math.Min(row, 4) * 20 + 14);
+        H = Math.Max(300, yr + Math.Min(row, 4) * 20 + 14);
+        }
         sb.Append("</svg>");
         var svg = sb.ToString().Replace("@@H@@", H.ToString("0", CultureInfo.InvariantCulture));
         return readOnly ? svg.Replace("class=\"trascina", "class=\"ro") : svg;
@@ -712,7 +739,7 @@
     });
 
     // ---- recap della simulazione: una riga per misura (20 pacchi ciascuna)
-    private sealed record RecapRow(string TypeId, double LengthMm, int Exited, double TonnesTotal, double TimeS, double? CycleS, double? Tph, string Bottleneck, string? Problem);
+    private sealed record RecapRow(string TypeId, double LengthMm, int Exited, int? SteadyFrom, double? SteadyFromS, double? CycleS, double? Tph, string Bottleneck, string? Problem);
     private readonly List<RecapRow> _recap = new();
     private bool _recapBusy;
 
@@ -726,15 +753,21 @@
         {
             try
             {
-                var p = PackageProductivity.PrepareFor(Work, t.Id, 20);
-                var e = new SimulationEngine(p);
-                while (e.Step()) { }
-                var r = e.ComputeResults();
-                string? problem = r.Collisions > 0 ? "collisioni" : r.Deadlock ? "blocco" : r.PackagesExited == 0 ? "nessun pacco uscito" : null;
-                double tons = r.Packages.Where(k => k.ExitTimeS.HasValue).Sum(k => k.WeightKg) / 1000.0;
-                _recap.Add(new RecapRow(t.Id, t.LengthMm, r.PackagesExited, tons, r.SimulatedTimeS, r.CycleTimeMeanS, r.TonnesPerHour, r.BottleneckName, problem));
+                SimulationResults r = null!;
+                foreach (int count in SteadyStateRun.PackageCounts)
+                {
+                    var p = PackageProductivity.PrepareFor(Work, t.Id, count);
+                    var e = new SimulationEngine(p);
+                    while (e.Step()) { }
+                    r = e.ComputeResults();
+                    if (SteadyStateRun.Reached(r)) break;
+                    await Task.Delay(1);
+                }
+                string? problem = r.Collisions > 0 ? "collisioni" : r.Deadlock ? "blocco" : r.PackagesExited == 0 ? "nessun pacco uscito"
+                    : !SteadyStateRun.Reached(r) ? "regime non raggiunto" : null;
+                _recap.Add(new RecapRow(t.Id, t.LengthMm, r.PackagesExited, SteadyStateRun.SteadyFromPackage(r), r.SteadyStateFromS, r.CycleTimeMeanS, r.TonnesPerHour, r.BottleneckName, problem));
             }
-            catch (Exception ex) { _recap.Add(new RecapRow(t.Id, t.LengthMm, 0, 0, 0, null, null, "", ex.Message)); }
+            catch (Exception ex) { _recap.Add(new RecapRow(t.Id, t.LengthMm, 0, null, null, null, null, "", ex.Message)); }
             StateHasChanged();
             await Task.Delay(1);
         }
@@ -754,14 +787,15 @@
         if (_recap.Count == 0) return;
         using var wb = new ClosedXML.Excel.XLWorkbook();
         var ws = wb.AddWorksheet("Recap");
-        string[] h = { "Pacco", "Lunghezza (m)", "Pacchi usciti", "Peso totale (t)", "Tempo totale (s)", "Ciclo medio (s)", "Produttività (t/h)", "Obiettivo con safety (t/h)", "Scarto (t/h)", "Collo di bottiglia", "Note" };
+        string[] h = { "Pacco", "Lunghezza (m)", "Pacchi simulati", "A regime dal pacco", "Tempo a regime (s)", "Ciclo medio (s)", "Produttività (t/h)", "Obiettivo con safety (t/h)", "Scarto (t/h)", "Collo di bottiglia", "Note" };
         for (int c = 0; c < h.Length; c++) { ws.Cell(1, c + 1).Value = h[c]; ws.Cell(1, c + 1).Style.Font.Bold = true; }
         double goal = Work.Simulation.EffectiveTargetTonnesPerHour;
         for (int i = 0; i < _recap.Count; i++)
         {
             var r = _recap[i]; int row = i + 2;
             ws.Cell(row, 1).Value = r.TypeId; ws.Cell(row, 2).Value = r.LengthMm / 1000.0; ws.Cell(row, 3).Value = r.Exited;
-            ws.Cell(row, 4).Value = Math.Round(r.TonnesTotal, 3); ws.Cell(row, 5).Value = Math.Round(r.TimeS, 1);
+            if (r.SteadyFrom is int sf) ws.Cell(row, 4).Value = sf;
+            if (r.SteadyFromS is double ts) ws.Cell(row, 5).Value = Math.Round(ts, 1);
             if (r.CycleS is double cs) ws.Cell(row, 6).Value = Math.Round(cs, 2);
             if (r.Tph is double tp) { ws.Cell(row, 7).Value = Math.Round(tp, 2); if (goal > 0) ws.Cell(row, 9).Value = Math.Round(tp - goal, 2); }
             if (goal > 0) ws.Cell(row, 8).Value = Math.Round(goal, 2);
@@ -1067,7 +1101,39 @@
     // Selezione, aggiunta ed eliminazione dalla vista 2D
     private string _selK = "", _selId = "";
 
-    private string Sel(string kind, string id) => _selK == kind && _selId == id ? " sel" : "";
+    private string Sel(string kind, string id) => (_selK == kind && _selId == id) || (_fam.Length > 0 && _fam == kind) ? " sel" : "";
+
+    // ---- famiglie: si seleziona tutta la famiglia e si aprono le sue proprietà (valgono per tutti i figli non personalizzati)
+    private string _fam = "";
+    private static readonly (string Key, string Label)[] Families =
+        { ("sezione", "Vie a rulli"), ("strapper", "Legatrici"), ("photocell", "Fotocellule"), ("scale", "Bilici") };
+
+    private int FamilyCount(string key) => key switch
+    {
+        "sezione" => Work.Sections.Count(x => x.IsEnabled),
+        "strapper" => Work.Strappers.Count(x => x.IsEnabled),
+        "photocell" => Work.Photocells.Count(x => x.IsEnabled),
+        "scale" => Work.Scales.Count(x => x.IsEnabled),
+        _ => 0
+    };
+
+    private object? FamilyModel => _fam switch
+    {
+        "sezione" => Work.SectionDefaults,
+        "strapper" => Work.StrapperDefaults,
+        "photocell" => Work.PhotocellDefaults,
+        "scale" => Work.ScaleDefaults,
+        _ => null
+    };
+
+    private void OpenFamily(string key) { _fam = key; _selK = ""; _selId = ""; _propOpen = true; }
+
+    // ---- fotocellule: acronimo FC e numero progressivo lungo la linea, da FC0 (ingresso); stessi nomi nel disegno, nella tabella e nella finestra
+    private string FcName(PhotocellConfig pc)
+    {
+        int i = Work.Photocells.Where(x => x.IsEnabled).OrderBy(x => x.PositionMm).ToList().IndexOf(pc);
+        return i < 0 ? pc.Id : "FC" + i;
+    }
 
     private object? SelectedComp => _selK switch
     {
@@ -1118,12 +1184,14 @@
 
     private void AddComp(string addKey)
     {
-        var added = ProjectEditing.Add(Work, addKey);
+        bool sma = addKey == "strapper-sma";   // Reggettatrice: legatrice a reggia (SMA), con i suoi tempi fuori dalla famiglia
+        var added = ProjectEditing.Add(Work, sma ? "strapper" : addKey);
         if (added == null)
         {
-            _msg = addKey == "strapper" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto.";
+            _msg = addKey is "strapper" or "strapper-sma" ? $"Al massimo {LineProject.MaxStrappers} legatrici." : "Componente non aggiunto.";
             return;
         }
+        if (sma && added is StrapperConfig st) { st.OverrideGroup = true; st.MachineType = StrapperMachineType.SMA; }
         ProjectEditing.Normalize(Work);
         _msg = "";
         OnViewManaged(added);
@@ -1142,7 +1210,7 @@
         OnViewManaged(null);
     }
 
-    private void CloseProp() { _propOpen = false; _selK = ""; _selId = ""; }
+    private void CloseProp() { _propOpen = false; _selK = ""; _selId = ""; _fam = ""; }
 
     private void OnPropChanged()
     {
@@ -1150,8 +1218,10 @@
         OnConfigChanged();
     }
 
-    private static string CompTitle(object m) => m switch
+    private string CompTitle(object m) => m switch
     {
+        PhotocellConfig pc => $"{FcName(pc)} · {PhotocellAudit.Role(pc)}",
+        StrapperConfig { MachineType: StrapperMachineType.SMA } st => $"{st.Id} · Reggettatrice",
         BundleClampConfig => "Stringifascio",
         SideCompactorConfig => "Compattatore laterale",
         RejectorConfig => "Rigettatrice",
@@ -1170,6 +1240,24 @@
         _selK = ""; _selId = ""; _propOpen = false;
         _edited = true;
         Check();
+    }
+
+    /// <summary>Descrizione del caso scelto in "Parti da": cosa rappresenta.</summary>
+    private string ModelText => _model switch
+    {
+        -1 => "Carichi un progetto salvato (.json) e continui da dove eri rimasto.",
+        -2 => "Parte da una sola legatrice: scegli quante legatrici, il pacco più lungo e le misure, poi crea il layout.",
+        int k when k >= 0 && k < SampleProjects.All.Count => SampleText(SampleProjects.All[k].Name),
+        _ => ""
+    };
+
+    private static string SampleText(string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(name, @"^(\d+) legatric[ei] - pacchi ([\d/]+) m$");
+        if (!m.Success) return name;
+        int n = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+        var l = m.Groups[2].Value.Split('/');
+        return $"Linea con {n} {(n == 1 ? "legatrice" : "legatrici")}, per pacchi da {l[0]} a {l[^1]} m.";
     }
 
     private string NameShown => _nameTouched && !string.IsNullOrWhiteSpace(Work.Name) ? Work.Name : "Senza nome";
@@ -1200,7 +1288,7 @@
     [JSInvokable]
     public void SelectComponent(string kind, string id)
     {
-        _selK = kind; _selId = id;
+        _selK = kind; _selId = id; _fam = "";
         _propOpen = true;
         StateHasChanged();
     }
@@ -1258,7 +1346,7 @@
     private DateTime _lastRes = DateTime.MinValue;
     private const double WarmupS = 180, RecordWindowS = 300;
     private double _progress;
-    private string _simCount = "20";
+    private int _runCount;
     private string? _uploaded, _uploadedName;
     private readonly List<string> _errors = new();
     private List<string> _changes = new();
@@ -1499,24 +1587,13 @@
         }
     }
 
-    private LineProject BuildProject()
+    private LineProject BuildProject(int packages)
     {
         var p = ProjectSerializer.Clone(Work);
         p.Infeed.TypeSequence = new List<string> { SimType };
-        if (_simCount == "continua")
-        {
-            // simulazione continua: i pacchi entrano senza fine; il ciclogramma tiene gli ultimi 5 minuti
-            p.Infeed.PackageCount = 1_000_000;
-            p.Infeed.Continuous = true;
-            p.Simulation.MaxSimulationTimeS = 1e9;
-            p.Simulation.RecordWindowS = RecordWindowS;
-        }
-        else
-        {
-            p.Infeed.PackageCount = int.Parse(_simCount, CultureInfo.InvariantCulture);
-            p.Infeed.Continuous = false;
-            p.Simulation.RecordWindowS = 0;
-        }
+        p.Infeed.PackageCount = packages;
+        p.Infeed.Continuous = false;
+        p.Simulation.RecordWindowS = 0;
         return p;
     }
 
@@ -1531,42 +1608,41 @@
         await Task.Delay(30);
         try
         {
-            var p = BuildProject();
-            var fix = ProjectAutoFix.Run(p);
-            var e = new SimulationEngine(p);
-            _changes = fix.Messages.Concat(e.Preparation.Changes).Distinct().ToList();
-            _errors.AddRange(fix.Errors);
-            _errors.AddRange(e.Preparation.Errors);
-            _errors.AddRange(e.Validation.Errors.Select(i => i.Message));
-            if (_errors.Count > 0)
+            // il simulatore decide quanti pacchi: si raddoppia finché la linea va a regime (SteadyStateRun)
+            LineProject p = null!;
+            SimulationEngine e = null!;
+            var counts = SteadyStateRun.PackageCounts;
+            for (int a = 0; a < counts.Count; a++)
             {
-                var distinct = _errors.Distinct().ToList();
-                _errors.Clear(); _errors.AddRange(distinct);
-                return;
-            }
-            int n = 0;
-            if (_simCount == "continua")
-            {
-                while (e.Time < WarmupS && e.Step())
+                int total = counts[a];
+                _runCount = total;
+                p = BuildProject(total);
+                var fix = ProjectAutoFix.Run(p);
+                e = new SimulationEngine(p);
+                if (a == 0)
                 {
-                    if (++n % 2000 != 0) continue;
-                    _progress = Math.Min(0.98, e.Time / WarmupS);
-                    StateHasChanged();
-                    await Task.Delay(1);
+                    _changes = fix.Messages.Concat(e.Preparation.Changes).Distinct().ToList();
+                    _errors.AddRange(fix.Errors);
+                    _errors.AddRange(e.Preparation.Errors);
+                    _errors.AddRange(e.Validation.Errors.Select(i => i.Message));
+                    if (_errors.Count > 0)
+                    {
+                        var distinct = _errors.Distinct().ToList();
+                        _errors.Clear(); _errors.AddRange(distinct);
+                        return;
+                    }
                 }
-            }
-            else
-            {
-                int total = int.Parse(_simCount, CultureInfo.InvariantCulture);
+                int n = 0;
                 while (e.Step())
                 {
                     if (++n % 2000 != 0) continue;
-                    _progress = Math.Min(0.98, e.Packages.Count(k => k.ExitTimeS.HasValue) / (double)Math.Max(1, total));
+                    _progress = Math.Min(0.98, (a + e.Packages.Count(k => k.ExitTimeS.HasValue) / (double)Math.Max(1, total)) / counts.Count);
                     StateHasChanged();
                     await Task.Delay(1);
                 }
+                _res = e.ComputeResults();
+                if (SteadyStateRun.Reached(_res)) break;
             }
-            _res = e.ComputeResults();
             _events = e.Events.Where(x => x.Severity != EventSeverity.Trace).ToList();
             _evIdx = e.Events.Count;
             _lastRes = DateTime.UtcNow;
