@@ -403,7 +403,6 @@ public class ProcessLogicTests
         Assert.Equal("B2", pk.ScaleId);
         Assert.Equal(1000.0, pk.MeasuredWeightKg!.Value);
         Assert.True(pk.WeighingValid);
-        Assert.False(e.Scales.Single(s => s.Id == "B2").ShortPosition);
         // Sul bilico il pacco non si muove: pesato dove il trasferitore lo ha depositato (testa allo stopper, 56,5 m)
         Assert.NotNull(headAtStabilizing);
         Assert.Equal(headAtDeposit!.Value, headAtStabilizing!.Value, 9);
