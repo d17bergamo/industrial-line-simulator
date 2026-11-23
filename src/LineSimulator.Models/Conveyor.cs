@@ -95,13 +95,6 @@ public sealed class RollerSection : ComponentBase, IGroupChild
     public bool FollowsStrapping { get; set; }
 
     /// <summary>
-    /// B9 (decisione dell'utente, 2026-11-23): parte dello svincolo che non serve alla legatura di coda, ricavata dal programma
-    /// dal modulo con i motori commutabili. Ha il suo inverter e non segue mai la legatura; il programma la riunisce e la
-    /// ricalcola quando cambiano pacchi o lunghezze.
-    /// </summary>
-    public bool SwitchRest { get; set; }
-
-    /// <summary>
     /// Svincolo unito all'inverter di legatura (un inverter in meno). Di default lo svincolo ha l'inverter dedicato
     /// (regola dell'utente del 2026-11-13); l'unione la propone l'ottimizzatore quando la linea supera l'obiettivo di oltre il 25%.
     /// </summary>
