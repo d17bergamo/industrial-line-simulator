@@ -330,9 +330,10 @@ public static class ControlLogicGenerator
                 rules.Add(new ControlRule($"{b.Id}.PESATURA", "Bilici", $"DEV({b.Id},PositionCheck)", $"PESATURA: stabilizzazione {F(b.StabilizationTimeS)} s + acquisizione {F(b.AcquisitionTimeS)} s", b.Id,
                     "Il pacco resta sul bilico finché il trasferitore non lo porta via con il ciclo successivo.").K("PESA"));
             if (acc)
-                rules.Add(new ControlRule($"{p.AccumulationTransfer.Id}.PASSO", gt, $"DEV({p.Transfer.Id},Depositing) fronte di discesa con pacco dal bilico",
+                rules.Add(new ControlRule($"{p.AccumulationTransfer.Id}.PASSO", gt, $"DEV({p.Transfer.Id},Depositing) & SIG({p.Transfer.Id}_DEPOSITO_DAL_BILICO)",
                     $"AVANZA di larghezza pacco + {F(p.AccumulationTransfer.StepGapMm, "0")} mm a {F(p.AccumulationTransfer.StepSpeed)} m/s", p.AccumulationTransfer.Id,
                     $"Libera il punto di deposito; i pacchi che arrivano in fondo ({F(p.AccumulationTransfer.WidthMm, "0")} mm) vengono scaricati."));
+            if (acc) signals.Add(new ControlSignal($"{p.Transfer.Id}_DEPOSITO_DAL_BILICO", "Fronte di discesa del deposito con un pacco portato via dal bilico."));
         }
         else if (scales.Count > 0)
         {
