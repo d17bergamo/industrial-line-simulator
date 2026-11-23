@@ -102,8 +102,6 @@ public sealed class PackageRuntime
     internal bool InfeedReleased = true;
     /// <summary>Istante in cui la coda ha liberato la fotocellula di ingresso della via rulli di legatura.</summary>
     internal double? EntryClearedTimeS;
-    /// <summary>Il pacco è stato creato e attende a monte della via rulli di legatura.</summary>
-    public bool WaitingAtInfeed => !InfeedReleased;
 
     public bool InStopperContact { get; internal set; }
     public bool IsSlipping { get; internal set; }

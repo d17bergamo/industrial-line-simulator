@@ -107,9 +107,11 @@ public static class FunctionalSpecExporter
         foreach (var line in new[]
         {
             "Il pacco viene identificato dalla fotocellula di ingresso (fronte di salita) e ne viene misurata la lunghezza (fronte di discesa).",
+            "Ingresso un pacco alla volta: il pacco fermo sulla fotocellula di ingresso parte quando il precedente è legato e la sua coda ha liberato la fotocellula di uscita legatura e il primo rullo dello svincolo (che è sull'inverter della via di legatura).",
+            "All'avvio tutte le vie a rulli con arresto automatico sono vuote e ferme: si accendono solo quando arriva il pacco.",
             "Ogni inverter si spegne quando i suoi rulli hanno compiuto una corsa pari alla lunghezza della zona senza che le sue fotocellule rilevino pacchi; riparte quando la fotocellula a monte rileva l'arrivo di un pacco.",
             "Accumulo: una zona si ferma quando la sua fotocellula di accumulo è occupata e la zona a valle non dà il consenso; lo spazio di arresto (tempo di risposta + frenatura) è verificato dentro la zona.",
-            $"Con il trasferitore sollevato il materiale si ferma sulla fotocellula di arresto posta {N(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore (almeno 2 m, o lo spazio per fermarsi dalla velocità massima) e riparte a trasferitore abbassato."
+            $"Il materiale si ferma sulla fotocellula di arresto posta {N(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore (almeno 2 m, o lo spazio per fermarsi dalla velocità massima) finché il trasferitore non è a riposo (anche in abbassamento, deposito e ritorno), con l'area del trasferitore occupata e, in double banking, finché il primo pacco non è intestato; riparte con il trasferitore a riposo e un posto libero."
         }) body.Append(Bullet(line));
 
         if (p.StrappingStation.IsEnabled && topo.StrappingZone != null)
@@ -133,44 +135,40 @@ public static class FunctionalSpecExporter
         }
 
         foreach (var m in p.Sections.Where(x => x.FollowsStrapping).OrderBy(x => x.StartMm))
-            body.Append(Bullet($"Svincolo {m.Id} ({N(m.LengthMm, "0")} mm) con motori commutabili: inverter proprio; mentre il pacco in legatura lo impegna per le legature di coda i motori sono commutati sull'inverter della via di legatura; altrimenti porta via il pacco già legato. Se la fermata successiva porterebbe la testa sullo svincolo ancora occupato dal pacco precedente, la legatura attende che sia libero."));
+            body.Append(Bullet(m == LayoutRules.TransferModule(p)
+                ? $"Via del trasferitore {m.Id} con motori commutabili: durante una legatura di coda che porta la testa del pacco sulla via, i motori sono commutati sulla legatura quando la testa copre la fotocellula d'ingresso; se manca il consenso (trasferitore a riposo e via davanti libera) la legatura si ferma alla fotocellula e riparte al consenso, e il trasferitore non solleva finché il pacco è in legatura sulla sua via."
+                : $"Svincolo {m.Id} ({N(m.LengthMm, "0")} mm) con motori commutabili: inverter proprio; mentre il pacco in legatura lo impegna per le legature di coda i motori sono commutati sull'inverter della via di legatura; altrimenti porta via il pacco già legato. Se la fermata successiva porterebbe la testa sullo svincolo ancora occupato dal pacco precedente, la legatura attende che sia libero."));
         body.Append(Para("3.3 Accumulo sul trasferitore: single e double banking", "Heading2"));
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
-        double safety = p.Simulation.MinSafetyDistanceMm;
         bool tailMode = BankingOptions.ForSimulation(p).Heading == StopReference.Tail && stops.Count > 0;
         bool dblMode = BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking;
-        bool virtualSecond = dblMode && stops.Count == 0;
         body.Append(Para($"Impostazione della simulazione: {(dblMode ? "double banking" : "single banking")}, intestatura di {(tailMode ? "coda" : "testa")}." +
             (tailMode ? " Intestatura di coda: il pacco supera il fermo scomparente abbassato di un'extra corsa, il fermo si solleva dietro la coda e il pacco torna indietro fino alla battuta." : "")));
-        string HeadText(IntermediateStopConfig s) => tailMode ? $"{s.Id}, intestatura di coda" : $"{s.Id}, intestatura di testa";
-        double HeadAt(IntermediateStopConfig s, PackageType t) => tailMode ? s.PositionMm + t.LengthMm : s.PositionMm;
-        double Reach(IntermediateStopConfig s, PackageType t) => HeadAt(s, t) + (tailMode ? s.TailOvershootMm : 0);
+        // B7: banking e intestatura per tipologia dal calcolo unico del Core (stessa scelta della tabella dei pacchi e del motore)
         foreach (var t in p.PackageTypes)
         {
-            if (virtualSecond)
-            {
-                bool fits = BankingOptions.TwoFitWithoutStop(p, t.LengthMm);
-                body.Append(Bullet(fits
-                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking senza fermo scomparente. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo è fermato per posizionamento (encoder) {N(p.Transfer.DoubleBankingGapMm, "0")} mm dietro al primo. Il trasferitore preleva i due pacchi insieme."
-                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (due pacchi non stanno sul trasferitore). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
-            }
-            else if (dblMode)
-            {
-                bool dbl = stops.Any(s => HeadAt(s, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(s, t) <= p.Stopper.PositionMm - t.LengthMm - safety + 1);
-                body.Append(Bullet(dbl
-                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): double banking. Il primo pacco va in fondo e si intesta di testa sullo stopper; il secondo si ferma sul fermo scomparente ({string.Join(", ", stops.Select(HeadText))}). Il trasferitore preleva i due pacchi insieme."
-                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking (double banking non possibile per lunghezza). Il pacco va in fondo, di testa sullo stopper, e il trasferitore lo preleva da solo."));
-            }
-            else if (tailMode)
-            {
-                var s = stops.FirstOrDefault(x => HeadAt(x, t) - t.LengthMm >= p.Transfer.PositionMm - 1 && Reach(x, t) <= p.Stopper.PositionMm + 1);
-                body.Append(Bullet(s != null
-                    ? $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking, intestatura di coda sul fermo {s.Id} ({N(s.PositionMm, "0")} mm); il trasferitore preleva un pacco per ciclo."
-                    : $"{t.Id} ({N(t.LengthMm, "0")} mm): single banking; intestatura di coda non possibile per lunghezza, il pacco si intesta di testa sullo stopper."));
-            }
+            var b = BankingOptions.Banking(p, t);
+            var h = BankingOptions.Heading(p, t);
+            string head = h == StopReference.Tail ? "intestatura di coda" : "intestatura di testa";
+            if (b == AccumulationMode.DoubleBanking)
+                body.Append(Bullet($"{t.Id} ({N(t.LengthMm, "0")} mm): double banking, {head} per il secondo pacco. Il primo pacco va in fondo e si intesta di testa sul fermo finale; il secondo " +
+                    (stops.Count > 0 ? $"si ferma sul fermo scomparente ({string.Join(", ", stops.Select(x => x.Id))})" : $"è fermato per posizionamento (encoder) {N(p.Transfer.DoubleBankingGapMm, "0")} mm dietro al primo") +
+                    " e aspetta alla fotocellula finché il primo non è intestato. I pacchi partono sempre a coppia; il trasferitore li preleva insieme."));
             else
-                body.Append(Bullet($"{t.Id} ({N(t.LengthMm, "0")} mm): single banking. Il pacco va in fondo e si intesta di testa sullo stopper; il trasferitore lo preleva da solo."));
+                body.Append(Bullet($"{t.Id} ({N(t.LengthMm, "0")} mm): single banking, {head}" +
+                    (h == StopReference.Tail ? (stops.Count > 0 ? $" sul fermo {stops[0].Id}" : " per posizionamento (encoder, senza fermo)") : " sul fermo finale") +
+                    "; il trasferitore preleva un pacco per ciclo." +
+                    (BankingOptions.ChosenBanking(p, t) == AccumulationMode.DoubleBanking && BankingOptions.DoubleBankingBlockReason(p, t) is { } why ? $" Double banking scelto ma non possibile: {why}." : "")));
         }
+        double splitMm = TransferSplitRule.SplitMm(p);
+        if (splitMm > 0 && topo.StopperZone is { } sz)
+            body.Append(Bullet($"Via del trasferitore su due inverter: {TransferSplitRule.MonteId(sz.Id)} a monte (secondo pacco) e {TransferSplitRule.ValleId(sz.Id)} a valle (primo pacco), divisi a {N(splitMm, "0")} mm; il trasferitore sollevabile ha il doppio comando diviso nello stesso punto. Finché nessun pacco è fermo a valle i due inverter hanno lo stesso comando."));
+        else if (topo.StopperZone != null)
+            body.Append(Bullet("Tutti i pacchi in single banking: la via del trasferitore ha un solo inverter."));
+        if (p.Scales.Any(s => s.IsEnabled) && p.Transfer.Kind == TransferKind.Lifting)
+            body.Append(Bullet("Due pacchi sullo stesso bilico: pesata in due tempi. Prima si abbassa la metà a monte e si pesa il primo pacco, poi si abbassa la metà a valle e si pesa il totale; il peso del secondo è la differenza."));
+        if (p.Rejector.IsEnabled)
+            body.Append(Bullet($"Rigettatrice {p.Rejector.Id}: identificazione, abilitazione, posizionamento nel campo di spinta, espulsione con conferma, ritorno e consenso alla ripartenza; un pacco alla volta e solo con la sua zona libera."));
         if (p.Scales.Any(s => s.IsEnabled))
             body.Append(Bullet("Il trasferitore deposita i pacchi sui bilici liberi; pesatura (stabilizzazione e acquisizione), consenso a proseguire e scarico. Un pacco più lungo di un bilico è pesato su più bilici insieme."));
 

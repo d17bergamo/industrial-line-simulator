@@ -8,7 +8,12 @@ using LineSimulator.Optimization;
 namespace LineSimulator.Infrastructure;
 
 /// <summary>Regola di controllo: SE condizione (AND/OR/NOT sugli ingressi) ALLORA azione sull'uscita.</summary>
-public sealed record ControlRule(string Id, string Group, string Condition, string Action, string Target, string Description);
+public sealed record ControlRule(string Id, string Group, string Condition, string Action, string Target, string Description)
+{
+    /// <summary>Chiavi delle decisioni del motore (<c>Link</c>) descritte da questa regola: JSON, ciclogramma e motore restano allineati.</summary>
+    public List<string> EngineKeys { get; init; } = new();
+    public ControlRule K(params string[] keys) => this with { EngineKeys = EngineKeys.Concat(keys).Distinct().ToList() };
+}
 
 /// <summary>Segnale interno del controllore (contatori, consensi) con la sua definizione.</summary>
 public sealed record ControlSignal(string Name, string Definition);
@@ -65,6 +70,18 @@ public static class ControlLogicGenerator
         foreach (var e in pcs.Where(x => x.IsEntryPhotocell))
             rules.Add(new ControlRule($"{e.Id}.IDENTIFICA", "Ingresso", PC(e), "IDENTIFICA pacco (tipologia, peso; lunghezza misurata al fronte di discesa)", e.Id,
                 "La fotocellula di ingresso è il punto zero: ogni pacco viene identificato al fronte di salita."));
+        var exitPc = pcs.FirstOrDefault(x => x.Purpose == PhotocellPurpose.StrappingExit);
+        var firstRel = StrappingAreaRules.ReleaseModules(p).FirstOrDefault();
+        foreach (var e in pcs.Where(x => x.IsEntryPhotocell))
+        {
+            string cond = PC(e) + " & SIG(PRECEDENTE_LEGATO)" + (exitPc != null ? $" & !{PC(exitPc)}" : "") + (firstRel != null ? " & SIG(PRIMO_RULLO_LIBERO)" : "");
+            rules.Add(new ControlRule($"{e.Id}.INGRESSO", "Ingresso", cond, "CONSENSO d'ingresso: il pacco fermo sulla fotocellula parte verso la legatura", topo.Zones.FirstOrDefault()?.Id ?? "",
+                "Un pacco alla volta: il nuovo pacco parte quando il precedente è legato e la sua coda ha liberato la fotocellula di uscita legatura" +
+                (firstRel != null ? $" e il primo rullo dello svincolo {firstRel.Id}." : ".")).K("INGRESSO"));
+        }
+        signals.Add(new ControlSignal("PRECEDENTE_LEGATO", "Il pacco precedente ha finito l'ultima legatura (o non c'è un pacco in legatura)."));
+        if (firstRel != null)
+            signals.Add(new ControlSignal("PRIMO_RULLO_LIBERO", $"La coda del pacco precedente ha superato il primo rullo dello svincolo {firstRel.Id} ({F(StrappingAreaRules.FirstReleaseRollerMm(firstRel), "0")} mm, sull'inverter di legatura)."));
 
         // ------------------------------------------------ Inverter / zone di comando
         foreach (var z in topo.Zones)
@@ -94,10 +111,10 @@ public static class ControlLogicGenerator
                 var startTerms = (rs != null ? new[] { PC(rs) } : Array.Empty<string>()).Concat(own.Select(PC)).ToList();
                 rules.Add(new ControlRule($"{z.Id}.AVVIO", group, startTerms.Count > 0 ? string.Join(" | ", startTerms) : "TRUE", "AVVIA inverter", z.Id,
                     rs != null ? $"Ripartenza comandata dalla fotocellula a monte {rs.Id}; resta in marcia finché le fotocellule della zona vedono pacchi."
-                               : "Prima zona: avvio quando le sue fotocellule (ingresso) rilevano il pacco."));
+                               : "Prima zona: avvio quando le sue fotocellule (ingresso) rilevano il pacco.").K("AUTOSTART"));
                 string stopCond = $"SIG({empty})" + string.Concat(startTerms.Select(t => " & !" + t));
                 rules.Add(new ControlRule($"{z.Id}.ARRESTO_VUOTO", group, stopCond, "ARRESTA inverter (zona vuota)", z.Id,
-                    $"Dopo una corsa pari alla propria lunghezza ({F(z.LengthM)} m) senza pacchi sulle fotocellule l'inverter si spegne."));
+                    $"Dopo una corsa pari alla propria lunghezza ({F(z.LengthM)} m) senza pacchi sulle fotocellule l'inverter si spegne. All'avvio della simulazione la via è già vuota e ferma.").K("AUTOSTOP"));
             }
             else rules.Add(new ControlRule($"{z.Id}.AVVIO", group, "TRUE", "AVVIA inverter (marcia continua)", z.Id, "Arresto automatico disabilitato."));
 
@@ -109,13 +126,25 @@ public static class ControlLogicGenerator
             {
                 string cond = a.Activation == PhotocellActivation.WhenOccupied ? PC(a) : "!" + PC(a);
                 string act = a.Action switch { PhotocellAction.SlowDown => $"VELOCITÀ BASSA ({F(z.Inverter.LowSpeed)} m/s)", PhotocellAction.SpeedUp => $"VELOCITÀ ALTA ({F(z.Inverter.HighSpeed)} m/s)", _ => "ARRESTA inverter (interblocco)" };
-                rules.Add(new ControlRule($"{z.Id}.{a.Action.ToString().ToUpperInvariant()}_{a.Id}", group, cond, act, z.Id, a.Name));
+                var r0 = new ControlRule($"{z.Id}.{a.Action.ToString().ToUpperInvariant()}_{a.Id}", group, cond, act, z.Id, a.Name);
+                rules.Add(a.Action == PhotocellAction.SlowDown ? r0.K("RALLENTA") : r0);
             }
             foreach (var t in pcs.Where(x => x.ActsAsTransferStop && topo.ResolveZoneId(x.ControlledInverterId) == z.Id))
+            {
                 rules.Add(new ControlRule($"{z.Id}.ARRESTO_TRASFERITORE_{t.Id}", group,
-                    $"{PC(t)} & (DEV({p.Transfer.Id},Lifting) | DEV({p.Transfer.Id},Translating) | DEV({p.Transfer.Id},WaitingDestination))",
-                    "ARRESTA inverter (interblocco trasferitore sollevato)", z.Id,
-                    $"Con il trasferitore sollevato il materiale si ferma su {t.Id} ({F(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore); riparte a trasferitore abbassato."));
+                    $"{PC(t)} & (!TRANSFER_HOME | SIG(AREA_OCCUPATA) | SIG(PRIMO_NON_INTESTATO))",
+                    "ARRESTA inverter (interblocco trasferitore)", z.Id,
+                    $"Il materiale si ferma su {t.Id} ({F(ProjectNormalizer.TransferStopDistanceMm(p), "0")} mm prima del trasferitore) con il trasferitore non a riposo (sollevamento, traslazione, abbassamento, deposito e ritorno con le forche sotto la linea), con l'area del trasferitore occupata (posti presi) o, in double banking, con il primo pacco non ancora intestato.")
+                    .K("ARRESTO_TRF", "ARRESTO_AREA", "ARRESTO_PRIMO"));
+                rules.Add(new ControlRule($"{z.Id}.VIA_LIBERA_{t.Id}", group, $"{PC(t)} & TRANSFER_HOME & !SIG(AREA_OCCUPATA) & !SIG(PRIMO_NON_INTESTATO)",
+                    "AVVIA inverter (il pacco entra nell'area del trasferitore)", z.Id, "Riparte solo con il trasferitore a riposo e un posto libero.").K("VIA_LIBERA", "RIPOSO"));
+            }
+        }
+
+        if (pcs.Any(x => x.ActsAsTransferStop))
+        {
+            signals.Add(new ControlSignal("AREA_OCCUPATA", "L'area del trasferitore non ha un posto libero per il pacco in arrivo (single banking: area occupata; double banking: due posti presi)."));
+            signals.Add(new ControlSignal("PRIMO_NON_INTESTATO", "Double banking: il primo pacco della coppia non è ancora intestato sul fermo finale."));
         }
 
         // ------------------------------------------------ Regole dell'utente
@@ -141,7 +170,7 @@ public static class ControlLogicGenerator
             string notBusy = string.Join(" & ", machines.Select(m => $"!STR({m.Id})"));
             if (refPc != null)
                 rules.Add(new ControlRule($"{p.StrappingEncoder.Id}.RIFERIMENTO", g, PC(refPc), $"AZZERA conteggio encoder {p.StrappingEncoder.Id} e calcola le quote di fermata", p.StrappingEncoder.Id,
-                    "La fotocellula prima dell'encoder dà il riferimento per il posizionamento preciso del pacco."));
+                    "La fotocellula prima dell'encoder dà il riferimento per il posizionamento preciso del pacco.").K("RIFERIMENTO"));
             rules.Add(new ControlRule($"{station.Id}.POSIZIONAMENTO", g, "DEV(STATION,Positioning)", $"POSIZIONA {station.Id} alla quota encoder della fermata (profilo v = min(vmax, √(2·0,95·d·r)))", station.Id,
                 "Le quote per tipologia sono nella tabella dei piani di legatura."));
             foreach (var m in machines)
@@ -162,25 +191,25 @@ public static class ControlLogicGenerator
             if (cmp)
             {
                 rules.Add(new ControlRule($"{p.Compactor.Id}.CHIUSURA", g, $"DEV(STATION,Compacting) & !RUN({station.Id})", $"CHIUDI compattatore ({F(p.Compactor.CloseTimeS)} s + conferma)", p.Compactor.Id,
-                    "Il pacco è in posizione e la via a rulli è ferma."));
+                    "Il pacco è in posizione e la via a rulli è ferma.").K("FERMATA"));
                 signals.Add(new ControlSignal($"{p.Compactor.Id}_OK", $"{p.Compactor.Id} chiuso confermato da almeno {F(p.Compactor.HoldTimeS)} s (mantenimento)."));
             }
             if (knof)
                 rules.Add(new ControlRule($"{p.BundleClamp.Id}.CHIUSURA", g, $"DEV(STATION,Clamping) & !RUN({station.Id})" + (cmp ? $" & SIG({p.Compactor.Id}_OK)" : ""),
                     $"CHIUDI stringifascio ({F(p.BundleClamp.CloseTimeS)} s + conferma)", p.BundleClamp.Id,
                     "Deve essere chiuso prima che inizi il ciclo di legatura della legatrice o della reggettatrice." +
-                    (p.BundleClamp.PerMachine ? $" Uno stringifascio per macchina ({string.Join(", ", LayoutRules.BundleClampPositions(p).Select(x => $"{x.Id} a {F(x.PositionMm, "0")} mm"))}): si chiude solo quello con il pacco sotto (testa a valle e coda a monte dello stringifascio), gli altri restano aperti; ogni macchina lega con il proprio stringifascio chiuso." : "")));
+                    (p.BundleClamp.PerMachine ? $" Uno stringifascio per macchina ({string.Join(", ", LayoutRules.BundleClampPositions(p).Select(x => $"{x.Id} a {F(x.PositionMm, "0")} mm"))}): si chiude solo quello con il pacco sotto (testa a valle e coda a monte dello stringifascio), gli altri restano aperti; ogni macchina lega con il proprio stringifascio chiuso." : "")).K("FERMATA"));
             foreach (var m in machines)
             {
                 string cond = $"DEV({m.Id},Armed) & !RUN({station.Id}) & SIG({m.Id}_IN_FERMATA)" + (knof ? $" & DEV({p.BundleClamp.Id},Closed)" : "") +
                               (cmp && p.Compactor.OpenPhase != CompactorOpenPhase.AfterBundleClampClosed ? $" & DEV({p.Compactor.Id},Closed)" : "");
                 rules.Add(new ControlRule($"{m.Id}.AVVIO_CICLO", g, cond, $"AVVIA CICLO di {(m.MachineType == StrapperMachineType.SMA ? "reggettatura" : "legatura")} ({F(m.StrappingTimeS)} s: abbassa, lega, rialza)", m.Id,
-                    knof ? "Interblocco: senza conferma di chiusura dello stringifascio la legatura non parte." : ""));
+                    knof ? "Interblocco: senza conferma di chiusura dello stringifascio la legatura non parte." : "").K("LEGA"));
                 signals.Add(new ControlSignal($"{m.Id}_IN_FERMATA", $"Il pacco è fermo alla quota di una fermata in cui {m.Id} ha una legatura assegnata (piano di legatura)."));
             }
             if (knof)
                 rules.Add(new ControlRule($"{p.BundleClamp.Id}.APERTURA", g, $"DEV(STATION,Strapping) & {notBusy}", $"APRI stringifascio dopo {F(p.BundleClamp.HoldTimeS)} s di mantenimento ({F(p.BundleClamp.OpenTimeS)} s)", p.BundleClamp.Id,
-                    "Si apre solo dopo che il ciclo di legatura è terminato."));
+                    "Si apre solo dopo che il ciclo di legatura è terminato.").K("APRE"));
             if (cmp)
                 rules.Add(new ControlRule($"{p.Compactor.Id}.APERTURA", g,
                     p.Compactor.OpenPhase switch
@@ -188,10 +217,10 @@ public static class ControlLogicGenerator
                         CompactorOpenPhase.AfterBundleClampClosed => $"DEV({p.BundleClamp.Id},Closed)",
                         CompactorOpenPhase.AfterBundleClampOpened => $"DEV(STATION,Unclamping) & DEV({p.BundleClamp.Id},Open)",
                         _ => $"DEV(STATION,Strapping) & {notBusy}"
-                    }, $"APRI compattatore ({F(p.Compactor.OpenTimeS)} s)", p.Compactor.Id, "Si apre solo dopo che la legatrice o la reggettatrice ha finito."));
+                    }, $"APRI compattatore ({F(p.Compactor.OpenTimeS)} s)", p.Compactor.Id, "Si apre solo dopo che la legatrice o la reggettatrice ha finito.").K("APRE"));
             string release = notBusy + (knof ? $" & DEV({p.BundleClamp.Id},Open)" : "") + (cmp ? $" & DEV({p.Compactor.Id},Open)" : "");
             rules.Add(new ControlRule($"{station.Id}.RIPARTENZA", g, release, "CONSENSO alla fermata successiva o al rilascio del pacco", station.Id,
-                "Il pacco riparte solo con dispositivi aperti e macchine rialzate."));
+                "Il pacco riparte solo con dispositivi aperti e macchine rialzate.").K("PROSSIMA", "LEGATO"));
 
             foreach (var t in p.PackageTypes.Where(t => t.StrapPositionsMm.Count > 0))
             {
@@ -204,13 +233,14 @@ public static class ControlLogicGenerator
         }
 
         // ------------------------------------------------ Svincolo con motori commutabili
-        foreach (var m in p.Sections.Where(x => x.FollowsStrapping).OrderBy(x => x.StartMm))
+        var trfModule = LayoutRules.TransferModule(p);
+        foreach (var m in p.Sections.Where(x => x.FollowsStrapping && x != trfModule).OrderBy(x => x.StartMm))
         {
             string st = p.StrappingStation.InverterId;
             rules.Add(new ControlRule($"{m.Id}.COMMUTA_MOTORI", "Svincolo",
                 $"(DEV(STATION,Positioning) | DEV(STATION,Strapping) | DEV(STATION,Clamping) | DEV(STATION,Unclamping) | DEV(STATION,WaitingStrappers)) & SIG({m.Id}_PACCO_IN_LEGATURA) & !SIG({m.Id}_ALTRO_PACCO)",
                 $"COMMUTA i motori di {m.Id} sull'inverter {st} (marcia, posizionamento, arresto insieme alla via di legatura)", m.Id,
-                "Motori commutabili: inverter proprio, motori commutati sull'inverter di legatura solo mentre il pacco in legatura impegna lo svincolo per le legature di coda; altrimenti porta via il pacco già legato."));
+                "Motori commutabili: inverter proprio, motori commutati sull'inverter di legatura solo mentre il pacco in legatura impegna lo svincolo per le legature di coda; altrimenti porta via il pacco già legato.").K("COMMUTA"));
             rules.Add(new ControlRule($"{st}.ATTESA_{m.Id}", "Svincolo",
                 $"DEV(STATION,Positioning) & SIG({m.Id}_PACCO_IN_LEGATURA) & SIG({m.Id}_ALTRO_PACCO)",
                 $"ARRESTO di {st}: attesa svincolo {m.Id} libero", st, "La fermata successiva porta la testa del pacco sullo svincolo ancora occupato dal pacco precedente."));
@@ -218,27 +248,51 @@ public static class ControlLogicGenerator
             signals.Add(new ControlSignal($"{m.Id}_ALTRO_PACCO", $"Sullo svincolo {m.Id} c'è un altro pacco (già legato)."));
         }
 
+        // Legatura di coda oltre lo svincolo (B10/B11): la via del trasferitore si commuta sulla legatura alla sua fotocellula d'ingresso
+        if (trfModule != null && trfModule.FollowsStrapping && station != null)
+        {
+            string st = p.StrappingStation.InverterId, tz = topo.ResolveZoneId(trfModule.Id);
+            var entryPc = pcs.Where(x => x.ActsAsTransferStop).OrderBy(x => x.PositionMm).FirstOrDefault();
+            string atEntry = entryPc != null ? PC(entryPc) : "SIG(TESTA_ALLA_FOTOCELLULA_TRASF)";
+            rules.Add(new ControlRule($"{tz}.COMMUTA_MOTORI", "Svincolo",
+                $"DEV(STATION,Positioning) & {atEntry} & SIG(CONSENSO_TRASF_LEGATURA)",
+                $"COMMUTA i motori di {tz} sull'inverter {st} per tutta la legatura del pacco", tz,
+                "Legatura di coda che porta la testa del pacco sulla via del trasferitore: la via si commuta quando la testa copre la fotocellula d'ingresso, con il consenso del trasferitore.").K("COMMUTA"));
+            rules.Add(new ControlRule($"{st}.ATTESA_TRASFERITORE", "Svincolo",
+                $"DEV(STATION,Positioning) & {atEntry} & !SIG(CONSENSO_TRASF_LEGATURA)",
+                $"ARRESTA {st}: legatura ferma alla fotocellula d'ingresso della via del trasferitore", st,
+                "Il pacco in legatura avanza fino alla fotocellula; se manca il consenso si ferma e riparte appena arriva.").K("LEGATURA_ATTESA_TRASF"));
+            signals.Add(new ControlSignal("CONSENSO_TRASF_LEGATURA", "Trasferitore a riposo e via davanti libera; per il secondo pacco in double banking anche primo pacco intestato e metà a monte libera. Dato il consenso vale per tutta la legatura del pacco e il trasferitore non solleva."));
+        }
+
         // ------------------------------------------------ Stopper, fermi, trasferitore, bilici
         const string gt = "Accumulo e trasferitore";
         rules.Add(new ControlRule($"{p.Stopper.Id}.ALLINEAMENTO", gt, $"DEV({p.Stopper.Id},Aligning)", $"MARCIA di allineamento a {F(p.Stopper.AlignmentRollerSpeed)} m/s per {F(p.Stopper.AlignmentTimeS + p.Stopper.HeadingTimeS)} s", topo.StopperZone?.Id ?? "",
-            "Intestatura di testa contro il fermo finale."));
+            "Intestatura di testa contro il fermo finale.").K("BATTUTA"));
         bool tail = BankingOptions.ForSimulation(p).Heading == StopReference.Tail;
         bool dbl = BankingOptions.ForSimulation(p).Banking == AccumulationMode.DoubleBanking;
         var stops = p.IntermediateStops.Where(s => s.IsEnabled).OrderByDescending(s => s.PositionMm).ToList();
+        bool tailNoStop = tail && stops.Count == 0 && topo.StopperZone != null;
         if (stops.Count == 0) tail = false;
         if (!dbl && !tail) stops.Clear();   // single banking di testa: fermi scomparenti sempre abbassati
         int batch = dbl ? 2 : 1;
         if (dbl && stops.Count == 0 && topo.StopperZone != null)
             rules.Add(new ControlRule($"{p.Transfer.Id}.SECONDO_PACCO", gt, $"DEV({p.Stopper.Id},Aligned) | DEV({p.Stopper.Id},Aligning)",
                 $"POSIZIONA il secondo pacco con la testa {F(p.Transfer.DoubleBankingGapMm, "0")} mm dietro la coda del primo (encoder)", topo.StopperZone.Id,
-                "Double banking senza fermo scomparente: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.EffectiveMaxOverhangMm, "0") + " mm."));
+                "Double banking senza fermo scomparente: il secondo pacco è fermato dall'inverter con posizionamento; sbalzo massimo oltre il trasferitore " + F(p.Transfer.EffectiveMaxOverhangMm, "0") + " mm.").K("SECONDO"));
+        if (tailNoStop)
+            rules.Add(new ControlRule($"{p.Transfer.Id}.CODA_POSIZIONAMENTO", gt, $"SIG({topo.StopperZone!.Id}_PACCO_DESTINATO_CODA)",
+                "POSIZIONA il pacco con la coda sul riferimento (encoder, senza fermo)", topo.StopperZone.Id,
+                "Intestatura di coda senza fermo scomparente: posizionamento dell'inverter con la coda sul riferimento.").K("FERMO_CODA"));
+        if (tailNoStop)
+            signals.Add(new ControlSignal($"{topo.StopperZone!.Id}_PACCO_DESTINATO_CODA", "Il pacco in arrivo è destinato all'intestatura di coda (scelta per tipologia)."));
         foreach (var s in stops)
         {
             if (tail)
             {
                 rules.Add(new ControlRule($"{s.Id}.OLTRE", gt, $"DEV({s.Id},Positioning)",
                     $"POSIZIONA il pacco con la coda {F(s.TailOvershootMm, "0")} mm oltre il fermo (encoder)", topo.StopperZone?.Id ?? "",
-                    "Intestatura di coda: il pacco supera il fermo abbassato."));
+                    "Intestatura di coda: il pacco supera il fermo abbassato.").K(dbl ? "SECONDO" : "FERMO_CODA"));
                 rules.Add(new ControlRule($"{s.Id}.SOLLEVA", gt, $"(DEV({s.Id},Returning) | DEV({s.Id},Aligning) | DEV({s.Id},Aligned)) & !SIG({s.Id}_PACCO_SOPRA)",
                     "SOLLEVA fermo scomparente (intestatura di coda)", s.Id,
                     $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva dietro la coda del pacco, solo se nessun pacco è sopra il fermo."));
@@ -249,7 +303,7 @@ public static class ControlLogicGenerator
             else
                 rules.Add(new ControlRule($"{s.Id}.SOLLEVA", gt, $"(DEV({s.Id},Assigned) | DEV({s.Id},Positioning) | DEV({s.Id},Aligning) | DEV({s.Id},Aligned)) & !SIG({s.Id}_PACCO_SOPRA)",
                     "SOLLEVA fermo scomparente (intestatura di testa)", s.Id,
-                    $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva solo se nessun pacco è sopra il fermo."));
+                    $"Riferimento a {F(s.PositionMm, "0")} mm; si solleva solo se nessun pacco è sopra il fermo. Un pacco non assegnato che arriva sul fermo sollevato è una collisione.").K("SECONDO"));
             signals.Add(new ControlSignal($"{s.Id}_PACCO_SOPRA", $"Un pacco occupa la posizione del fermo {s.Id} ({F(s.PositionMm, "0")} mm)."));
             rules.Add(new ControlRule($"{s.Id}.ABBASSA", gt, $"DEV({p.Transfer.Id},Lifting)", "ABBASSA fermo scomparente", s.Id, "Il trasferitore preleva i pacchi allineati."));
         }
@@ -259,7 +313,7 @@ public static class ControlLogicGenerator
         rules.Add(new ControlRule($"{p.Transfer.Id}.SOLLEVA", gt, aligned + $" & SIG({p.Transfer.Id}_GRUPPO_COMPLETO)",
             $"SOLLEVA trasferitore e trasla ({F(p.Transfer.LiftTimeS)} s + {F(p.Transfer.EffectiveTranslationTimeS)} s)", p.Transfer.Id,
             dbl ? $"Double banking: i pacchi partono sempre a coppia; uno solo aspetta il compagno e parte da solo solo se in ingresso non arriva materiale per {F(p.Transfer.BatchWaitTimeoutS)} s."
-                  : $"Single banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s."));
+                  : $"Single banking: fino a {batch} pacchi per ciclo; attesa massima del gruppo {F(p.Transfer.BatchWaitTimeoutS)} s.").K("SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO"));
         signals.Add(new ControlSignal($"{p.Transfer.Id}_GRUPPO_COMPLETO", $"Pacchi allineati = {batch}, oppure il pacco successivo non può entrare, oppure attesa scaduta."));
         var scales = p.Scales.Where(s => s.IsEnabled).OrderBy(s => s.StartMm).ToList();
         if (scales.Count > 0 && p.Transfer.ScaleAtMidStroke && p.Transfer.Kind == TransferKind.Lifting)
@@ -270,11 +324,11 @@ public static class ControlLogicGenerator
             rules.Add(new ControlRule($"{p.Transfer.Id}.CICLO_DUE_PRESE", gt,
                 $"TRANSFER_HOME & !({weighing})" + (acc ? $" & !RUN({p.AccumulationTransfer.Id})" : "") + $" & (SIG({p.Transfer.Id}_GRUPPO_COMPLETO) | SIG({p.Transfer.Id}_PESATO_DA_SCARICARE))",
                 $"SOLLEVA, AVANZA di mezza corsa ({F(p.Transfer.TranslationStrokeMm / 2, "0")} mm, {F(p.Transfer.EffectiveTranslationTimeS / 2)} s), ABBASSA e deposita, poi TORNA", p.Transfer.Id,
-                $"Il pacco della via rulli va sul bilico a metà corsa; il pacco già pesato va dal bilico {(acc ? "al trasferitore d'accumulo" : "alla stazione successiva")}. Al primo ciclo solo la via rulli; il pacco pesato parte da solo solo se sulla via rulli non ci sono più pacchi."));
+                $"Il pacco della via rulli va sul bilico a metà corsa; il pacco già pesato va dal bilico {(acc ? "al trasferitore d'accumulo" : "alla stazione successiva")}. Al primo ciclo solo la via rulli; il pacco pesato parte da solo solo se sulla via rulli non ci sono più pacchi.").K("SOLLEVA", "SOLLEVA_2", "SOLLEVA_BILICO"));
             signals.Add(new ControlSignal($"{p.Transfer.Id}_PESATO_DA_SCARICARE", "Sul bilico c'è un pacco con la pesatura completata e sulla via rulli non ci sono più pacchi."));
             foreach (var b in scales)
                 rules.Add(new ControlRule($"{b.Id}.PESATURA", "Bilici", $"DEV({b.Id},PositionCheck)", $"PESATURA: stabilizzazione {F(b.StabilizationTimeS)} s + acquisizione {F(b.AcquisitionTimeS)} s", b.Id,
-                    "Il pacco resta sul bilico finché il trasferitore non lo porta via con il ciclo successivo."));
+                    "Il pacco resta sul bilico finché il trasferitore non lo porta via con il ciclo successivo.").K("PESA"));
             if (acc)
                 rules.Add(new ControlRule($"{p.AccumulationTransfer.Id}.PASSO", gt, $"DEV({p.Transfer.Id},Depositing) fronte di discesa con pacco dal bilico",
                     $"AVANZA di larghezza pacco + {F(p.AccumulationTransfer.StepGapMm, "0")} mm a {F(p.AccumulationTransfer.StepSpeed)} m/s", p.AccumulationTransfer.Id,
@@ -287,9 +341,36 @@ public static class ControlLogicGenerator
             foreach (var b in scales)
             {
                 rules.Add(new ControlRule($"{b.Id}.PESATURA", "Bilici", $"DEV({b.Id},PositionCheck)", $"PESATURA: stabilizzazione {F(b.StabilizationTimeS)} s + acquisizione {F(b.AcquisitionTimeS)} s", b.Id,
-                    $"Pacchi corti (≤ {F(b.ShortPackageMaxLengthMm, "0")} mm) in posizione intermedia."));
+                    $"Pacchi corti (≤ {F(b.ShortPackageMaxLengthMm, "0")} mm) in posizione intermedia.").K("PESA"));
                 rules.Add(new ControlRule($"{b.Id}.SCARICO", "Bilici", $"DEV({b.Id},Completed)", $"CONSENSO a proseguire e scarico ({F(b.ReleaseTimeS)} s)", b.Id, ""));
             }
+        }
+
+        // Pesata in due tempi (B3): due pacchi sullo stesso bilico, il secondo pesato per differenza
+        if (scales.Count > 0 && p.Transfer.Kind == TransferKind.Lifting)
+        {
+            rules.Add(new ControlRule($"{p.Transfer.Id}.PESA_MONTE", "Bilici", $"SIG({p.Transfer.Id}_DUE_PACCHI_STESSO_BILICO) & DEV({p.Transfer.Id},Translating)",
+                "ABBASSA solo la metà a monte e PESA il primo pacco", p.Transfer.Id,
+                "Trasferitore a doppio comando: con due pacchi sullo stesso bilico prima si deposita il pacco a monte e si pesa da solo."));
+            rules.Add(new ControlRule($"{p.Transfer.Id}.PESA_DIFF", "Bilici", $"SIG({p.Transfer.Id}_DUE_PACCHI_STESSO_BILICO) & SIG(PESO_MONTE_ACQUISITO)",
+                "ABBASSA la metà a valle: pesata del totale, peso del secondo = totale − primo", p.Transfer.Id,
+                "Seconda pesata per differenza.").K("PESA_DIFF"));
+            signals.Add(new ControlSignal($"{p.Transfer.Id}_DUE_PACCHI_STESSO_BILICO", "I due pacchi della coppia vanno sullo stesso bilico."));
+            signals.Add(new ControlSignal("PESO_MONTE_ACQUISITO", "Peso del pacco a monte acquisito dal bilico."));
+        }
+        if (p.Rejector.IsEnabled && topo.ZoneAt((p.Rejector.PositionMm + p.Rejector.LengthMm / 2) / 1000.0) is { } rzi)
+        {
+            var rj = p.Rejector;
+            string rz = rzi.Id;
+            const string gr = "Rigettatrice";
+            rules.Add(new ControlRule($"{rj.Id}.ABILITA", gr, $"SIG({rj.Id}_DA_RIGETTARE) & !DEV({rj.Id},Ejecting) & !ZONE({rz})", "ABILITA rigetto del pacco", rj.Id,
+                "Pacco da rigettare identificato all'ingresso (numero progressivo o tipologia); un pacco alla volta, con la sua zona libera."));
+            rules.Add(new ControlRule($"{rj.Id}.POSIZIONA", gr, $"DEV({rj.Id},Enabled)", $"POSIZIONA il pacco nel campo di spinta ({F(rj.PositionMm, "0")}-{F(rj.PositionMm + rj.LengthMm, "0")} mm, tolleranza {F(rj.PositionToleranceMm, "0")} mm)", rz, ""));
+            rules.Add(new ControlRule($"{rj.Id}.ESPELLI", gr, $"DEV({rj.Id},InPosition) & !RUN({rz})", $"ESPELLI ({F(rj.EjectTimeS)} s, corsa {F(rj.StrokeMm, "0")} mm) e conferma", rj.Id, ""));
+            rules.Add(new ControlRule($"{rj.Id}.RITORNO", gr, $"DEV({rj.Id},Ejecting) & SIG({rj.Id}_ESPULSO)", $"RITORNO ({F(rj.ReturnTimeS)} s)", rj.Id, ""));
+            rules.Add(new ControlRule($"{rj.Id}.CONSENSO", gr, $"DEV({rj.Id},RestartConsent)", $"CONSENSO alla ripartenza della linea dopo {F(rj.RestartDelayS)} s", rz, ""));
+            signals.Add(new ControlSignal($"{rj.Id}_DA_RIGETTARE", "Il pacco identificato è nell'elenco dei pacchi o delle tipologie da rigettare."));
+            signals.Add(new ControlSignal($"{rj.Id}_ESPULSO", "Conferma di fine espulsione."));
         }
 
         // ------------------------------------------------ Ingressi/uscite
@@ -319,6 +400,18 @@ public static class ControlLogicGenerator
             string.Join(", ", rules.Where(r => r.Target == z.Id && (r.Action.StartsWith("AVVIA", StringComparison.Ordinal) || r.Action.StartsWith("VELOCITÀ", StringComparison.Ordinal) || r.Action.StartsWith("POSIZIONA", StringComparison.Ordinal) || r.Action.StartsWith("MARCIA", StringComparison.Ordinal))).Select(r => r.Id)),
             string.Join(", ", rules.Where(r => r.Target == z.Id && r.Action.StartsWith("ARRESTA", StringComparison.Ordinal)).Select(r => r.Id)))).ToList();
 
+        // Primo rullo dello svincolo sull'inverter della via di legatura
+        if (firstRel != null && topo.StrappingZone is { } szn)
+        {
+            double roll = StrappingAreaRules.FirstReleaseRollerMm(firstRel);
+            int a = invRows.FindIndex(r => r.Id == szn.Id), b = invRows.FindIndex(r => r.Id == topo.ResolveZoneId(firstRel.Id));
+            if (a >= 0 && b >= 0 && a != b && roll > 0 && roll < firstRel.LengthMm)
+            {
+                invRows[a] = invRows[a] with { Modules = invRows[a].Modules + $" + primo rullo di {firstRel.Id} ({F(roll, "0")} mm)", EndMm = invRows[a].EndMm + roll, LengthM = invRows[a].LengthM + roll / 1000.0 };
+                invRows[b] = invRows[b] with { StartMm = invRows[b].StartMm + roll, LengthM = invRows[b].LengthM - roll / 1000.0 };
+            }
+        }
+
         // Via del trasferitore su due inverter (double banking): la monte ha il suffisso "A", la valle "B" (es. M3A e M3B)
         double splitMm = TransferSplitRule.SplitMm(p);
         if (splitMm > 0 && topo.StopperZone is { } sz)
@@ -329,7 +422,7 @@ public static class ControlLogicGenerator
             rules.Add(new ControlRule($"{up}.INSIEME", grp, $"!SIG({held})", $"STESSO COMANDO di {down}", up,
                 "Finché nessun pacco è fermo a valle i due inverter hanno lo stesso comando: un pacco può stare a cavallo del punto di divisione."));
             rules.Add(new ControlRule($"{down}.FERMO_IN_BATTUTA", grp, $"SIG({held})", "ARRESTA inverter (fino al prelievo)", down,
-                "Il primo pacco resta fermo in battuta: nessun rullo gira sotto di lui."));
+                "Il primo pacco resta fermo in battuta: nessun rullo gira sotto di lui.").K("VALLE_FERMA"));
             rules.Add(new ControlRule($"{up}.SECONDO_PACCO", grp, $"SIG({held})", $"COMANDI DELLA VIA solo su {up}: ingresso, posizionamento e intestatura del secondo pacco", up,
                 "Il secondo pacco si posiziona e si intesta muovendo solo la parte di monte."));
             int k = invRows.FindIndex(r => r.Id == sz.Id);
@@ -357,6 +450,8 @@ public static class ControlLogicGenerator
             Notes =
             {
                 "Le regole sono valutate a ogni scansione con gli ingressi della scansione precedente (come un PLC); l'arresto (interblocco) ha priorità su ogni comando di marcia.",
+                "Stato iniziale: tutte le vie a rulli con arresto automatico sono vuote e ferme; si accendono solo quando arriva il pacco.",
+                "Le chiavi engineKeys collegano ogni regola alle decisioni del simulatore (ciclogramma), così le tre uscite restano allineate.",
                 "Strumento di progettazione e simulazione: protezioni e interblocchi di sicurezza reali vanno verificati e implementati nel PLC e nei circuiti di sicurezza."
             }
         };

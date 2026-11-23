@@ -48,6 +48,25 @@ public class ProjectEditingTests
     }
 
     [Fact]
+    public void Add_FixAndSimulate_WithTheComponentPresent()
+    {
+        // E (revisore): il test qui sopra cancella subito il componente; qui la simulazione gira con il componente nel progetto
+        foreach (var (key, _) in ProjectEditing.Addable)
+        {
+            var p = SampleProjects.All[0].Factory();
+            var added = ProjectEditing.Add(p, key);
+            if (added == null) continue;
+            ProjectEditing.Normalize(p);
+            ProjectAutoFix.Run(p);
+            var e = new SimulationEngine(p);
+            if (e.Validation.HasErrors || e.Preparation.HasErrors) continue;                    // lo segnala già il controllo prima di simulare
+            e.RunToCompletion();
+            Assert.True(e.CompletedNormally, $"{key}: {e.FinishReason}");
+            Assert.Equal(0, e.Collisions);
+        }
+    }
+
+    [Fact]
     public void Locks_FamilyValuesAndFixedPositions()
     {
         var p = SampleProjects.All[0].Factory();

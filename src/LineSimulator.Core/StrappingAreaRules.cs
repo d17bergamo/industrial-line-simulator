@@ -150,9 +150,6 @@ public static class StrappingAreaRules
                          .OrderBy(s => s.StartMm).ToList();
     }
 
-    /// <summary>Lunghezza minima della via di legatura dopo l'ultima legatrice: due rulli.</summary>
-    public static double MinTrackAfterLastStrapperMm(RollerSection s) => 2 * s.RollerPitchMm;
-
     /// <summary>
     /// Posizione massima della testa del pacco durante la legatura: la legatura più lontana dalla testa (di solito quella di
     /// coda) si fa al più presto sotto la prima macchina, quindi la testa arriva almeno a prima macchina + distanza di quella
@@ -215,6 +212,7 @@ public static class StrappingAreaRules
             }
             if (engaged) reach = m.EndMm;
         }
+        reach = Math.Min(reach, CarveSwitchedPart(p, need, done) ?? reach);
         // la via davanti al trasferitore (fronte accumulo) ha sempre il suo inverter
         if (trf != null && trf.EffectiveZoneId != trf.Id)
         {
@@ -255,6 +253,18 @@ public static class StrappingAreaRules
         var done = new List<string>();
         if (!p.Simulation.AutoReleaseInverters || !p.Strappers.Any(s => s.IsEnabled)) return done;
         var mods = ReleaseModules(p);
+        // B9: modulo commutabile + sua parte non commutabile = un solo svincolo; si riunisce solo se poi va diviso in sezioni
+        if (mods.Count == 2 && mods[1].SwitchRest && !mods[0].SwitchRest && mods[0].RollerPitchMm > 0
+            && (int)Math.Round((mods[1].EndMm - mods[0].StartMm) / mods[0].RollerPitchMm) / Math.Max(1, (int)Math.Ceiling((ParkingReferenceMm + ParkingMarginMm) / mods[0].RollerPitchMm - 1e-9)) >= 2
+            && mods[1].EndMm - mods[0].StartMm >= (p.PackageTypes.Count == 0 ? 0 : p.PackageTypes.Max(t => t.LengthMm)) + ParkingMarginMm - 1e-6)
+        {
+            double end = mods[1].EndMm;
+            foreach (var pc in p.Photocells.Where(x => x.ControlledInverterId == mods[1].Id)) pc.ControlledInverterId = mods[0].Id;
+            p.Sections.Remove(mods[1]);
+            mods[0].LengthMm = end - mods[0].StartMm;
+            mods[0].RollerCount = (int)Math.Round(mods[0].LengthMm / mods[0].RollerPitchMm);
+            mods = ReleaseModules(p);
+        }
         if (mods.Count != 1) return done;
         var m = mods[0];
         if (m.JoinStrappingInverter || m.RollerPitchMm <= 0) return done;
@@ -283,6 +293,7 @@ public static class StrappingAreaRules
                 s.Name = $"{m.Name} - sezione {j + 1}";
                 s.CommandZoneId = string.Empty;
                 s.FollowsStrapping = false;
+                s.SwitchRest = false;
                 s.JoinStrappingInverter = false;
                 s.SplitAtMm = 0;
                 p.Sections.Add(s);
@@ -337,6 +348,64 @@ public static class StrappingAreaRules
         int sez = first.Name.IndexOf(" - sezione ", StringComparison.Ordinal);
         if (sez > 0) first.Name = first.Name[..sez];
         return true;
+    }
+
+    /// <summary>
+    /// B9 (decisione dell'utente, 2026-11-23: "tratto esatto"): dei motori commutabili dello svincolo solo i rulli che servono
+    /// alla legatura di coda, cioè fino alla testa del pacco più lungo nell'ultima legatura, a rulli interi. Il resto del modulo
+    /// diventa una via a sé (<see cref="RollerSection.SwitchRest"/>) con il suo inverter, che non segue mai la legatura.
+    /// Si ricalcola a ogni preparazione: se la divisione esistente non serve più o è nel punto sbagliato, la via si riunisce.
+    /// Restituisce la nuova fine del tratto commutabile (mm), null se nulla è cambiato rispetto al calcolo del ciclo.
+    /// </summary>
+    private static double? CarveSwitchedPart(LineProject p, double need, List<string> done)
+    {
+        var rel = ReleaseModules(p).ToList();
+        // divisione già presente: si tiene se è ancora quella giusta, altrimenti si riunisce
+        foreach (var rest in rel.Where(s => s.SwitchRest).ToList())
+        {
+            var sw = rel.LastOrDefault(s => !s.SwitchRest && Math.Abs(s.EndMm - rest.StartMm) < 1);
+            if (sw != null && sw.FollowsStrapping && Boundary(sw.StartMm, rest.EndMm - sw.StartMm, sw.RollerPitchMm, need) is { } b0 && Math.Abs(b0 - sw.EndMm) < 1) continue;
+            if (sw == null) { rest.SwitchRest = false; continue; }
+            double end = rest.EndMm;
+            p.Sections.Remove(rest);
+            sw.LengthMm = end - sw.StartMm;
+            sw.RollerCount = (int)Math.Round(sw.LengthMm / Math.Max(1, sw.RollerPitchMm));
+            foreach (var pc in p.Photocells.Where(x => x.ControlledInverterId == rest.Id)) pc.ControlledInverterId = sw.Id;
+            done.Add($"{sw.Id} (svincolo): riunita la parte non commutabile {rest.Id}, la parte commutabile si ricalcola");
+            rel = ReleaseModules(p).ToList();
+        }
+        var m = rel.FirstOrDefault(s => s.FollowsStrapping && !s.JoinStrappingInverter && !s.SwitchRest && need > s.StartMm + 1e-6 && need < s.EndMm - 1e-6);
+        if (m == null || Boundary(m.StartMm, m.LengthMm, m.RollerPitchMm, need) is not { } b) return null;
+        if (rel.Any(s => s.SwitchRest && Math.Abs(s.StartMm - b) < 1)) return b;                   // già diviso nel punto giusto
+        var restNew = CloneSection(m);
+        restNew.Id = m.Id + ".R";
+        restNew.Name = m.Name + " - parte non commutabile";
+        restNew.StartMm = b;
+        restNew.LengthMm = m.EndMm - b;
+        restNew.RollerCount = (int)Math.Round(restNew.LengthMm / m.RollerPitchMm);
+        restNew.CommandZoneId = string.Empty;
+        restNew.FollowsStrapping = false;
+        restNew.JoinStrappingInverter = false;
+        restNew.SplitAtMm = 0;
+        restNew.SwitchRest = true;
+        m.LengthMm = b - m.StartMm;
+        m.RollerCount = (int)Math.Round(m.LengthMm / m.RollerPitchMm);
+        p.Sections.Add(restNew);
+        foreach (var pc in p.Photocells.Where(x => x.ControlledInverterId == m.Id && x.PositionMm >= b - 1e-6)) pc.ControlledInverterId = restNew.Id;
+        done.Add($"{m.Id} (svincolo): motori commutabili solo sui {m.RollerCount} rulli che servono alla legatura di coda ({m.LengthMm:0} mm, fino a {b:0} mm); " +
+                 $"il resto ({restNew.RollerCount} rulli, {restNew.LengthMm:0} mm) è la via {restNew.Id} con il suo inverter e non segue la legatura");
+        return b;
+    }
+
+    /// <summary>Fine del tratto commutabile per la testa <paramref name="need"/> (a rulli interi), null se non resta almeno un rullo dopo o il tratto sarebbe solo il primo rullo.</summary>
+    private static double? Boundary(double startMm, double lengthMm, double pitch, double need)
+    {
+        if (pitch <= 0) return null;
+        int total = (int)Math.Round(lengthMm / pitch);
+        if (Math.Abs(total * pitch - lengthMm) > 1) return null;                         // via non a rulli interi: non si divide
+        int k = (int)Math.Ceiling((need - startMm) / pitch - 1e-9);
+        if (k < 2 || k > total - 1) return null;
+        return startMm + k * pitch;
     }
 
     /// <summary>Copia di una via a rulli (stessi parametri di azionamento e geometria): Id e posizione si impostano dopo.</summary>
@@ -522,13 +591,6 @@ public static class StrappingAreaRules
         var fc0 = p.Photocells.FirstOrDefault(x => x.IsEntryPhotocell);
         double start = fc0?.PositionMm ?? (p.Sections.Count > 0 ? p.Sections.Min(s => s.StartMm) : 0);
         return start + MinReferenceAfterEntryMm;
-    }
-
-    /// <summary>Fotocellule di riferimento più a monte del minimo (FC0 + 100 mm).</summary>
-    public static IEnumerable<PhotocellConfig> ReferencePhotocellsBeforeEntry(LineProject p)
-    {
-        double min = MinReferencePhotocellMm(p);
-        return p.Photocells.Where(x => x.Purpose == PhotocellPurpose.StrappingReference && x.PositionMm < min - 0.5);
     }
 
     /// <summary>

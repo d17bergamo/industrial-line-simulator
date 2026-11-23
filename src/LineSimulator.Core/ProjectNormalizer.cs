@@ -59,14 +59,6 @@ public static class ProjectNormalizer
         return true;
     }
 
-    /// <summary>Posizione (mm) dell'ultimo rullo dell'ultima via a rulli, oppure null se non ci sono vie a rulli.</summary>
-    public static double? LastRollerPositionMm(LineProject p)
-    {
-        if (p.Sections.Count == 0) return null;
-        var last = p.Sections.OrderBy(s => s.EndMm).Last();
-        return last.EndMm - last.EndOverhangMm;
-    }
-
     /// <summary>
     /// Il fermo finale sta sempre dopo l'ultimo rullo dell'ultima via a rulli: la posizione della battuta si calcola
     /// dalla sola distanza rullo-fermo. Restituisce true se la posizione è cambiata.

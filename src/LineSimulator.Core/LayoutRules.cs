@@ -64,12 +64,6 @@ public static class LayoutRules
         return true;
     }
 
-    /// <summary>Posizioni ammesse per i fermi scomparenti non manuali: centro o estremità a monte del trasferitore.</summary>
-    public static IReadOnlyList<double> AllowedStopPositionsMm(LineProject p) => new[]
-    {
-        StrappingAreaRules.StopPositionMm(p, DevicePlacement.Center), StrappingAreaRules.StopPositionMm(p, DevicePlacement.End)
-    };
-
     /// <summary>Fermi scomparenti (senza spunta "spostamento manuale") fuori dal centro / estremità scelti.</summary>
     public static IEnumerable<IntermediateStopConfig> StopsOutOfPlace(LineProject p) => StrappingAreaRules.StopsOutOfPlace(p);
 

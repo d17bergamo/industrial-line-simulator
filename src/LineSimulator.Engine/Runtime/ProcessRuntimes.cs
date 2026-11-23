@@ -247,7 +247,6 @@ public sealed class ScaleRuntime
     public int Cycles { get; internal set; }
     public int Faults { get; internal set; }
     public double BusyTimeS { get; internal set; }
-    public bool ShortPosition { get; internal set; }
     /// <summary>
     /// Pesata per differenza (double banking con il trasferitore a doppio comando): pacco già pesato che resta sul bilico
     /// mentre si pesa <see cref="Package"/>; il peso di quest'ultimo è il totale meno quello del compagno.

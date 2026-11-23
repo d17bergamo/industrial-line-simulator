@@ -74,9 +74,6 @@ public static class StrapperTrack
         return changed;
     }
 
-    /// <summary>Distanza minima tra l'encoder / fotocellula di legatura e la prima legatrice (a monte di essa).</summary>
-    public const double MinEncoderToStrapperMm = 1000;
-
     /// <summary>
     /// Encoder e fotocellula di riferimento di legatura restano ad almeno 1 m a monte della prima legatrice: se la legatrice
     /// si avvicina di più, si spostano con lei (la fotocellula sta 300 mm prima dell'encoder). True se qualcosa è stato spostato.

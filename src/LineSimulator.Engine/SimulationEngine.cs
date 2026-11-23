@@ -1047,6 +1047,8 @@ public sealed partial class SimulationEngine : ILogicContext
     /// (marcia, posizionamento, arresto); altrimenti resta indipendente e porta via il pacco già legato.
     /// </summary>
     private readonly HashSet<ZoneRuntime> _following = new();
+    /// <summary>Urti già contati (pacco, fermo scomparente) per C5.</summary>
+    private readonly HashSet<(string, string)> _stopHits = new();
 
     private void ApplyFollowers()
     {
@@ -1414,6 +1416,23 @@ public sealed partial class SimulationEngine : ILogicContext
                             Emit(SimEventType.ExcessiveImpact, EventSeverity.Warning,
                                 $"Impatto di {p.Id} al fermo {s.Id} a {vNew:0.###} m/s.", s.Id, p.Id);
                         }
+                    }
+                    newHead = s.PositionM;
+                    vNew = 0;
+                }
+            }
+            // C5: un fermo scomparente sollevato ferma qualunque pacco che ci arriva contro, non solo quello assegnato; per un
+            // pacco non assegnato è una collisione (contata una volta sola)
+            foreach (var s in _stops)
+            {
+                if (!s.Raised || s.Package == p) continue;
+                if (newHead >= s.PositionM - 1e-9 && p.HeadM <= s.PositionM + 1e-6)
+                {
+                    if (_stopHits.Add((p.Id, s.Id)))
+                    {
+                        Collisions++;
+                        Emit(SimEventType.Collision, EventSeverity.Error,
+                            $"COLLISIONE: {p.Id} urta il fermo scomparente {s.Id} sollevato per un altro pacco a {vNew:0.###} m/s (posizione {s.PositionM * 1000:0} mm).", s.Id, p.Id);
                     }
                     newHead = s.PositionM;
                     vNew = 0;

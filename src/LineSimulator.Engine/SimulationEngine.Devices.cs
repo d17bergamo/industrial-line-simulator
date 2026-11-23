@@ -1189,13 +1189,11 @@ public sealed partial class SimulationEngine
         if (lead.Combined)
         {
             lead.TargetHeadM = p.HeadM;
-            lead.ShortPosition = false;
             where = "pesatura combinata, nessuno spostamento";
         }
         else
         {
             // Sul bilico il pacco non si muove: viene pesato dove il trasferitore lo deposita
-            lead.ShortPosition = false;
             lead.TargetHeadM = p.HeadM;
             where = "pesatura sul punto di deposito, il pacco non si muove sul bilico";
         }

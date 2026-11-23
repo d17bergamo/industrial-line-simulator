@@ -511,6 +511,5 @@ public static class LayoutTopViewPdf
 
     private static string M(double mm) => (mm / 1000).ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
     private static string Mm(double mm) => Math.Round(mm).ToString("0", CultureInfo.InvariantCulture);
-    private static string SignedMm(double mm) => (mm >= 0 ? "+" : "") + Mm(mm) + " mm";
     private static string N2(double v) => v.ToString("0.0#", CultureInfo.InvariantCulture).Replace('.', ',');
 }
